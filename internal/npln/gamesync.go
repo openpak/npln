@@ -30,6 +30,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -48,6 +49,44 @@ type gsSession struct {
 type watcher struct {
 	gsid string
 	wake chan struct{}
+	// push delivers one document to this stream if (and only if) its content changed since the
+	// last delivery on that target. Nintendo emits a document change ONCE per change; re-pushing
+	// unchanged mailbox documents (docs/__pgn/All/__stu/<uss>) made the consoles re-process old
+	// messages and answer each duplicate — a feedback loop measured at hundreds of writes/s.
+	push    func(tid, kind, name string, m *commonpb.MapValue) error
+	tmu     *sync.Mutex
+	targets map[string]*target
+}
+
+type target struct {
+	tid, coll string
+	docs      []string
+}
+
+// deliver pushes a just-written document, once, to every stream of the farm that watches it
+// (by name, or through a collection target). Caller holds g.mu.
+func (g *gamesyncServer) deliver(gsid, name string, m *commonpb.MapValue) {
+	for w := range g.watchers {
+		if w.gsid != gsid || w.push == nil || w.tmu == nil {
+			continue
+		}
+		w.tmu.Lock()
+		var hits []string
+		for _, t := range w.targets {
+			if t.coll != "" && strings.HasPrefix(name, t.coll+"/") {
+				hits = append(hits, t.tid)
+			}
+			for _, d := range t.docs {
+				if d == name {
+					hits = append(hits, t.tid)
+				}
+			}
+		}
+		w.tmu.Unlock()
+		for _, tid := range hits {
+			go w.push(tid, "UPDATED", name, m) //nolint:errcheck // stream errors end the stream itself
+		}
+	}
 }
 
 type gamesyncServer struct {
@@ -398,15 +437,30 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 		return stream.Send(r)
 	}
 
-	type target struct {
-		tid, coll string
-		docs      []string
-	}
 	var tmu sync.Mutex
 	targets := map[string]*target{}
 	w := &watcher{wake: make(chan struct{}, 8)}
 	if s := g.lookup(streamUss); s != nil {
 		w.gsid = s.gsid
+	}
+	var lastMu sync.Mutex
+	last := map[string][]byte{} // tid|name -> deterministic bytes of the last delivered fields
+	w.push = func(tid, kind, name string, m *commonpb.MapValue) error {
+		b, _ := proto.MarshalOptions{Deterministic: true}.Marshal(m)
+		k := tid + "|" + name
+		lastMu.Lock()
+		same := kind == "UPDATED" && string(last[k]) == string(b)
+		last[k] = b
+		lastMu.Unlock()
+		if same {
+			return nil
+		}
+		logPush(streamUss, tid, kind, name, m)
+		dc := gspb.DocumentChange_UPDATED
+		if kind == "EXIST" {
+			dc = gspb.DocumentChange_EXIST
+		}
+		return send(change(tid, dc, doc(name, m, timestamppb.Now())))
 	}
 	g.mu.Lock()
 	g.watchers[w] = struct{}{}
@@ -431,7 +485,6 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 			case <-t.C:
 			case <-w.wake:
 			}
-			now := timestamppb.Now()
 			tmu.Lock()
 			list := make([]*target, 0, len(targets))
 			for _, t := range targets {
@@ -444,12 +497,9 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 					names = g.collectionDocs(t.coll, streamUss)
 				}
 				for _, n := range names {
-					if send(change(t.tid, gspb.DocumentChange_UPDATED, doc(n, g.fields(n, streamUss), now))) != nil {
+					if w.push(t.tid, "UPDATED", n, g.fields(n, streamUss)) != nil {
 						return
 					}
-				}
-				if t.coll != "" {
-					_ = send(targetChange(t.tid, gspb.TargetChange_UPDATED))
 				}
 			}
 		}
@@ -478,13 +528,12 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 			}
 			log.Printf("[GS] update_target %s docs=%v collection=%q", tid, t.docs, t.coll)
 			_ = send(targetChange(tid, gspb.TargetChange_UPDATED))
-			now := timestamppb.Now()
 			names := t.docs
 			if t.coll != "" {
 				names = g.collectionDocs(t.coll, streamUss)
 			}
 			for _, n := range names {
-				if err := send(change(tid, gspb.DocumentChange_EXIST, doc(n, g.fields(n, streamUss), now))); err != nil {
+				if err := w.push(tid, "EXIST", n, g.fields(n, streamUss)); err != nil {
 					return err
 				}
 			}
@@ -494,6 +543,7 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 			tmu.Lock()
 			targets[tid] = t
 			tmu.Unlock()
+			w.tmu, w.targets = &tmu, targets
 			continue
 		}
 		if dt := req.GetDeleteTarget(); dt != nil {
@@ -504,6 +554,16 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 			_ = send(targetChange(tid, gspb.TargetChange_DELETED))
 		}
 	}
+}
+
+// logPush traces mailbox/station document deliveries (docs/__pgn/All/__stu/<uss>) so a lost
+// signaling message can be told apart from one the client ignored.
+func logPush(streamUss, tid, kind, name string, m *commonpb.MapValue) {
+	if !strings.Contains(name, "/__stu/") {
+		return
+	}
+	pl := m.GetFields()["pl"].GetBytesValue()
+	log.Printf("[GS] push to=%s tid=%s %s %s from=%s pl=%dB", streamUss, tid, kind, lastSeg(name), lastSeg(m.GetFields()["susid"].GetStringValue()), len(pl))
 }
 
 func (g *gamesyncServer) wakeFarm(gsid string) {
@@ -612,6 +672,7 @@ func (g *gamesyncServer) apply(ctx context.Context, ops []*gspb.WriteOperation) 
 			results = append(results, &gspb.WriteResult{})
 		}
 		log.Printf("[GS] write farm=%s %s fields=%s", gsid, opName(op), fieldKeys(g.store[k]))
+		g.deliver(gsid, opName(op), g.store[k])
 		if os.Getenv("NPLN_GS_DIAG") != "" {
 			log.Printf("[GS][DIAG] %s = %s", opName(op), prototext.MarshalOptions{Multiline: false}.Format(g.store[k]))
 		}
