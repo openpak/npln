@@ -6,6 +6,28 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-02 (session 4, LATE — JOIN PATH: signaling works, P2P blocked by coturn): with the farm
+  listed, the joiner's click sends **JoinGameSession** (first ever), opens gamesync, and both sides
+  signal through `docs/__pgn/All/__stu/<uss>` used as a per-station MAILBOX: peers WRITE into the
+  owner's doc (fields suid/susid/sussid/suscid = SENDER, `pl` = message bytes) and the owner watches
+  its own doc. Observed: joiner→host 9-byte `01 12 …` probes (every ~0.5 s) + 78-byte `32 ab 98 64
+  90 22 …` messages; host→joiner one long `01 11 00 b0 …` message (host station id + candidates)
+  then 78-byte replies. Our server relays these (stored write + wake push). Two server bugs found
+  live: (1) mergeFields mutated stored maps in place → "concurrent map iteration and map write"
+  panics mid-join (container restarted twice; caused 2321-5251 on the joiner / 2318-1500 on the
+  host) — fixed copy-on-write; (2) `withStation` now relays a participant's `pl` into its `__pus`
+  member doc (harmless; the real channel is the mailbox). UDP: the host probes the joiner's port
+  (93-byte packets, every 500 ms, via 127.0.0.1 and 10.87.0.2 — nncs reports both consoles'
+  mapped address as 127.0.0.1); the joiner never answers and its socket shows unread Recv-Q.
+  ROOT CAUSE of the P2P stall: both consoles authenticate to coturn fine (our HMAC creds accepted)
+  but every TURN **ALLOCATE gets 400 "Transport field missed or wrong"** — Pia sends the ALLOCATE
+  WITHOUT a REQUESTED-TRANSPORT attribute (coturn `if (!transport)`), retries every 500 ms, and Pia
+  gives up with **2318-1202**. FIX IN PROGRESS: nextendo-local `stun/Dockerfile` builds coturn from
+  source with a one-line patch (missing REQUESTED-TRANSPORT → UDP); compose `stun` now builds it.
+  Tools: header-only UDP capture `sudo tcpdump -i any -nn -l udp …` (needs sudo; CAP_NET_RAW) and
+  `readsess.py joiner` (base cached per pid → instant) read the joiner in the ~20 s connecting
+  window (glue 7 = JoinSessionAsync pending, session state 2).
+
 - 2026-09-02 (session 4, RESULT — LOBBY-DATA GATE FOUND AND OPENED): the host never published lobby
   data because Pia silently rejected our `AllocateIceServerSet` answer (STUN only, non-empty ttl):
   with a rejected ICE set Pia never starts the mesh transport — no STUN probe, no UDP socket, the
