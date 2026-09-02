@@ -1087,6 +1087,14 @@ podman logs -f nextendo-local_npln_1
    (b) decompile NplndRelayClient/NplndProtocol send+recv to get the login/attach-mesh/relay
    message formats and the expected replies; (c) write `cmd/nplnd` (UDP :34343) in this repo:
    login ack, attach-mesh ack, and packet relaying between attached stations of a session;
+   CAPTURED (scratch/nplnd-34343.log, 2026-09-02 21:42): the login datagram is 292 B: UDP payload =
+   magic `32 ab 98 64`, byte `10`, 21 zero bytes (nonce/session slot?), `00 0f 00 01 00 0f 00 00`,
+   `2c 00 fc 01`, then ~236 B of ciphertext — same magic as the 78/94-B mailbox signaling, so
+   nplnd and the NAT-traversal messages share one encrypted framing. A relay cannot answer without
+   the key; candidates: the 32-byte room secret `rs` we return in `docs/__gs/f` (we generate it,
+   so we would know it), the `_Pia_SystemData` 16-byte id, or the ICE/TURN credentials. Start the
+   RE at NplndProtocol (vtable 0xba6eb40; big methods 0x75f1830/0x75f19f0/0x76f9a74/0x76f9cf0)
+   and look for the key-derivation call sites (SHA/AES over `rs`).
    (d) route `g2122d301.lp1.p.srv.nintendo.net` to it in the emulator route table (the shared
    launcher already resolves *.nintendo.net to NEXTENDO_SERVER_IP=127.0.0.1, so listening on
    127.0.0.1:34343 is enough) and add it to nextendo-local.
