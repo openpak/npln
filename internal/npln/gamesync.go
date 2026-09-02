@@ -22,12 +22,14 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"log"
+	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -253,13 +255,16 @@ func (g *gamesyncServer) fields(name, streamUss string) *commonpb.MapValue {
 	stored := g.store[gsid+"|"+name]
 	g.mu.Unlock()
 	if stored != nil {
+		if strings.Contains(name, "/__pus/") || strings.Contains(name, "/__us/") {
+			return g.withStation(gsid, uss, stored)
+		}
 		return stored
 	}
 	switch {
 	case strings.Contains(name, "/__stu/"):
 		return stateUserFields(s, uss)
 	case strings.Contains(name, "/__pus/"), strings.Contains(name, "/__us/"), strings.HasSuffix(name, "/__gs/s"):
-		return userSessionFields(s)
+		return g.withStation(gsid, uss, userSessionFields(s))
 	case strings.Contains(name, "/__stg/"):
 		return g.mutableFields(s)
 	case strings.Contains(name, "/__gs/"):
@@ -268,6 +273,24 @@ func (g *gamesyncServer) fields(name, streamUss string) *commonpb.MapValue {
 		}
 	}
 	return &commonpb.MapValue{Fields: map[string]*commonpb.Value{"id": gsStr("")}}
+}
+
+// withStation relays a participant's Pia station blob (`pl`, written by the console into its own
+// docs/__pgn/All/__stu/<uss>) into that participant's member document, which every other
+// participant watches through the __pus collection. Nintendo's captures show consoles reading
+// back station blobs they never wrote, so the server merges peers' blobs into watched documents;
+// without it each console knows only itself and the mesh join times out at "connecting".
+func (g *gamesyncServer) withStation(gsid, uss string, m *commonpb.MapValue) *commonpb.MapValue {
+	g.mu.Lock()
+	st := g.store[gsid+"|docs/__pgn/All/__stu/"+uss]
+	g.mu.Unlock()
+	pl := st.GetFields()["pl"]
+	if pl == nil || len(pl.GetBytesValue()) == 0 {
+		return m
+	}
+	out := mergeFields(nil, m)
+	out.Fields["pl"] = pl
+	return out
 }
 
 // roomFields are the room documents docs/__gs/{f,m,r,n,ck} in the schema the reference server
@@ -498,14 +521,19 @@ func (g *gamesyncServer) wakeFarm(gsid string) {
 
 // ---- store ----
 
+// mergeFields returns a NEW map holding dst's fields overlaid with src's. It never mutates dst:
+// stored documents are handed to gRPC marshalling on other goroutines outside the lock, and
+// mutating them in place raced with that ("concurrent map iteration and map write" — the server
+// died mid-join, 2026-09-02). Copy-on-write makes every stored MapValue immutable once published.
 func mergeFields(dst, src *commonpb.MapValue) *commonpb.MapValue {
-	if dst == nil || dst.Fields == nil {
-		dst = &commonpb.MapValue{Fields: map[string]*commonpb.Value{}}
+	out := &commonpb.MapValue{Fields: make(map[string]*commonpb.Value, len(dst.GetFields())+len(src.GetFields()))}
+	for k, v := range dst.GetFields() {
+		out.Fields[k] = v
 	}
 	for k, v := range src.GetFields() {
-		dst.Fields[k] = v
+		out.Fields[k] = v
 	}
-	return dst
+	return out
 }
 
 func transformValue(ft *gspb.FieldTransform) *commonpb.Value {
@@ -584,6 +612,9 @@ func (g *gamesyncServer) apply(ctx context.Context, ops []*gspb.WriteOperation) 
 			results = append(results, &gspb.WriteResult{})
 		}
 		log.Printf("[GS] write farm=%s %s fields=%s", gsid, opName(op), fieldKeys(g.store[k]))
+		if os.Getenv("NPLN_GS_DIAG") != "" {
+			log.Printf("[GS][DIAG] %s = %s", opName(op), prototext.MarshalOptions{Multiline: false}.Format(g.store[k]))
+		}
 		g.mirrorProps(gsid, g.store[k])
 	}
 	g.mu.Unlock()
