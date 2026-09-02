@@ -1076,6 +1076,21 @@ podman logs -f nextendo-local_npln_1
 
 ## Next Steps
 
+-1. **(session 4, latest) Implement Pia's nplnd relay service** — the last P2P gate. Facts: every
+   console sends UDP datagrams (292–388 B) to `g2122d301.lp1.p.srv.nintendo.net`:34343 (port
+   hardcoded in ELF fn 0x75dd5e4; the emulator routes that host to 127.0.0.1); Pia classes
+   `nn::pia::nplnd::{NplnPlugin,NplndService,NplndProtocol,NplndRelayClient,NplndLoginJob,
+   AttachMeshJob,DetachMeshJob,NplndHostMigrationJob,NplndPlayerInfo,IceServerConfigGetter}`
+   (vtables via tools/vtfind.py: relay client 0xba6f1a8, protocol 0xba6eb40, service 0xba6f250,
+   login job 0xba6e878). Joiner parks in `NplnBackgroundProcessJob::WaitConnectNetwork` until the
+   relay answers. Plan: (a) capture payloads (`scratch/nplnd-34343.log`, armed with tcpdump -X);
+   (b) decompile NplndRelayClient/NplndProtocol send+recv to get the login/attach-mesh/relay
+   message formats and the expected replies; (c) write `cmd/nplnd` (UDP :34343) in this repo:
+   login ack, attach-mesh ack, and packet relaying between attached stations of a session;
+   (d) route `g2122d301.lp1.p.srv.nintendo.net` to it in the emulator route table (the shared
+   launcher already resolves *.nintendo.net to NEXTENDO_SERVER_IP=127.0.0.1, so listening on
+   127.0.0.1:34343 is enough) and add it to nextendo-local.
+
 0. **(session 4) Live test of the lobby-data mechanism** — host + joiner on the shared profiles:
    a. Host a farm. While hosting, run `sudo python3 /mnt/media/nextendo-research/scratch/tools/
       readsess.py <host-ryujinx-pid>` (read-only): expect glue state 9; check whether the Session
