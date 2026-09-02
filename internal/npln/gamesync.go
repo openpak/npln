@@ -584,9 +584,35 @@ func (g *gamesyncServer) apply(ctx context.Context, ops []*gspb.WriteOperation) 
 			results = append(results, &gspb.WriteResult{})
 		}
 		log.Printf("[GS] write farm=%s %s fields=%s", gsid, opName(op), fieldKeys(g.store[k]))
+		g.mirrorProps(gsid, g.store[k])
 	}
 	g.mu.Unlock()
 	return results, gsid
+}
+
+// mirrorProps republishes a written document's `prp` map (the Pia session properties — the
+// host's UpdateNetworkProperty job writes `prp._Pia_SystemData` with the lobby application data
+// appended, plus `ip`) into the farm's GameSession, so QueryGameSessions hands searchers the
+// updated blob. Nintendo's backend does the same (reference server: __gs/m.prp).
+// Caller holds g.mu; lock order g.mu -> g.mm.mu as in roomFields.
+func (g *gamesyncServer) mirrorProps(gsid string, doc *commonpb.MapValue) {
+	prp, ip := doc.GetFields()["prp"].GetMapValue(), doc.GetFields()["ip"]
+	if gsid == "" || (prp == nil && ip == nil) {
+		return
+	}
+	g.mm.mu.Lock()
+	defer g.mm.mu.Unlock()
+	s := g.mm.sessions[gsid]
+	if s == nil {
+		return
+	}
+	if prp != nil {
+		s.Properties = mergeFields(s.Properties, prp)
+		log.Printf("[GS] mirror prp -> farm %s properties=%s", gsid, fieldKeys(s.Properties))
+	}
+	if ip != nil {
+		s.IsPublic = ip.GetBooleanValue()
+	}
 }
 
 func (g *gamesyncServer) WriteDocuments(ctx context.Context, req *gspb.WriteDocumentsRequest) (*gspb.WriteDocumentsResponse, error) {
