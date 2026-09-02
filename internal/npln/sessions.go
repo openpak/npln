@@ -10,7 +10,11 @@ package npln
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -485,16 +489,36 @@ func (g *sessionServer) GetGameSessionShortAlias(ctx context.Context, req *mmpb.
 
 func (g *sessionServer) AllocateIceServerSet(ctx context.Context, req *mmpb.AllocateIceServerSetRequest) (*mmpb.IceServerSet, error) {
 	diag("AllocateIceServerSet", req)
+	// Shape measured by the family's reference server on Nintendo's answers: a STUN server AND a
+	// TURN server (shared-secret credentials "<exp>:<user>" / base64(HMAC-SHA1)), `ttl` PRESENT
+	// but empty, client cache 90 s. With the set incomplete (no TURN, or a field missing) Pia
+	// rejects it silently and never sends a single STUN probe — which is exactly what left our
+	// host's session mesh unstarted (glue stuck in CreateSessionAsync, no station, no lobby data).
+	tn := tenantFromCtx(ctx)
+	user := req.GetUser()
+	if user == "" {
+		user = tn + "/users/" + uidFromCtx(ctx)
+	}
+	stunHost, turnHost := envOr("NPLN_STUN_HOST", "127.0.0.1"), envOr("NPLN_TURN_HOST", "")
+	if turnHost == "" {
+		turnHost = stunHost
+	}
+	exp := time.Now().Add(time.Hour).Unix()
+	turnUser := fmt.Sprintf("%d:%s", exp, user)
+	mac := hmac.New(sha1.New, []byte(envOr("NPLN_TURN_SECRET", "nextendo-turn")))
+	mac.Write([]byte(turnUser))
 	set := &mmpb.IceServerSet{
-		Name:                tenantFromCtx(ctx) + "/iceServerSets/" + uuid4(),
-		StunServer:          &mmpb.StunServer{Host: envOr("NPLN_STUN_HOST", "127.0.0.1"), Port: envInt("NPLN_STUN_PORT", 3478), Protocol: mmpb.StunServer_UDP},
-		Ttl:                 durationpb.New(time.Hour),
-		ClientCacheDuration: durationpb.New(10 * time.Minute),
+		Name:       tn + "/iceServerSets/static",
+		StunServer: &mmpb.StunServer{Host: stunHost, Port: envInt("NPLN_STUN_PORT", 3478), Protocol: mmpb.StunServer_UDP},
+		TurnServers: []*mmpb.TurnServer{{
+			Host: turnHost, Port: envInt("NPLN_TURN_PORT", 3478), Protocol: mmpb.TurnServer_UDP,
+			Username: turnUser, Password: base64.StdEncoding.EncodeToString(mac.Sum(nil)),
+		}},
+		Ttl:                 &durationpb.Duration{},
+		ClientCacheDuration: durationpb.New(90 * time.Second),
 		UpdateTime:          timestamppb.Now(),
 	}
-	if h := envOr("NPLN_TURN_HOST", ""); h != "" {
-		set.TurnServers = []*mmpb.TurnServer{{Host: h, Port: envInt("NPLN_TURN_PORT", 3478), Protocol: mmpb.TurnServer_UDP, Username: envOr("NPLN_TURN_USER", ""), Password: envOr("NPLN_TURN_PASSWORD", "")}}
-	}
+	log.Printf("[MM] AllocateIceServerSet user=%s -> STUN %s:%d TURN %s:%d", lastSeg(user), stunHost, set.StunServer.Port, turnHost, set.TurnServers[0].Port)
 	return set, nil
 }
 

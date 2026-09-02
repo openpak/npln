@@ -6,6 +6,22 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-02 (session 4, RESULT — LOBBY-DATA GATE FOUND AND OPENED): the host never published lobby
+  data because Pia silently rejected our `AllocateIceServerSet` answer (STUN only, non-empty ttl):
+  with a rejected ICE set Pia never starts the mesh transport — no STUN probe, no UDP socket, the
+  glue stays in state 6 (`CreateSessionAsync` pending forever), Pia Session state 0, all station
+  fields 0 — and the app-data flush (gated on local station == host station) never runs. Live read
+  BEFORE the fix: glue 6, session 0, stations 0. FIX: `AllocateIceServerSet` now returns the shape
+  the reference server measured on Nintendo (STUN + TURN with `<exp>:<user>` / base64 HMAC-SHA1
+  credentials, `ttl` present-but-empty, client cache 90 s) and nextendo-local's coturn runs
+  STUN+TURN with `--use-auth-secret` (`NPLN_TURN_SECRET`, `.env` + compose; backups
+  `.env.bak-turn`, `compose.yml.bak-turn`). Live read AFTER: glue 9, session 1, local station ==
+  host station (0x6b49d203 idx 18), and the host writes `docs/__gs/m {ip, prp._Pia_SystemData}`
+  three times at hosting (mirrored into the farm's GameSession by the new `mirrorProps`). Next:
+  the joiner's Refresh must now list the farm (blob carries `key\nvalue\n` lobby text); then the
+  JOIN path (JoinGameSession → gamesync → Pia mesh join via STUN/TURN on loopback) is the next
+  milestone.
+
 - 2026-09-02 (session 4, IN PROGRESS — lobby-data channel narrowed): static RE only (no emulator
   freezes). Findings so far, all from the binary + logs:
   (1) **Presence RULED OUT**: Ryujinx stub logging is on and Stardew makes ZERO `nn::friends` IPC
