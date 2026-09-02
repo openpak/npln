@@ -6,6 +6,71 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-02 (session 4, IN PROGRESS — lobby-data channel narrowed): static RE only (no emulator
+  freezes). Findings so far, all from the binary + logs:
+  (1) **Presence RULED OUT**: Ryujinx stub logging is on and Stardew makes ZERO `nn::friends` IPC
+  calls (no GetFriendList/UpdateUserPresence in either emulator log), so lobby data does not ride
+  system presence AppField even though Ryujinx-Nextendo relays it.
+  (2) **No NPLN RPC can update a session**: the binary embeds no UpdateGameSession/SyncGameSession
+  method path (full path list checked). Pia's post-create property updates are gamesync
+  **WriteDocuments** carrying a `prp` map: the create/update jobs (`NplnBackgroundProcessJob::
+  WaitCreateNetwork` 0x7ab2880, `WaitUpdateHostPlayerName` 0x7ab6980, `WaitRegistSessionProperty`
+  0x7ab0910, plus 0x7aa9130) build the field path `["prp","_Pia_SystemData"]` (constant helper
+  0x7ad6bbc returns `"prp"`). This matches the reference server's note that Nintendo republishes
+  session properties in `docs/__gs/m.prp`. Our host never sent such a write (only `__pus`).
+  (3) **The joiner can only see `_Pia_SystemData`**: the search consumer (`WaitSearchNetwork`)
+  looks up exactly that key in the returned session's properties, memcpy's it (0x5c..0x200 bytes)
+  into the session-info object at +0x1e8 (len +0xb0) and pushes counts + name-derived id; no other
+  property survives. So Stardew's `SessionInfo` (class `StardewValley.SDKs.Switch.Internal.
+  SessionInfo`, kept as `Dictionary<uint,SessionInfo>` keyed by Pia session id) must be fed from
+  application data INSIDE the blob. The host's 92-byte blob has none → empty list.
+  (4) Game-side class map: `StardewValley.SDKs.Switch.{SwitchSDKHelper,SwitchSDKNetHelper,
+  SwitchNetServer,SwitchNetClient,Internal.SessionInfo}`; native glue class `SwitchNetwork`. The
+  binary is Sickhead **Brute** (C#→C++), so C# calls the glue directly; reflection tables only lead
+  to lazy static getters (dead end for locating bodies).
+  (5) **Blob layout (Pia NetSystemPropertyData, big-endian)**: [0..1] u16 header length (0x5c),
+  [2] u8 (0x16), [3..4] u16, [5..0x14] 16-byte id, [0x15],[0x16] count bytes, [0x17..0x5c) 69-byte
+  host PlayerInfo (nickname). Application data is APPENDED after the header: accessor 0x75ed41c
+  returns `total_len − BE16(blob[0])` = app-data size (0 for our host). Max blob 0x200.
+  (6) **Lobby-data channel FOUND (game side)**: C# `flush` at 0x1ab8b80 serializes the lobby
+  Dictionary<string,string> as `key\nvalue\n…` text → bytes → glue trampoline 0x1abaf40 →
+  `SwitchNetwork` update at 0x1ac57f8, which calls Pia UpdateNetworkProperty (0x760b26c →
+  `ChangeStateJob::WaitUpdateSessionPropertyAsync`) → NPLN job rewrites `_Pia_SystemData` with app
+  data and WriteDocuments it as `prp._Pia_SystemData` (0x7aa9130). The per-tick C# update
+  (0x1abae90) only flushes when the glue state (+0x68) == 9; state 9 is set in the glue state
+  machine (0x1ac2350) when Pia's create-session async completes OK.
+  (7) **THE GATE**: 0x1ac57f8 silently returns unless the Pia Session singleton (ELF ptr 0xe5fc7f8;
+  guest 0x16B027F8) has local station (+0xe0 u64 id, +0xe8 u16 index) non-zero AND equal to the
+  host station (+0xf0/+0xf8) — an is-host check (station event handler 0x1ac66b0 confirms the
+  field roles). The host emulator has NO UDP socket after hosting (only the 2 NAT-check sockets at
+  startup) and coturn saw nothing, so Pia's transport/mesh never started and the local station is
+  presumably still 0 → lobby data never published → empty join list. Per-user station doc is
+  `docs/__pgn/All/__stu/<uss>` (keys suid/susid/sussid/suscid/pl; reader 0x7b57718), which we
+  synthesize like the reference server.
+  (8) More glue facts: the glue singleton pointer is a static at ELF 0xe582088 (guest 0x16A88088;
+  object 0x270 bytes: +0x68 state, +0x6d is-host, +0x6f update-pending, +0x70 backend mode). The
+  glue's create (0x1ac5070, state 4→7) calls Pia `Session::CreateSessionAsync` (0x760b160) with a
+  setting that carries NO application data — so the 92-byte create-time blob is expected, and lobby
+  data can only arrive via the later UpdateNetworkProperty flush. That NPLN job (0x7ab5f30) writes
+  `prp._Pia_SystemData` plus one bool field (key at ELF 0x985d086) and has no other wait; we never
+  saw it, so the flush never ran. Max application data is 0x1a4 bytes (header getter 0x7703328
+  returns 0x5c, max-app getter 0x7703330 returns 0x1a4). Lobby key literals present in the binary:
+  farmName, farmType, date, farmhands, newFarmhands, protocolVersion, privacy, hostName, serverName,
+  gameVersion, password, players, Cabins.
+  LIVE-TEST TOOL (read-only, no freeze): `/mnt/media/nextendo-research/scratch/tools/readsess.py
+  <host-pid>` (run with sudo) finds the guest→host base and prints the glue state and the Session
+  local/host station pairs while the host is hosting. NOTE: the host emulator process that was
+  running at session start had already exited the game (log: game-exit at 00:11:19), so no live
+  read was possible this session; also its whole-run log shows only the 2 NAT-check UDP sockets —
+  no Pia transport socket was ever created while hosting.
+  NEXT: (a) when the user hosts again: run readsess.py on the host pid and watch the server log for
+  a WriteDocuments carrying `prp` (that is the lobby-data flush); (b) find what assigns the local station under NPLN
+  (the `__stu` reader / mesh creation) and what our server must return so the host becomes station
+  host (then it will publish `prp._Pia_SystemData`, which we must store AND mirror into the
+  session's properties for QueryGameSessions); (c) LAZY FALLBACK if (b) is deep: append the
+  `key\nvalue\n` app data server-side to the blob we return (keys farmName/protocolVersion/privacy…
+  from the lobby dictionary; exact key set still to read from the C# side).
+
 - 2026-09-02 (session 3, END STATE): with the consolidated setup fully working — verified shared
   accounts, correct routing, host hosting ONE clean farm (dedup fix live), joiner querying and getting
   exactly 1 session — the joiner's Co-op → Join list is STILL EMPTY. Socket-level proof: after the
@@ -951,7 +1016,26 @@ podman logs -f nextendo-local_npln_1
 
 ## Next Steps
 
-1. **Confirm the real join-list display path.** Trace the QueryGameSessions gRPC unary response
+0. **(session 4) Live test of the lobby-data mechanism** — host + joiner on the shared profiles:
+   a. Host a farm. While hosting, run `sudo python3 /mnt/media/nextendo-research/scratch/tools/
+      readsess.py <host-ryujinx-pid>` (read-only): expect glue state 9; check whether the Session
+      local station (+0xe0/+0xe8) is non-zero and equal to the host station (+0xf0/+0xf8). If it is
+      zero, the publish gate is the station assignment (Pia mesh never created on our stack) and
+      the next work item is the mesh/`CreateMeshJob` path; if it is non-zero and equal, the gate is
+      elsewhere (dirty flag / C# `updateLobbyData` not called — check farm joinability in-game).
+   b. Watch `podman logs -f nextendo-local_stardew_1` for a `[GS] write … fields=…prp…` line and
+      the new `[GS] mirror prp -> farm …` line: that is the lobby-data flush landing. If it lands,
+      the joiner's next Refresh should list the farm (blob now carries `key\nvalue\n` app data).
+   c. If the flush never comes, the lazy diagnostic fallback is to append synthetic app data
+      (`farmName\n…\nprotocolVersion\n1.6.15\nprivacy\nFriendsOnly\n…`, ≤0x1a4 bytes; the BE16
+      header length at blob[0..1] stays 0x5c, only the total grows) to the returned blob
+      server-side, to prove the joiner-side parser and reach JoinGameSession. Not implemented
+      (synthetic data; the user previously declined a fake-farm variant).
+   Server change made this session: gamesync writes carrying `prp`/`ip` are mirrored into the farm's
+   GameSession (`internal/npln/gamesync.go` mirrorProps + test). Needs a `stardew` container redeploy
+   (drops in-memory farms; host must re-host).
+
+1. **Confirm the real join-list display path.** (historical — superseded by session 4) Trace the QueryGameSessions gRPC unary response
    callback that fills the session vector at `(mgr+0x2800)` in `FUN_07bb3d30`'s caller/coroutine —
    do NOT trust `FUN_07bb3d30` as the display path until confirmed (the contradiction in Experiment
    2026-09-02 says it is probably a sibling routine).
