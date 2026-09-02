@@ -6,6 +6,28 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-02 (session 4, LATEST — the real P2P gate is Pia's **nplnd** service): after fixing
+  coturn (patched image: ALLOCATE without REQUESTED-TRANSPORT → UDP; TURN allocations now succeed
+  for both consoles), the server race (copy-on-write), the duplicate-push feedback loop (pushes are
+  now change-only + immediate per write; see gamesync.go watcher.push/deliver), and moving every
+  address to the LAN IP (NAT check/STUN/TURN/relay on 10.87.0.2 via NEXTENDO_NAT_IP + coturn
+  --relay-ip), the join STILL fails 2318-1201 after ~25 s: the mailbox signaling is orderly (host
+  207-B roster with station ids 1+2, 78-B encrypted NAT-traversal messages both ways, a final 94-B
+  host message), the host probes the joiner's transport port (93-B every 500 ms) but the joiner
+  never sends a probe and never reads its socket. Mid-join Pia job dump (tools/piajobs.py +
+  joinprobe.sh): the joiner is parked in `NplnBackgroundProcessJob::WaitConnectNetwork` /
+  `JoinSessionJob::WaitConnectNetwork` (glue 7, session state 0), i.e. BEFORE mesh startup.
+  KEY OBSERVATION: every session (host and joiner) sends 292/308/324/356/372/388-byte UDP
+  datagrams to **127.0.0.1:34343** — port 34343 (0x8627) is hardcoded in ELF fn 0x75dd5e4 and
+  127.0.0.1 is where the emulator resolves `g2122d301.lp1.p.srv.nintendo.net` (the host the early
+  handoff called "resolved, never dialed"). That is Pia's `nn::pia::nplnd` plugin
+  (`NplndLoginJob::WaitLogin`, `NplndFacade`, `AttachMeshJob`, `NplndPlayerInfo`, `IceServerConfigGetter`)
+  logging in to Nintendo's nplnd P2P service, which NOBODY in the family has implemented (the
+  reference S3 server never got P2P either). The join's "connect network" waits on it. NEXT: capture
+  the :34343 payloads (`tcpdump -X udp port 34343` armed → scratch/nplnd-34343.log), RE the nplnd
+  login/attach-mesh protocol (start at fn 0x75dd5e4 and the NplndLoginJob), and build a minimal
+  nplnd UDP service in this repo; route `g2122d301.lp1.p.srv.nintendo.net` to it.
+
 - 2026-09-02 (session 4, LATE — JOIN PATH: signaling works, P2P blocked by coturn): with the farm
   listed, the joiner's click sends **JoinGameSession** (first ever), opens gamesync, and both sides
   signal through `docs/__pgn/All/__stu/<uss>` used as a per-station MAILBOX: peers WRITE into the
