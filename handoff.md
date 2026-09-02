@@ -6,23 +6,175 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-02 (session 3, END STATE): with the consolidated setup fully working — verified shared
+  accounts, correct routing, host hosting ONE clean farm (dedup fix live), joiner querying and getting
+  exactly 1 session — the joiner's Co-op → Join list is STILL EMPTY. Socket-level proof: after the
+  query the joiner opens NO connection (no 18501, no STUN/UDP, nothing to the host addr) — it builds
+  the list SYNCHRONOUSLY from the query response. The response's only app data is the host's 92-byte
+  `_Pia_SystemData` blob, which carries just Pia flags + the host nickname ("OutboundHost"), NO
+  farmName / protocolVersion / privacy. So the joiner has no lobby data → no `CoopMenu.FriendFarmSlot`.
+  THE ONE REMAINING BLOCKER: the host does not advertise Stardew lobby data anywhere the joiner reads.
+  NEXT: determine why a real host publishes no lobby data on our stack — decode the `_Pia_SystemData`
+  blob's application-data region (the ~52 trailing zero bytes may be where farmName/protocolVersion/
+  privacy belong, unpopulated under emulation), or find whether Stardew sets lobby data via a Pia
+  session-property call we don't capture. protocolVersion value = `1.6.15`; farm name observed = "Test".
+  FIXED THIS SESSION: (1) "new farm every load" — the store now evicts a host's prior sessions on
+  Create (dedup by host; `internal/npln/sessions.go`), so QueryGameSessions returns one farm per host,
+  not N stale duplicates. (2) Ryujinx profile consolidation (below). HOST-QUIT FREEZE diagnosed: on
+  exit-to-title the host cleanly closes its gamesync KeepUserSession stream (the only server signal —
+  NO save RPC / cloud-save call), then the GAME UI hangs while the emulator idles (PTC saves + a BSD
+  poll loop, a thread ~92% CPU, no exception). It is a game/emulator online-session-teardown hang, not
+  a server-handleable save — nothing to implement server-side. `save://Test_<id>` in the guest log is
+  the farm's normal save at CREATION, not an exit signal.
+
+- 2026-09-02 (session 3, RYUJINX PROFILE CONSOLIDATION): the family moved from a Ryujinx data dir per
+  game to **two shared profiles for all games** — host `~/ryujinx-instances/host` + joiner
+  `~/ryujinx-instances/joiner` — signed into the family-wide shared accounts **`OutboundHost`
+  (1800000003)** / **`OutboundJoiner` (1800000004)** (per `shared-docs/conventions.md`, set by the
+  citron consolidation; names historical, treated as generic host/joiner). New family launchers
+  `shared-docs/scripts/launch-ryujinx-{host,joiner}.sh` (engine `launch-ryujinx.sh <host|joiner>`);
+  `scripts/launch-ryujinx.sh` is now a thin wrapper (`--joiner`, `--menu`) that bakes in Stardew's NSP
+  + route via `NEXTENDO_ROUTE`. The shared profile's `nextendo_routes.env` accumulates one line per
+  game (launchers ensure, never overwrite). Account migration DONE (2026-09-02): `OutboundHost`
+  (1800000003, u-s5jwdwpyopejkzvxcsjq) and `OutboundJoiner` (1800000004, u-rxroqs444xrkmhpny2na) are
+  mutual friends AND now VERIFIED (verified via `GET /api/verify?token=…`, an HMAC token bound to
+  id+email under `NEXTENDO_SECRET`; recipe in `shared-docs/ryujinx-isolation.md`), so Stardew's auth
+  gate passes for them. Remaining profile TODO (emulators closed): seed the two profile dirs and sign
+  them into these accounts. Old dated entries below still name the
+  per-game dirs (`~/ryujinx-instances/stardew`, `stardew-join`) and the old accounts — historical.
+  Docs updated: `shared-docs/ryujinx-isolation.md`, `emulator-launch-protocol.md`, `conventions.md`
+  (citron agent's), `README.md`, `docs/local-stack.md`.
+
+- 2026-09-02 (session 3, MECHANISM): the join-list entry is `CoopMenu.FriendFarmSlot` built from
+  `CoopMenu.FriendFarmData`, filled via `RequestFriendLobbyData` → `CoopMenu.LobbyUpdateCallback`. The
+  lobby data is a SERIALIZED object (there is a generated `ServerPrivacySerializer`; the field-descriptor
+  table at ELF 0x72bb0b4 lists the serialized fields) with fields `farmName`, `hostName`, `serverName`,
+  `protocolVersion`/`gameVersion`, `privacy` (enum `Public`/`FriendsOnly`/`InviteOnly`), `Cabins`.
+  CRUCIAL server-log finding: on our stack the HOST never publishes ANY of this — its only session
+  property is `_Pia_SystemData` (92 mostly-zero bytes, no farmName/version), it makes NO SyncGameSession
+  / property-update call, its gamesync WriteDocuments are only participant docs (`__us`,`__pus`,`__stu`
+  with fields pgn,pusa,ucsid,uid,upcsid,ussid), and there are ZERO UNIMPLEMENTED calls. So the joiner
+  has no lobby data to build an entry from → empty list. TWO hypotheses for where the lobby data is
+  meant to flow: (A) it is exchanged P2P — `RequestFriendLobbyData` connects to the friend's Pia
+  session and the host sends serialized lobby data over it; under one-box emulation the Pia connection
+  can't form, so the joiner (which makes NO RPC after the query) never gets it → the join list and the
+  P2P/relay milestone are the SAME gate; (B) the host only advertises lobby data once its farm is
+  actually joinable in-game (a built cabin / `enableFarmhandCreation` / `serverPrivacy` != InviteOnly),
+  which may not be set. NEXT (needs the emulator, currently in use for Outbound): verify the host farm
+  is in-game joinable (cabins/privacy) BEFORE more protocol work; then determine the lobby-data channel
+  by decompiling `RequestFriendLobbyData`/`GetLobbyData` (AOT C#; key literals are code-referenced —
+  protocolVersion@0x8387218←fn0x72aff9c, privacy@0x8461ffa←fns 0x72be798/0x72c3144/0x72daf48/0x7360590,
+  serverName@0x9319100←fn0x72bb0b4, hostName@0x88d0aee, farmName@0x8383ad0←fn0x7065ad0). If it turns
+  out lobby data rides GameSession properties, the fix is server-side (advertise the keys); if P2P, the
+  relay/mesh must work first. Clean decompiles in ~/ghidra-projects/out3/.
+
+- 2026-09-02 (session 3, ROOT CAUSE narrowed to Stardew lobby-data): drove the joiner to the co-op
+  **Join** tab (screenshot: two tabs Join/Host, an empty list box, a Refresh button — a browse-based
+  list) and confirmed it stays empty while the server returns valid farms (loopback host + duplicate
+  count already ruled out; 1 clean farm also empty). Mined the game binary's UTF-16 C# symbols (ASCII
+  `strings` misses them; use `strings -e l`). The join list is built from Stardew **lobby data**, not
+  the NPLN GameSession alone: symbols `RequestFriendLobbyData`, `GetLobbyData`, `GetLobbyOwnerName`,
+  `GetLobbyFromInviteCode`, `AddLobbyUpdateListener`, `canOfferInvite`/`offerInvite`, plus
+  `CheckProtocolSupport` / `CompareGameVersions` / `get_ProtocolVersion` / `protocolVersion` and a
+  `ServerPrivacy` enum (`Public`/`FriendsOnly`/`InviteOnly`). To render a friend's farm the joiner
+  needs that friend's lobby data — farmName, protocolVersion, serverPrivacy, player counts — which our
+  `QueryGameSessions` response does NOT carry (the host's Create advertised only `_Pia_SystemData`, and
+  our echoed blob is 92 mostly-zero bytes). The joiner's trace stops right after the query (no gamesync,
+  no GetDocument), so it is NOT fetching lobby data over the session either. So joining needs the
+  lobby-data layer, a level ABOVE the NPLN session/filter the project was stuck on. NEXT: find where
+  Stardew expects the lobby data — is it a GameSession property beyond `_Pia_SystemData`, inside the
+  `_Pia_SystemData` blob, or fetched by the joiner (RequestFriendLobbyData) via gamesync docs / P2P?
+  Start from `RequestFriendLobbyData`/`GetLobbyData` in the binary. Candidate quick test: also verify
+  the HOST farm is actually joinable in-game (cabins built / `enableFarmhandCreation` / `serverPrivacy`
+  not InviteOnly) — `BuildStartingCabins`, `availableFarmhands`, `CAN_BUILD_CABIN` gate joinability
+  host-side regardless of the network.
+
+- 2026-09-02 (session 3, loopback RULED OUT): set the advertised `host` to a DISTINCT address
+  (`NPLN_RELAY_HOST=127.0.0.2` in nextendo-local `.env`, rebuilt only the `stardew` container; listener
+  is `*:18501` so it still reaches the server; `.env.bak-hosttest` backup left). Host re-hosted (Create
+  session=3eaeb752 @ 127.0.0.2:18501, full flow OK), joiner queried and got exactly 1 clean farm
+  (`host="127.0.0.2"`), and the join list was STILL empty with no follow-up. So "game hides self/
+  loopback-hosted farms" is FALSE. Also confirmed: friend linkage works (the joiner's QueryGameSessions
+  `users=[hostUID]` matched the farm, so the joiner knows the host as a friend). The game's own stdout
+  (Ryujinx `ServiceLm` Guest Log, ProgramName StardewValley) logs boot noise + `[Nextendo][notif] 1
+  friend(s), 1 in a game` but NOTHING about rejecting the session. Blocker is squarely in the game's
+  (or Pia's post-matcher) session-list handling. NEXT unchanged: bisect empty-vs-nonempty SDK browse
+  result (memory capture), then RE the game's join-list consumer if non-empty.
+
+- 2026-09-02 (session 3, live trace): **The game RECEIVES the farms and sends NO follow-up.** Passive
+  server-log watch of a real join attempt: `IssuePrearrangedUserToken×2 → ActivateUser →
+  SubscribeFriendUsers → QueryGameSessions (4 sessions returned) → (nothing)`. No `JoinGameSession`,
+  `GetGameSession`, or gamesync follow. So the returned farms never become selectable — the blocker is
+  after the query, in the browse-result → join-list path. All farms advertise `host="127.0.0.1"` (the
+  joiner's OWN address on this one-box test) — a prime suspect for the game treating them as self /
+  unreachable. NEXT: one capture to bisect — read whether Pia's browse handed the game an EMPTY list
+  (post-matcher Pia drop) or a NON-EMPTY one (game-UI drop); and try a non-loopback `host` server-side.
+
+- 2026-09-02 (session 3, runtime): **THE SEARCH FILTER IS NOT THE BLOCKER — our farm PASSES it.**
+  Ran the freeze-capture (`capsession.sh`) against a live joiner searching in Co-op. Read OUR session's
+  Pia session-info object directly: `obj+0xa0 = blob[0x16] = 1`, `obj+0xa2 = struct[0x30] = 4`
+  (= MaxParticipantCount — resolves the field id: struct[0x30] is MAX, not current), `obj+0xa6 =
+  struct[0x40] = 1`. Hand-evaluating the matcher (Farm8, bits 3+4): bit4 vacancy `struct[0x30](4) >
+  blob[0x16](1)` and `4 != 1` → PASS; bit3 `struct[0x40](1) & 1` odd → PASS. So `WaitSearchNetwork`
+  KEEPS the farm. The join list is STILL empty, so the blocker is DOWNSTREAM of the search filter, not
+  the filter. Server returned 4 well-formed sessions (stale duplicates the in-memory store accumulated
+  across the host's re-hosting; not variants) — all 4 kept by the client. Presence is still never
+  called, so it is not a presence gate the client asks for. NEXT: the post-filter path —
+  `session::BrowseSessionJob::CompleteProcess` / the result list Pia hands the game, OR the game's own
+  C++ join-list logic, OR an unverified criteria bit (read the criteria object at mgr+0x1130 to confirm
+  only bits 3+4 are set). Joiner emulator crashed ~3m48s in on a PTC cache save race (not OOM; a stale
+  second process on the join dir held `1.6.15.13-default.info`) — cleaned, relaunch is safe. Capture
+  tooling proven end-to-end: `/mnt/media/nextendo-research/scratch/capsession.sh <joinpid>` freezes
+  the joiner 120ms after its query and reads the session-info object off the guest RAM.
+
+- 2026-09-02 (session 3): **CONTRADICTION RESOLVED — the decompiled join filter is Pia's WAN session
+  search, not the gRPC QueryGameSessions display path.** Re-derived true function boundaries from the
+  binary's `.eh_frame` unwind tables (the prior analysis used manually-created Ghidra functions with
+  bad stack bounds), re-decompiled cleanly, and identified the function by its OWN diagnostic string +
+  vtable: `FUN_07bb3d30` (Ghidra) = ELF-VA 0x7ab3d40 = **`nn::pia::npln::NplnBackgroundProcessJob::
+  WaitSearchNetwork`** (sibling `WaitSearchNetworkBySessionId` at 0x7ab4900). It filters PIA session
+  objects (0x98-byte structs) against a Pia `NetSessionSearchCriteria`, reading mostly the
+  `_Pia_SystemData` blob + a couple of Pia-struct fields — NOT the protobuf GameSession numeric
+  fields. THAT is why ~40 server-side protobuf variants all failed: the join filter never reads
+  max/current/is_public off the wire. Live-confirmed the host blob advertises `blob[0x16]=1`
+  (`_Pia_SystemData = 00 5c 16 00…(zeros)…01 01 00 00 00 0b 01 "stardewhost"`). Bit-4 of the matcher
+  is a vacancy test: KEEP needs `struct[0x30] > blob[0x16]` (i.e. > 1); bit-3 needs `struct[0x40]` odd.
+  Suspected root cause: a solo host (blob[0x16]=1) reads as "no vacancy" and is dropped. ONE UNKNOWN
+  LEFT: whether Pia-struct[0x30] is max (keep) or current (drop), settled by a single runtime freeze-
+  read of OUR session while the joiner searches (needs the user to drive the Join menu). Corrected
+  addressing note: **Ghidra addr = ELF-VA + 0x100000; the prior "module VA" values were Ghidra addrs,
+  so the real ELF functions sit 0x100000 BELOW them** (e.g. matcher 0x76ecee4→ELF 0x75ecee4). See
+  Experiment 2026-09-02 (session 3).
+
+- 2026-09-02: **Own NPLN server (`cmd/npln`) implements auth + friends + game-sessions + gamesync and drives Stardew through authentication and FARM HOSTING end to end** on the local podman stack (Ryujinx client). JOINING is the single open blocker: the joiner's `QueryGameSessions` returns the friend's farm, the client receives it complete (verified in guest memory), but filters it out before the Join list. The client filter was decompiled to exact logic, but a contradiction (our sessions *should* list per the decompile, yet ~40 variants failed) points to the analyzed function likely being a sibling of the true display path. See Experiment 2026-09-02.
+
 - 2026-08-31: The workspace was found completely empty and was not a Git repository.
 - 2026-08-31: A minimal Go research scaffold and protocol-neutral TCP/UDP observer were implemented and exercised with synthetic traffic.
 - 2026-08-31: An empty Git repository was initialized after the scaffold was created; no commit was made.
 - 2026-08-31: Stardew's startup reaches NNCS NAT checks and the NPLN tenant over redirected networking. DNS, TCP, SNI, TLS server-flight behavior, and the certificate-trust failure were measured.
 - 2026-08-31: A clean-room, exact-build Citron compatibility patch crossed the TLS trust boundary. Stardew now completes the client handshake and sends its first encrypted application record to Nextendo, then immediately closes. The first HTTP/2/gRPC method remains unknown.
 - 2026-08-31: A controlled loopback TLS-termination probe proved the client's first encrypted record is a pre-HEADERS cancel flight (preface/SETTINGS/ACK/RST/WINDOW_UPDATE), not an HTTP/2 request. The client cancels its first RPC before transmission regardless of server behavior; the blocker is client-local, upstream of the wire protocol.
-- No farm hosting, discovery, joining, peer connectivity, or gameplay traffic is confirmed yet.
+- 2026-09-01: The local Nextendo stack is complete on podman (`nextendo-local`: account 8099, npln 18500, baas-jwks 18448, nncs UDP 10025/10125, website/dashboard). Per-title launch wrappers (`scripts/launch-citron.sh`, `scripts/launch-ryujinx.sh`) pin every host to it and isolate the emulator profile; runbook in `docs/local-stack.md`. Next: sign the emulator into the local account and rerun the online attempt (identity-consistent test).
+- 2026-09-01: FIRST AUTHENTICATED STARDEW SESSION on the local podman stack (Ryujinx + local account `stardewhost`): `Auth/IssuePrearrangedUserToken` PASSED, then `Friends/ActivateUser`, `Friends/SubscribeFriendUsers`, then `GameSessionService/QueryGameSessions` → server UNIMPLEMENTED → client 2321-4224. The Stardew-specific RPC surface starts at `QueryGameSessions`; that is the next handler to build. Under citron the same identity still cancels pre-HEADERS (2321-4992): emulator gap, not protocol.
+- 2026-09-01: Own NPLN server written (`cmd/npln`), deployed as `stardew` container on 18501, tenant route switched to it. Auth/Friends/GameSessionService implemented per reference shapes; every session RPC dumps its request (DIAG) so hosting/joining can be built from what Stardew actually sends.
+- 2026-09-01 (evening): HOSTING WORKS on our server. Host flow measured end to end: `QueryGameSessions` (search config `Farm8Player_GameSessionSearchConfigs`, view BASIC, min_vacancy 1, page_size 1) → `CreateGameSessionCreationTicket` (matchmaking config `Farm4Player`, one `_Pia_SystemData` bytes property carrying the host name) → Track → session transport dialed with SNI `gamesync.npln.nintendo.net` (cert must cover it; that SAN was the gate) → `Gamesync/IssueToken` → `KeepUserSession` watching `docs/__us/<uss>`, `docs/__pgn/All/__stu/<uss>`, `docs/__stg/All` and collection `docs/__pgn/All/__pus` → host writes its `__pus` member (pgn,pusa,ucsid,uid,upcsid,ussid) → `AllocateIceServerSet` → `GetDocument docs/__gs/f` → the farm loads. Joining: second account `stardewjoin` (pid 1800000007) + second Ryujinx data dir `~/ryujinx-instances/stardew-join`; STUN-only coturn added to the stack (`stun` profile, 127.0.0.1:3478) for ICE.
+- 2026-09-01 (late): JOIN LIST STAYS EMPTY. The joiner (`stardewjoin`) queries `QueryGameSessions` with `users=[host]` (page_size 20, view BASIC, `Farm8Player_GameSessionSearchConfigs`) and receives the host's ACTIVE session, yet lists nothing and sends no further RPC. Twelve response variants (user path form, no user_sessions, no properties, LAN host address, name under tenants/current, is_public false, capacity 4..8, friend relationship flags, Nintendo's `_BaseConfigName`/`_AliasSuffix` system properties, config echoed with concrete tenant) all produced an empty list — the gate is client-side and not in those fields. Next: decompile the client's `_Pia_SystemData` / QueryGameSessions consumers (Ghidra project `~/ghidra-projects/sdfull`, script `~/ghidra-projects/decomp_query.py`, output `~/ghidra-projects/out/`).
+- 2026-09-01 (night): JOIN FILTER LOCALISED by decompiling the exact build (Ghidra project `~/ghidra-projects/sdfull`). The joiner's QueryGameSessions result consumer is main `FUN_07bb3d30`; it deserialises each session's `_Pia_SystemData` bytes property (accepts length 0x5c..0x200; the host's blob is exactly 0x5c=92 bytes, so it passes) and then filters with a criteria matcher (`0x76ecee4`). For the QueryGameSessions path the criteria (built in `0x1bc23b8` from `Farm8Player_GameSessionSearchConfigs`) sets **bit3** and **bit4** (setters `0x76edbfc`/`0x76edc0c`), NOT bit1/bit2. The matcher's bit3/bit4 read the session via VIRTUAL methods (`vtbl+0x30 &1`; `session+0xa2` vs `vtbl+0x20`/`vtbl+0x38`, plus `param_3` from `*(*(mgr+0x80)+0x510)`, default 1) on a session-info object built from the BLOB, not from the wire GameSession. Twenty server-side variants (config name in every form, max_participant 2..9, current 0/1, is_public, user_sessions present/absent, properties present/absent) ALL produced an empty join list — because the deciding values come from the host's opaque `_Pia_SystemData`, which we echo unchanged and cannot vary from the server. Presence is never called (0 Presence RPCs), so the list is not presence-driven. NEXT (heavier): runtime memory inspection of the joiner at the filter moment — read the criteria object (`mgr+0x1130`) and one session-info object (`uStack_658`) to capture the real bit3/bit4 comparison values; or decode the Pia `_Pia_SystemData` layout (92-byte struct: byte[1]=0x5c length, byte[2]=0x16, host name "tobagin" at ~offset 0x1a) to learn which field the host must advertise as "joinable/has-vacancy". Decompiled functions saved under `~/ghidra-projects/out/`.
+- 2026-09-01 (late night): join filter DECOMPILED precisely but NOT yet defeated. In main `FUN_07bb3d30` the returned sessions are copied into 0x98-byte structs (converter `fn_07bb79a0`) and matched by `fn_076ecee4` against criteria built in `0x1bc23b8` from `Farm8Player_GameSessionSearchConfigs` (criteria bits 3 and 4 set; bit1/bit2 not). Session-info getters: vtbl+0x10=`*(u64)obj+0x98` (config), +0x20=`*(u16)obj+0xa0`, +0x30=`*(u8)obj+0xa6`, +0x38=`*(u16)obj+0xa4`; matcher also reads `*(u16)obj+0xa2` directly. Object fields are filled: obj+0xa0/0xa4 = blob byte 0x16 (`bStack_45a`), obj+0xa2 = converter-struct[0x30] (wire), obj+0xa6 = converter-struct[0x40] byte (wire). So the two live checks are **bit4 KEEP: wire[0x30] > blob[0x16]** and **bit3 KEEP: wire[0x40] low byte odd**, plus a pre-gate `wire[0x38]!=0`. BUT: ~36 server-side variants — zeroing blob[0x16], sweeping max/current/port/state/flags/host, every config-name form — ALL still list nothing, including a kitchen-sink variant. So either `FUN_07bb3d30` is NOT the QueryGameSessions display path, or the SDK GameSession offsets (0x30/0x38/0x40) map to different proto fields than assumed (need the QueryGameSessionsResponse→GameSession parser's field→offset map). Runtime confirmation is BLOCKED: Ryujinx runs non-dumpable (`/proc/<pid>/{maps,mem}` root-owned), ptrace_scope=0 but no passwordless sudo; citron is dumpable but citron can't get Stardew online (2321-4992). Decompiled fns under `~/ghidra-projects/out/` (vm_10/20/30/38 = the getters, parse, FUN_07bb3d30 site fns). NEXT: (a) decompile the QueryGameSessionsResponse/GameSession protobuf parser to get the true SDK field offsets, or (b) enable Ryujinx guest GDB stub (config `GdbStubPort=55555`) to read guest RAM at the filter, or run the joiner under a dumpable wrapper / with sudo memory read.
+- No joining, peer connectivity, or gameplay traffic is confirmed yet.
 
 ## Architecture
 
-The initial component is a dependency-free Go process with independent TCP and UDP listeners and a shared structured-event sink. Socket handling is separate from event serialization. It reads a bounded amount of traffic, logs byte counts but not contents or remote addresses, and sends no guessed response. Service modules will be introduced only when observations justify them.
+Since 2026-09-01 the main component is `cmd/npln` + `internal/npln`: Stardew's own NPLN gRPC/TLS server (Auth with nnex-proof identity and ES256 access tokens, Friends from the Nextendo graph, GameSessionService with an in-memory farm-session store that logs every request in full while the flow is measured). Generated NPLN protobuf bindings live in `proto/` (from the family's reference server, notice preserved). Deployed as the `stardew` container (18501) of `nextendo-local`; the reference `splatoon-3` server stays the model for gamesync and P2P.
+
+The earlier research component is a dependency-free Go process with independent TCP and UDP listeners and a shared structured-event sink. Socket handling is separate from event serialization. It reads a bounded amount of traffic, logs byte counts but not contents or remote addresses, and sends no guessed response. Service modules will be introduced only when observations justify them.
 
 ## Environment
 
 - Workspace: `/home/tobagin/REPOS/stardew-nextendo`
 - Session date: 2026-08-31
 - Nearby Nextendo-related repositories exist and are being reviewed only for independently written, license-compatible infrastructure concepts. No code has been copied.
+- Local stack (2026-09-01): `~/REPOS/nextendo-local` on podman — see `docs/local-stack.md` for ports, identity chain, launch and verification. Emulator profiles (2026-09-02: consolidated to two SHARED host/joiner profiles for all games — see the Current Status consolidation note): Ryujinx `~/ryujinx-instances/{host,joiner}` (`--root-data-dir`, via `shared-docs/scripts/launch-ryujinx-{host,joiner}.sh`); citron `~/.local/share/nextendo-citron/{host,joiner}`. (Earlier this project used per-game dirs `~/ryujinx-instances/stardew` + `stardew-join`.)
 
 ## Discoveries
 
@@ -51,53 +203,380 @@ The initial component is a dependency-free Go process with independent TCP and U
 
 ## Endpoint Inventory
 
-No HTTP/2 path or gRPC method is confirmed. TLS ApplicationData is now observed, making sanitized TLS termination/method logging the next experiment.
+Confirmed on the wire (Ryujinx, local stack, 2026-09-01), in order after the NNCS NAT checks:
 
-## Authentication Flow
+1. `/nn.npln.auth.v1.Auth/IssuePrearrangedUserToken` — **CONFIRMED**, tenant `t-9f607adf-lp1`, sent on two parallel connections; accepted once the `nnex` claim resolves to a verified local account.
+2. `/nn.npln.friends.v1.Friends/ActivateUser` — **CONFIRMED**, bearer token from step 1.
+3. `/nn.npln.friends.v1.Friends/SubscribeFriendUsers` — **CONFIRMED** (0 friends, 4-byte message).
+4. `/nn.npln.matchmaking.v1.GameSessionService/QueryGameSessions` — **CONFIRMED** and IMPLEMENTED. Joiner sends it with `users=[friend]`, view BASIC, `Farm8Player_GameSessionSearchConfigs`, min_vacancy 1, page_size 20.
+5. Hosting flow **CONFIRMED end to end** on our server: `CreateGameSessionCreationTicket` (matchmaking config `Farm4Player`, one `_Pia_SystemData` bytes property) → `TrackGameSessionCreationTicket` (PENDING→SUCCEEDED) → session transport dialed with SNI `gamesync.npln.nintendo.net` → `Gamesync/IssueToken` → `KeepUserSession` (watches `docs/__us/<uss>`, `docs/__pgn/All/__stu/<uss>`, `docs/__stg/All`, collection `docs/__pgn/All/__pus`) + `WriteDocuments` → `AllocateIceServerSet` → `GetDocument docs/__gs/f` → farm loads and stays hosted.
+6. Joining: the query returns the farm, but the client filters it out before display (see the join-filter finding in Current status). OPEN.
 
-Unknown. No authentication material is present or required for the initial passive experiment.
+## Authentication Flow — CONFIRMED
 
-## Startup Flow
+Ryujinx (the working client; citron still cancels pre-HEADERS 2321-4992 — emulator gap). Order:
+1. NNCS NAT checks (UDP 10025/10125), answered by the local `nncs` container.
+2. Two parallel TLS/h2 connections to the tenant host `t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net`
+   (routed to our `stardew` NPLN server on 18501). Each sends
+   `Auth/IssuePrearrangedUserToken` with an `ExternalIdToken` whose `nsa_id_token` field is the
+   emulator's BAAS id_token. That id_token carries an `nnex` claim = the `nx2.` token
+   nextendo-account HMAC-signed (`pid.username.expiry`) with the shared `NEXTENDO_SECRET`.
+3. Our server verifies the `nnex` HMAC → PID, calls the account server
+   `/internal/npln-friends?pid=` → requires the account be verified, and mints an ES256 access
+   token (Nintendo shape: `npln.authorization.allow=["**"]`, `ext_id=<pid hex>`, `tid`). The client
+   echoes it as `authorization: bearer` on every later call.
 
-Unknown.
+Identity gate (measured): not signed in → 2321-4992 (pre-auth cancel); signed in to a DIFFERENT
+account deployment (production) → 2321-5760 (UNAUTHENTICATED, token unprovable); signed in to the
+SAME local account the NPLN server validates against → PASS. `stardewhost` (pid 1800000005) is the
+verified local test account.
 
-## Multiplayer Menu Flow
+## Startup Flow — CONFIRMED
 
-Unknown.
+Boot resolves `nncs1/nncs2` (NAT), `g2122d301.lp1.p.srv.nintendo.net` (resolved, never dialed), and
+the NPLN tenant. With both build-scoped patches applied (X509 chain + certificate-acceptance flag),
+TLS completes and the client reaches the gRPC layer. Ryujinx holds the first NPLN resolution until
+the JIT burst calms (`MaybeDelayNplnInit`). The BAAS `jku` fetch
+(`e0d67c50…baas.nintendo.com/1.0.0/certificates`) is served by the local `baas-jwks` (same signing
+key the emulator uses).
 
-## Farm Hosting Flow
+## Multiplayer Menu Flow — CONFIRMED
 
-Unknown.
+Opening Co-op re-runs auth (two `IssuePrearrangedUserToken`), then `Friends/ActivateUser`
+("tenants/current/users/current"), `Friends/SubscribeFriendUsers` (held open, keep-alive), then
+`GameSessionService/QueryGameSessions`. The joiner's query carries
+`users=[<friend uid>]`, view BASIC, `game_session_search_config =
+tenants/current/gameSessionSearchConfigs/Farm8Player_GameSessionSearchConfigs`, `min_vacancy_count=1`,
+`page_size=20`. The game re-authenticates each time the menu is opened. Presence
+(`nn.npln.friends.v1.PresenceService`) is NEVER called (0 RPCs) — the join list is not NPLN-presence
+driven.
 
-## Farm Discovery Flow
+## Farm Hosting Flow — CONFIRMED end to end
 
-Unknown.
+`QueryGameSessions` (0 results) → `CreateGameSessionCreationTicket` (request carries only
+`matchmaking_config = tenants/current/matchmakingConfigs/Farm4Player`, one `UserDefinition` with the
+caller, and `game_session.properties{_Pia_SystemData: <92-byte blob>}`; NO other fields, NO is_public,
+NO counts) → server returns the ticket PENDING then `TrackGameSessionCreationTicket` streams
+PENDING→SUCCEEDED with the full GameSession (host/port, our synthesized fields) → the client dials the
+session transport with SNI `gamesync.npln.nintendo.net` (our npln cert must cover that SAN — this was
+a real gate) → `Gamesync/IssueToken` (exchanges the matchmaking id-token for a gss token) →
+`KeepUserSession` bidi stream watching `docs/__us/<uss>`, `docs/__pgn/All/__stu/<uss>`,
+`docs/__stg/All`, and collection `docs/__pgn/All/__pus`; the host `WriteDocuments` its `__pus` member
+(fields pgn,pusa,ucsid,uid,upcsid,ussid) → `AllocateIceServerSet` (we return STUN 127.0.0.1:3478) →
+`GetDocument docs/__gs/f` → the farm loads and stays hosted. The `_Pia_SystemData` blob is the host's
+Pia session descriptor (92 bytes: byte[1]=0x5c total length, byte[2]=0x16, bytes[0x15..0x16]=01 01,
+then a length-prefixed account name).
 
-## Farm Join Flow
+## Farm Discovery Flow — PARTIAL
 
-Unknown.
+The joiner's `QueryGameSessions(users=[friend])` reaches our server and we return the friend's farm
+(server-side user filter matches). The client receives a complete, correct
+QueryGameSessionsResponse (verified by reading the joiner's guest memory — the wire bytes are intact:
+name, max=4, current=1, can_participate=1, is_public=1, state=ACTIVE, host=127.0.0.1, port=18501,
+`_Pia_SystemData` blob, one user_session for the host). BUT the client filters the farm out before
+display — see Farm Join Flow and Experiment 2026-09-02.
+
+## Farm Join Flow — OPEN (single remaining blocker)
+
+The returned farm never appears in the joiner's Join list. Decompiled the client's filter to the
+exact logic (Experiment 2026-09-02) but a CONTRADICTION remains: the decompiled checks, worked
+through by hand, say our sessions should list, yet ~40 server-side variants (every wire field, config
+name, blob-byte mutation, and a kitchen-sink) all produced an empty list. Most likely the analyzed
+function (`FUN_07bb3d30`) is a sibling of the true display path, not the path itself. Next step is to
+CONFIRM the actual QueryGameSessions response-callback before any more server changes. Also unruled-
+out: the Join UI may gate on the friend showing as "playing Stardew" via account presence.
 
 ## Invitation Flow
 
 Unknown.
 
-## Peer Connectivity
+## Peer Connectivity — not yet reached
 
-Whether gameplay traffic is peer-to-peer is an **UNCONFIRMED HYPOTHESIS**.
+Not reachable until joining works. Hosting allocates an ICE server set (STUN, and TURN if
+configured) and the session's `game_session.host:port` points at our relay endpoint (127.0.0.1:18501
+by default). The actual Pia peer connection uses the `_Pia_SystemData` descriptor + ICE; standing up
+a real relay/STUN/TURN and address rewriting is the milestone after joining. A STUN-only coturn is in
+the stack (`stun` profile, 127.0.0.1:3478).
 
 ## NAT Traversal
 
 Unknown. Standard STUN/TURN behavior must not be assumed.
 
-## Session Lifecycle
+## Session Lifecycle — PARTIAL
 
-Unknown.
+Host: Create → Track(SUCCEEDED) → gamesync IssueToken → KeepUserSession (held) + document writes.
+On quit the host tries to SAVE the farm (cloud save) which is unimplemented → the host emulator
+freezes on exit. The server keeps the session in its in-memory map until the ticket is cancelled;
+every `stardew` container redeploy drops all in-memory farms (host must re-host after a redeploy).
 
 ## Disconnect / Reconnect Behavior
 
 Unknown.
 
 ## Experiments
+
+### Experiment 2026-09-02 (session 3): Contradiction resolved — the filter is Pia WAN search, not the gRPC path
+
+Objective: resolve the Experiment-2026-09-02 contradiction (our sessions should list per the decompile,
+yet ~40 server variants failed) by confirming the true identity of `FUN_07bb3d30` before any more
+server changes.
+
+Method (GUI-free static analysis; external ELF only, no proprietary bytes in repo). Built a small
+offline toolchain over the reconstructed `main.elf` (scratch: session scratchpad, not committed):
+- `ehfuncs.py` — parses the ELF's `.eh_frame_hdr`/`.eh_frame` to get AUTHORITATIVE function ranges
+  (the prior analysis manually created Ghidra functions with bad stack analysis — the source of the
+  wrong offsets), plus a numpy BL-scan for exact callers/callees.
+- `xref.py` — ADRP+ADD/LDR string-xref scan and per-function referenced-string listing.
+- `disas.py` — capstone disassembly with BL targets annotated by eh_frame fn + diagnostic string.
+- `gdec.py` — pyghidra decompile that first DELETES the wrongly-bounded overlapping functions, then
+  creates the function at the true eh_frame entry and decompiles (outputs in `~/ghidra-projects/out3/`).
+
+Results (all CONFIRMED from the binary + a live server-log blob read):
+
+1. **Addressing bug in the prior notes.** Ghidra imports the PIE at base 0x100000, so `getAddress(0x…)`
+   in the old scripts was a GHIDRA address = ELF-VA + 0x100000. The real ELF functions are therefore
+   0x100000 BELOW the "module VA" values used before (matcher 0x76ecee4 → ELF 0x75ecee4, filter
+   0x7bb3d30 → ELF 0x7ab3d40, converter 0x7bb79a0 → ELF 0x7ab79a0−… etc.). The old decompiles landed
+   in the right functions ONLY because Ghidra's base absorbed the offset; the manually-created function
+   boundaries (not Ghidra-base) were what corrupted the stack analysis.
+
+2. **`FUN_07bb3d30` is `NplnBackgroundProcessJob::WaitSearchNetwork`.** Its vtable slot lives at
+   ELF 0xba5e268 in the `nn::pia::npln::NplnBackgroundProcessJob` vtable group; the function embeds the
+   diagnostic string `"NplnBackgroundProcessJob::WaitSearchNetwork"` via its search-starter
+   (0x7ab3870). Its sibling (0x7ab4900) is `WaitSearchNetworkBySessionId`. Neither reaches the gRPC
+   `QueryGameSessions` client stub (0x7bd2710, whose wrapper 0x7bd26c4 sets state=2) within 4 call
+   hops — the gRPC RPC is issued asynchronously by Pia's NplnService/dispatcher, and the response is
+   converted into Pia session objects that THIS function then filters. So it IS on the display path,
+   but as Pia's session-search consumer, and it filters on Pia-session + blob fields, not wire fields.
+
+3. **Why the 40 variants failed.** The matcher (clean decompile, ELF 0x75ecee4) for the Farm8 criteria
+   (bits 3+4 set) reads: bit3 `vm_30(obj)&1` (= Pia-struct[0x40] byte, must be ODD); bit4 DROP if
+   `obj+0xa2 == vm_20(obj)` OR `obj+0xa2 < param_3 + vm_38(obj)`, where obj+0xa2 = (u16)Pia-struct[0x30],
+   vm_20 = vm_38 = blob[0x16], param_3 defaults to 1. I.e. KEEP needs `struct[0x30] > blob[0x16]` and
+   `struct[0x40]` odd. These come from the PIA session object (converter `fn_7ab79a0` copies a 0x98
+   Pia struct: name@0, sub-msg-ptr@0x20, two int32@0x30, two int32@0x38, bools@0x40, string@0x48,
+   longs@0x68/0x70, user-session vector@0x78) and the `_Pia_SystemData` blob — NOT the protobuf
+   GameSession fields the server was varying.
+
+4. **Live blob confirmed.** Host session 74844b5b's `_Pia_SystemData` property in the server log:
+   `00 5c 16 00 …(18 zeros)… 01 01 00 00 00 0b 01 "stardewhost" …`. So blob[1]=0x5c(len 92),
+   blob[2]=0x16, blob[0x15]=1, blob[0x16]=1, blob[0x1a]=0x0b(name len), then the account name. Bit-4
+   thus needs `struct[0x30] > 1`.
+
+Interpretation / suspected root cause: bit-4 is a "has-vacancy" gate. If Pia-struct[0x30] is the
+CURRENT participant count, a solo host (1) fails `1 > blob[0x16]=1` and the farm is dropped as full;
+if it is MAX (4), it keeps. (Round 8's blob[0x16]=0 attempt was on the WRONG assumption that these
+were protobuf fields — it edited the wire, which this filter ignores.)
+
+Decision rule / NEXT (unchanged in spirit, now correctly targeted): do ONE runtime freeze-read of
+OUR session's Pia struct[0x30]/[0x38]/[0x40] while the joiner is mid-search, to fix whether
+struct[0x30] is max or current and whether an earlier gate fires. That is the single measurement that
+turns this into a one-shot fix. It needs the user to open Co-op → Join (the GUI can't be driven by
+the agent). Candidate fixes to try once the field is known, in order of laziness: (a) if struct[0x30]
+is current-count sourced from the blob, rewrite `blob[0x16]` (or the count byte) server-side so the
+solo host advertises vacancy; (b) if it is a protobuf field after all, set it; (c) inject a second
+phantom user_session so the count reads > 1. Do NOT run blind server variants — the filter ignores
+the wire.
+
+Artifacts: `~/ghidra-projects/out3/` (clean eh_frame-bounded decompiles: filterA/filterB, matcher,
+converter, the two search starters, criteria builder, the Pia browse-job chain, the gRPC stub). The
+offline toolchain lives in the session scratchpad; no proprietary bytes in the repo.
+
+### Experiment 2026-09-02: Full NPLN server built; join filter decompiled to a contradiction
+
+Objective: with the identity-consistent local stack working (auth passes), implement the whole
+online flow in this repo and drive two Stardew instances to host + join + play.
+
+Method and results (all sanitized; raw binaries/dumps stayed external):
+
+1. **Own NPLN server written** — `cmd/npln` + `internal/npln` in this repo:
+   - `internal/npln/server.go` — gRPC/TLS server, `npln-grpc-type` header on every reply, keepalive
+     enforcement relaxed (grpc-go default sends GOAWAY(ENHANCE_YOUR_CALM) and kills in-flight RPCs),
+     an UnknownServiceHandler that logs `UNIMPLEMENTED <method>` (the next thing to build), and a
+     conn tracer.
+   - `internal/npln/identity.go` — `nnex` HMAC verification → PID, account lookup + verified gate,
+     ES256 access/session token minting in Nintendo's claim shape, `callerPID` from the bearer token.
+   - `internal/npln/auth.go` — Auth service (IssuePrearrangedUserToken, IssueToken,
+     IssueAnonymousUserToken, RefreshToken, ValidateToken).
+   - `internal/npln/friends.go` — Friends service (ActivateUser, SubscribeFriendUsers streamed from
+     the Nextendo account graph, keep-alive held open).
+   - `internal/npln/sessions.go` — GameSessionService (Create/Track/Cancel, Get/BatchGet/Query,
+     Join, Sync, ListUserSessions, short aliases, AllocateIceServerSet, ListLatencyMeasurementServers)
+     with an in-memory farm store; logs every request in full (`prototext`) while the flow is measured.
+   - `internal/npln/gamesync.go` — Gamesync session transport (IssueToken, KeepUserSession bidi
+     document-watch stream, WriteDocuments/Commit/GetDocument/ListDocuments/QueryCollectionIds,
+     room documents `docs/__gs/{f,m,r,n,ck}` and per-user `__us/__pus/__stu/__stg` in the measured
+     Firestore-style MapValue schema).
+   - `proto/` holds the generated NPLN protobuf bindings, copied from the family `splatoon-3` server
+     (PolyForm, notice preserved in `proto/NOTICE.md`), import path rewritten. NOTE: rewrite ONLY the
+     Go import lines, NEVER the embedded rawDesc bytes (doing so corrupts the descriptors — panic on
+     init).
+
+2. **Deployed as the `stardew` container** (tcp 18501) of `nextendo-local`; the emulator route table
+   points the Stardew tenant at it, keeping the reference `splatoon-3` server on 18500 for S3.
+   Three account-server bundle fixes were required for the npln→account internal call to pass its
+   guard (see the local-stack doc / Session Log): `NEXTENDO_DATA_DIR=/data`,
+   `data/account/internal_net.conf`=`10.89.1.0/24 10.89.1.100` + a static account IP, and NO
+   `NEXTENDO_INTERNAL_KEY` on the account service (the npln server sends no X-Internal-Key header).
+
+3. **CONFIRMED working end to end**: authentication (nnex-proof identity), friends, and FARM HOSTING
+   including the full gamesync session transport (see the Flow sections). The npln cert had to cover
+   SAN `gamesync.npln.nintendo.net` (a real gate; reissued the cert with that SAN + the tenant).
+   Two local accounts made friends: `stardewhost` (pid 1800000005), `stardewjoin` (pid 1800000007).
+   A STUN-only coturn added (`stun` profile).
+
+4. **JOIN BLOCKER — the returned farm never lists.** The joiner queries with `users=[host]` and gets
+   the farm, but the client drops it before display. Ruled out by ~40 server variants (every
+   GameSession wire field; every `_BaseConfigName` form; blob-byte mutations; a kitchen-sink): none
+   list. Ruled out presence (never called). Confirmed by reading the joiner's guest memory that the
+   response is received complete and correct.
+
+5. **Decompiled the client filter** (Ghidra project `~/ghidra-projects/sdfull`; base convention:
+   function addrs are module-VA `getAddress(0x…)`, string/data addrs are +0x100000; guest VA =
+   0x8506000 + (Ghidra_addr − 0x100000)). The QueryGameSessions result filter is main `FUN_07bb3d30`;
+   it copies each session (`fn_07bb79a0`) into a 0x98-byte struct and matches it (`fn_076ecee4`)
+   against criteria built from `Farm8Player_GameSessionSearchConfigs`. Struct layout (from the
+   converter + helper `cpy_078795c4`, whose 0x20 field is a POINTER to a 0x30-byte sub-message, not a
+   string): 0x00 name(std::string) | 0x20 msg-ptr | 0x30 two int32 | 0x38 two int32 | 0x40 bools |
+   0x48 std::string | 0x68/0x70 longs | 0x78 vector(user_sessions). The blob is deserialized to
+   obj+0x1e8 (length at +0xb0). Session-info getters: vm_10=obj+0x98, vm_20=obj+0xa0, vm_30=obj+0xa6,
+   vm_38=obj+0xa4; matcher also reads obj+0xa2 directly. KEEP-prep sets obj+0xa0/0xa4 = blob[0x16],
+   obj+0xa2 = (u16)struct[0x30], obj+0xa6 = struct[0x40]. For the Farm8 query the criteria has bits 3
+   and 4 set (setters `fn_76edbfc`/`fn_76edc0c`), not 1/2. Live checks:
+     - outer gate: `fn_76ed01c(crit)!=1 || struct[0x40]!=0` (crit bit3=1 ⇒ struct[0x40] must be ≠0);
+     - pre-matcher vacancy gate: compares blob[0x16] (`bStack_45a`) against `*(mgr+0x1a48)` (GAME-side);
+     - `struct[0x38]!=0 || *(mgr+0x1a4c)!=0`;
+     - matcher bit3: `struct[0x40] & 1` must be ODD;
+     - matcher bit4: KEEP needs `(u16)struct[0x30] > blob[0x16]` (drop if == or < 1+blob[0x16]).
+   Remaining field ambiguity: struct[0x30] = max OR current; struct[0x40] = can_participate OR
+   is_public. `vm_68` (called first in the matcher) reads blob header bytes (`ed4c0`=blob[2],
+   `ed4e4`=BE(blob[3]), `vm_50`=BE(blob[0..1])=length) but its return is IGNORED — no side effect on
+   the decision.
+
+6. **THE CONTRADICTION.** Round 8 set `blob[0x16]=0` + current=3 + max=4 + can_participate=true +
+   is_public=true. That passes bit4 (struct[0x30] > 0) and bit3 (struct[0x40] odd) under EVERY
+   interpretation of the two ambiguous fields, and passes the pre-matcher gate (blob[0x16]=0 ⇒ never
+   drops). It STILL did not list. Therefore an anchor assumption is wrong — most likely
+   `FUN_07bb3d30` is a sibling routine, not the true QueryGameSessions display path.
+
+Decision rule / NEXT: do NOT run more server variants or refine `FUN_07bb3d30`. First CONFIRM the
+real display path — trace the QueryGameSessions gRPC unary response callback that fills the session
+vector at `(mgr+0x2800)` — and separately verify whether the Join UI is gated on account presence
+("friend playing Stardew"). Then one clean runtime read of the confirmed struct settles the field
+ids, and the fix is a one-shot.
+
+Runtime capture method (works, sanitized): passwordless sudo enabled
+(`/etc/sudoers.d/<user>-nopasswd`); Ryujinx runs non-dumpable so read its memory as root via
+`/proc/<pid>/mem`. Guest RAM is the largest `/dev/shm/Ryujinx-*` shm set (~10 GB); the 512 GB set is
+the reserved HostMappedUnsafe address-space mirror (skip it). Ryujinx maps the guest AS at MULTIPLE
+host mirror bases — one confirmed base: host `0x7e53ddd616fc` = guest `0x11D616FC` (Farm8 string) ⇒
+`host_base 0x7E53CC000000`; pointer-following across mirrors is the only hard part. To catch the
+transient parsed response, freeze the joiner ~120 ms after its query (Monitor on the server log +
+`sleep 0.12` + `sudo kill -STOP`), scan, then `kill -CONT`. SCRATCH MUST LIVE ON
+`/mnt/media/nextendo-research/scratch/` — writing multi-GB dumps to the 15 GB `/tmp` tmpfs hits
+EDQUOT and kills the shell tool for the whole session (per the playbook §5). The GDB stub reads guest
+memory READ-ONLY but CRASHES the emulator on breakpoints — never set breakpoints.
+
+Tooling: `~/ghidra-projects/out/` and `out2/` hold the decompiled functions (filter, matcher,
+converter, getters, blob readers). `/mnt/media/nextendo-research/scratch/scan.sh` and `dump.sh` are
+the memory tools.
+
+Artifacts: no proprietary bytes in the repo; the Ghidra project, ELF, dumps, and scratch are all
+external. Server code and sanitized conclusions only.
+
+
+### Experiment 2026-09-01-B: Identity-consistent local run — auth PASSES, Stardew's first own RPC observed
+
+Hypothesis: with the emulator signed into the SAME account deployment the local NPLN server validates against, `IssuePrearrangedUserToken` passes and the next RPCs become visible.
+
+Method: full local podman stack (`docs/local-stack.md`); Ryujinx via `scripts/launch-ryujinx.sh --menu`, signed in to the local account server as `stardewhost` (pid 1800000005), then Stardew 0.20.0 loaded (build E7F845…, both built-in patches applied), Co-op → Online. citron via `scripts/launch-citron.sh`, same account, same attempt.
+
+Observation:
+
+- **CONFIRMED (Ryujinx):** NAT checks answered by the local `nncs`; tenant TLS to the local `npln`; `IssuePrearrangedUserToken` received on two connections, `nnex prouve pid=1800000005`. First attempts were DENIED because the npln→account `/internal/npln-friends` call was refused (account internal guard: rule file not read since `NEXTENDO_DATA_DIR` was unset; then the handler's own `X-Internal-Key` demand, which the npln server never sends) → game 2321-5760 (UNAUTHENTICATED). After fixing the bundle (see local-stack doc) the auth PASSED, `Friends/ActivateUser` and `SubscribeFriendUsers` succeeded, and `GameSessionService/QueryGameSessions` arrived → UNIMPLEMENTED → **2321-4224** in the game.
+- **HIGH:** 2321-4224 is the client-side mapping of gRPC UNIMPLEMENTED (server-attributed; the converter table has no entry read for it yet).
+- **CONFIRMED (citron):** identical stack and account, patches applied (both logged), NAT checks answered locally, three tenant connections with h2 established and ZERO RPCs → 2321-4992. The pre-HEADERS cancel now follows the EMULATOR, not the identity or the server. Candidates: Ryujinx's gRPC connect repairs (`NEXTENDO_GRPC_CONNECT_SYNC`, lost-address substitution) and its NPLN-init hold, which citron lacks (`NEXTENDO_NPLN_DELAY_MS` exists but was not set).
+
+Decision: Ryujinx is the Stardew test client until citron's gRPC connect path is repaired. Next: log the sanitized request fields of `QueryGameSessions` on the reference server (or the probe), then implement the minimal response in this repository's own service — the first Stardew handler.
+
+Artifacts: sanitized server-log conclusions only; tokens never recorded.
+
+### Experiment 2026-09-01 (cont.): FIRST STARDOW RPCs OBSERVED — identity deployment confirmed as the gate
+
+Correction to the attribution above: the **2321-5760** result was **Ryujinx + Stardew + production Nextendo account + local reference server** (not citron). Ryujinx results: **without** Nextendo login → 2321-4992; **with** Nextendo login → 2321-5760.
+
+Breakthrough (server log, local reference server):
+
+```
+CONN begin (h2 established)
+RPC begin method=/nn.npln.auth.v1.Auth/IssuePrearrangedUserToken
+RPC InHeader remote=127.0.0.1:50566
+[NPLN RPC] /nn.npln.auth.v1.Auth/IssuePrearrangedUserToken tenant="t-9f607adf-lp1" uid="" auth=""
+[NPLN Auth] jeton NSA non prouvable — le client subsdk (HMAC) est requis en prod -> REFUS
+IssuePrearrangedUserToken DENIED ext=nsa:eyJ… : PermissionDenied
+  = "Nextendo account not recognised — sign in with your Nextendo account to play online"
+```
+
+- **CONFIRMED:** first Stardew NPLN method observed on the wire: `nn.npln.auth.v1.Auth/IssuePrearrangedUserToken`, tenant `t-9f607adf-lp1` — matches the method surface embedded in the binary (experiment 8).
+- **CONFIRMED:** the full client chain works end-to-end under Ryujinx once the patches actually apply: patches → TLS → h2 → auth metadata → RPC delivered. The citron-side equivalent remains to be re-tested (citron patches were always applying; its local failures are now attributed to the identity deployment mismatch, same as Ryujinx).
+- **CONFIRMED:** the error code maps to the account state: no Nextendo login → 2321-4992 (UNAVAILABLE, pre-auth failure path); Nextendo login → RPC sent → server denial → 2321-5760 (UNAUTHENTICATED).
+- **CONFIRMED:** the remaining rejection is identity proof: the `nsa:` NsaIdToken presented by the emulator (signed into the PRODUCTION account server) is not provable against the LOCAL reference server, which requires production-mode HMAC-proof NSA tokens and trusts `NEXTENDO_ACCOUNT_URL=127.0.0.1:8099` (the local account server).
+
+Next steps:
+
+1. **Identity-consistent local test**: sign the emulator into the account server the NPLN server trusts (local: custom-server override / route the account hostname to `127.0.0.1:8099`; Ryujinx currently signs into production). Expect `IssuePrearrangedUserToken` to PASS and the flow to advance to the next RPC (friends/matchmaking/gamesync — the full Stardew RPC surface finally observable).
+2. **Production provisioning** (end goal): register Stardew's tenant `t-9f607adf-lp1` and accept its NSA tokens on the Nextendo server, then test Stardew + production end-to-end.
+3. Both paths converge on the same deliverable: the Stardew RPC catalog (every method the game calls, in order) — the input for the Stardew server handlers.
+
+### Experiment 2026-08-31-11 / 2026-09-01: The identity deployment is the gate (UNAUTHENTICATED breakthrough)
+
+Hypothesis (user-driven): the NPLN backend validates the client's identity against its OWN account deployment. Stardew was only ever tested with an identity the server does not recognize (locally-fabricated / local-account tokens), which — not TLS, not pinning — is why every server rejected it.
+
+Method and observations:
+
+1. **Patch-application bug found and fixed (Ryujinx).** `ModLoader.ApplyNsoPatches` only invoked the built-in patch tables inside the `ModsInterdits` (Splatoon 3 mods-ban) branch, so Stardew's patches never applied under Ryujinx; the earlier Ryujinx local test was invalid (client died at TLS, server saw nothing). Fixed: built-in tables now apply for every title (build-ID keyed, no-op otherwise). citron was never affected (its `nso.cpp` patch is unconditional for the title).
+2. **Citron S3 correction.** citron + S3 + production **always worked**; the single morning failure (2321-4992) was session-specific (region selection Europe vs the supported Americas, and/or account state). The "citron NPLN gap" theory is retracted; the playbooks were corrected.
+3. **The account deployment changes the outcome (Stardew, citron, production NPLN, both patches):**
+   - local account (`stardewhost`, local `nextendo-account`): **2321-4992** (UNAVAILABLE — cancelled pre-authentication), identically against the local reference server AND production.
+   - production account (signed in via production `nextendo-account` after the stored local token was rejected at startup): **2321-5760** — grpc status 16 = **UNAUTHENTICATED** per the same conversion table.
+
+Conclusion:
+
+- **CONFIRMED:** the identity deployment is a real gate. With a recognized identity, Stardew's flow reaches authentication and gets a credential verdict instead of the pre-authentication cancel. The earlier "client-local, environment-independent" interpretation is refined: the failure followed the *identity*, not the server or the emulator.
+- **OPEN:** where the UNAUTHENTICATED verdict is produced (production auth rejecting the fabricated token/tenant, or a client-side check against the production identity), and what production needs to accept Stardew: tenant `t-9f607adf-lp1` provisioning and/or per-title BAAS client id (the fabricated `aud` is still S3's `ed9e2f05d286f7b8` in both emulators).
+- **NEXT:** (1) read the production NPLN server logs for the rejected call — method, status, `rawContext` (the splatoon-3 server spells the failing method out); (2) provision Stardew's tenant on the Nextendo server (or point the local stack at a fully matching account+NPLN pair) and retest; (3) if production auth still rejects, align the fabricated token's `aud` with Stardew's registered BAAS client id (value TBD from the game/tenant config).
+
+Artifacts: no proprietary material; production log excerpts stay on the operator's side and enter this document only as sanitized conclusions.
+
+### Experiment 2026-08-31-10: Pin-bypass differential, socket-level teardown analysis, and the identity-mismatch hypothesis
+
+Hypothesis:
+
+If the certificate-acceptance flag was the last client-local gate, forcing it (plus the X509 chain patch) lets the first auth RPC reach the server. If the abort persists, the transport teardown is a symptom and the failure lies in the SDK's login orchestration — prime suspect: a local identity cross-check between the fabricated BAAS id_token and the ACC account identity.
+
+Method:
+
+1. Rebuilt citron with both build-scoped patches (X509 0x79B4C10 + flag-read 0x782F5D0); ran Stardew against the local full reference NPLN server on the tapped port with the linked local account.
+2. At the failure dialog, scanned guest rw memory for the result constant, grpc failure strings, and runtime materialized SDK diagnostics.
+3. Correlated citron's socket-level DIAG logs (send/recv/shutdown per fd) with the server's [stats] CONN lines.
+
+Observation:
+
+- **CONFIRMED (decisive negative):** both patches applied (logged at load); the server logged three "h2 established" connections with ZERO RPCs — identical abort to pre-flag-patch runs. The OpenSSL verification layer is eliminated as the gate.
+- **CONFIRMED (socket level):** per connection: ClientHello(213B) → server flight (1412+189+44B reads) → client 126B handshake flight → client 133B ApplicationData → `Shutdown(fd, how=2)` called BY THE GUEST 82-85ms after connect, ~1-3ms after the send. The 133B flight already contains the h2 RST_STREAM(stream=1, REFUSED_STREAM) — the call was cancelled BEFORE the transport finished coming up, and the SDK then shut the socket down itself. The transport (TLS/h2) is a victim, not the cause.
+- **CONFIRMED (result mapping):** the grpc-status→nn::Result table at VA 0x98CA1AC (module 321): OK→2000-0, UNKNOWN→2321-384, FAILED_PRECONDITION→2321-3072, INTERNAL→2321-4608, UNAVAILABLE→2321-4992, UNAUTHENTICATED→2321-5760. The observed 2321-4992 is a client-side gRPC UNAVAILABLE — consistent with the SDK shutting down the whole channel, failing the queued auth call.
+- **CONFIRMED (runtime diagnostics):** the SDK's auth diagnostic " (Auth RPC result)" (static rodata 0x9885c a6; leading space — appended after a dynamic status message) was materialized 18x in guest RAM at the dialog, with the dynamic part ending "…losed" — matching the static strings "Transport closed" (0x9864930) / "Socket closed" (0x9852b5e). The "(Auth RPC result, original status code: " template never ran (no server status existed). The auth resource "tenants/t-9f607adf-lp1/users/current" was in the heap — the auth layer was mid-request-preparation.
+- **CONFIRMED (gateway lead):** Stardew resolves `g2122d301.lp1.p.srv.nintendo.net` at startup and menu time but NEVER dials it (no ConnectImpl line). The splatoon-3 server repository documents the equivalent pre-gRPC identity chain for S3: `gw.hac.lp1.vermillion.srv.nintendo.net` (device init + accounts/config with online_license) and `val.hac.lp1.penne.srv.nintendo.net` (login tickets) — same `*.lp1.p*srv.nintendo.net` platform family. Why Stardew's SDK skips the gateway dial is unresolved.
+- **CONFIRMED (identity mismatch candidate):** citron's fabricated BAAS id_token uses `sub = RandomHex(0x10)` (random) while `IManagerForApplication::GetAccountId` returns the linked account's uid (1800000005). An env-gated override `NEXTENDO_BAAS_SUB` already exists in the citron worktree (added for the Fall Guys EOS work). If Stardew's auth stack cross-checks token sub vs account identity locally (S3's demonstrably does not, since S3 works with the random sub), the auth call would be aborted pre-send with exactly the observed signature.
+
+Next steps (in order):
+
+1. **Env-only differential:** relaunch Stardew with `NEXTENDO_BAAS_SUB=1800000005` (token sub = linked uid). If the auth RPC fires (server CONN lines with RPCs / IssueToken), the identity cross-check was the gate. Variants if needed: `u-1800000005`, zero-padded/hex forms.
+2. If sub-alignment alone fails: try aligning `aud` per-title (find Stardew's expected BAAS client id — not present as a plaintext 16-hex string in main; may be in game data or verified structurally).
+3. If identity alignment fails entirely: the healthy-title differential (run Splatoon 3 under the same tap and observe whether it dials its vermillion/penne gateway pre-gRPC and sends HEADERS immediately) — the handoff's previously prescribed experiment, now doubly motivated. Requires asking per the Launch Protocol when other titles run.
+4. Optional deeper static: the SDK's diagnostic-table handlers near the "(Auth RPC result)" table-init sites (0x74c1c dc/0x73f4320/0x711f678) reveal the failure-classification logic.
+
+Artifacts: no proprietary material; all analysis external; sanitized conclusions only.
 
 ### Experiment 2026-08-31-9: Static identification of the certificate-acceptance gate and build-scoped pin-bypass patch
 
@@ -463,20 +942,39 @@ go test -race ./...
 go vet ./...
 printf 'synthetic-tcp' | nc 127.0.0.1 18080
 printf 'synthetic-udp' | nc -u -w1 127.0.0.1 18080
+cd ~/REPOS/nextendo-local && podman-compose --profile nncs up -d   # local stack
+scripts/launch-ryujinx.sh            # shared HOST profile, hosting Stardew (thin wrapper over shared-docs/scripts/launch-ryujinx-host.sh)
+scripts/launch-ryujinx.sh --joiner   # shared JOINER profile
+scripts/launch-citron.sh             # citron (its own two-persona launchers)
+podman logs -f nextendo-local_npln_1
 ```
 
 ## Next Steps
 
-1. Run a legitimate retail-client startup and multiplayer-menu test with controlled DNS logging; record sanitized query names, order, timestamps, and outcome.
-2. Redirect only an observed candidate hostname to the observer in a controlled network and identify TCP/UDP transport and destination port without retaining payloads.
-3. Add a protocol-specific response only after the first client transmission and disconnect behavior have been independently summarized.
+1. **Confirm the real join-list display path.** Trace the QueryGameSessions gRPC unary response
+   callback that fills the session vector at `(mgr+0x2800)` in `FUN_07bb3d30`'s caller/coroutine —
+   do NOT trust `FUN_07bb3d30` as the display path until confirmed (the contradiction in Experiment
+   2026-09-02 says it is probably a sibling routine).
+2. **Rule the presence angle in or out.** Check whether the Join UI lists a friend only when they
+   show as "playing Stardew Valley" via account presence, independent of `QueryGameSessions`.
+3. Once the display path is confirmed, do ONE clean runtime read of its parsed GameSession struct
+   (`struct[0x30]` u16, `struct[0x40]` byte) against known values to fix the two field ids, then a
+   one-shot server change. Reuse the memory method in Experiment 2026-09-02; scratch on `/mnt/media`.
+4. After joining: implement the P2P/Pia peer connection (relay/STUN/TURN, address rewriting) and the
+   host-quit cloud save (unimplemented save currently freezes the host on exit).
+5. Re-decompile `FUN_07bb3d30` and `fn_076ecee4` only if needed; the clean copies are in
+   `~/ghidra-projects/out2/`.
 
 ## Open Questions
 
-- Which hostname is contacted when the online multiplayer menu opens?
-- Which transports and ports are contacted, and in what order?
-- Does the backend carry only discovery/control traffic or gameplay traffic too?
-- Are friend presence, invitations, NAT traversal, or relay services required?
+- Which client function is the ACTUAL QueryGameSessions result-to-Join-list path? (`FUN_07bb3d30`
+  is decompiled but contradicts the empirical result — likely a sibling.)
+- Is the Join list gated on account presence ("friend playing Stardew"), not just query results?
+- In the parsed GameSession 0x98 struct, is offset 0x30 `max` or `current`, and 0x40
+  `can_participate` or `is_public`? (Determines the exact filter fix.)
+- Does gameplay go peer-to-peer after session setup, and does the `_Pia_SystemData` blob need
+  server-side rewriting for a reachable peer address under emulation?
+- What does the host expect at quit to save the farm (cloud save) so it does not freeze?
 
 ## Session Log: 2026-08-31
 
@@ -508,23 +1006,15 @@ Compare against a working NPLN title through the same probe. Run Splatoon 3 (alr
 - **Smallest method:** Same loopback probe, same sanitized metadata logging, one controlled Splatoon 3 boot to the lobby; compare sanitized flow summaries (DNS order, SETTINGS ids, first frames) between titles.
 - **Decision rule:** If Splatoon sends HEADERS where Stardew cancels, the transport is validated and the delta is Stardew's client-local prerequisite; the specific missing step becomes the next experiment target. If Splatoon also cancels pre-HEADERS against the probe, the probe's transport must be improved before any client-side conclusion is drawn.
 
-## Citron Launch Protocol (2026-08-31, family-wide)
+## Emulator Launch Protocol
 
-- The assistant may launch/kill/restart citron autonomously when either
-  (a) no other citron instance is running, or (b) the only running
-  instance is this project's own instance — identified by the Stardew Valley
-  NSP path on the command line plus this project's `NEXTENDO_*` env
-  vars — including closing and relaunching it to test freshly rebuilt
-  citron binaries.
-- ASK FIRST when any OTHER title's citron instance is running: Among
-  Us, Outbound, Fall Guys, CTR:NF, Stardew, MC and PvZ all share this
-  machine and the same citron build; a broad kill takes their session
-  down.
-- Detection: `pgrep -af "^/home/tobagin/REPOS/citron-nextendo/build"`
-  and inspect each process's cmdline (NSP path) and environ
-  (title-specific `NEXTENDO_*` vars).
-- Never broad-`pkill` citron patterns: they match the calling shell
-  itself and other titles' instances.
+Family-wide, canonical version: `shared-docs/emulator-launch-protocol.md`
+(symlinked into this repo as `shared-docs/`). Short form: autonomous
+launch/kill/restart only when no other title's citron instance is running or
+when only this project's own instance runs; otherwise ASK FIRST. Detect via
+`pgrep -af "^/home/tobagin/REPOS/citron-nextendo/build"` and inspect each
+process's cmdline (NSP path) and environ (`NEXTENDO_*` vars). Never
+broad-`pkill` — patterns match the calling shell and other titles' sessions.
 
 ### Kills: target by game, never by binary path (incident 2026-08-31)
 
@@ -534,3 +1024,46 @@ instance, kill ONLY pids whose cmdline contains THIS project's game
 NSP path (check /proc/<pid>/cmdline per pid). When any other title's
 instance is running, ask before launching or killing anything — memory
 pressure alone (29 GB host) can OOM a foreign session.
+
+## Session Log: 2026-09-01 (local stack)
+
+- Found: `nextendo-local` containers up except `nncs`; the Stardew citron ran from the default profile with `NEXTENDO_API=https://account.tobagin.eu` — verified to be the LOCAL account container via the local Traefik (resolves to the podman network, LE cert), i.e. the right deployment — but not signed in (log: `PollInvitations: skipped, not linked`), and with the profile setting `nextendo_server_ip` still at the production IP (see the precedence lesson below).
+- Started the `nncs` profile container (host network, UDP 10025/10125 + 33334 sinkhole). Verified: JWKS served with `kid nextendo-baas-key-1`, account API answering, npln cert SAN covers the tenant, `stardewhost` (pid 1800000005) present and verified in the local account store, Ryujinx's `nextendo_baas.pem` identical to the stack's signing key.
+- Added `scripts/launch-citron.sh` (portable profile, nand/keys symlinked; `NEXTENDO_API=https://account.tobagin.eu` + trusted suffix, `NEXTENDO_SERVER_IP`/`NAT_IP` 127.0.0.1, npln tap 18500, JWKS port 18448, signing key from the stack) and `scripts/launch-ryujinx.sh` (`--root-data-dir ~/ryujinx-instances/stardew`, seeded from the main portable dir minus the production link, route table tenant→18500 / jku→18448). Both enforce the launch protocol and preflight the stack.
+- Lesson (citron, source-verified in `sfdnsres.cpp` `GetConfiguredIp`): the profile SETTING `nextendo_server_ip`/`nextendo_nat_ip` wins over `NEXTENDO_SERVER_IP`/`NEXTENDO_NAT_IP`, and a fresh profile defaults both to the production IPs — the env vars alone are silently ignored (this is why NAT checks and the JWKS fetch kept going to production). The wrapper now pins the settings in `qt-config.ini` (`\default=false`) and refuses to launch if that did not take. Added to `shared-docs/citron-isolation.md`.
+- Lesson (shared doc corrected, source-verified): Ryujinx detects `portable/` next to the BINARY only; per-title data dirs need `--root-data-dir`.
+- Added `docs/local-stack.md`; README pointer.
+- Test run (Experiment 2026-09-01-B): citron → 2321-4992 (pre-HEADERS cancel, emulator gap). Ryujinx → auth denied until two bundle fixes (account `NEXTENDO_DATA_DIR=/data` + `data/account/internal_net.conf` with a static account IP 10.89.1.100; `NEXTENDO_INTERNAL_KEY` removed from the account service), then auth PASSED and the RPC chain ran to `QueryGameSessions` → UNIMPLEMENTED → 2321-4224. `nextendo-local/compose.yml` was also being edited by another session during this work (backup `compose.yml.bak-*`).
+- Wrapper additions: `launch-ryujinx.sh --menu` (main window only, sign in first, then load the game).
+- Next: observe `QueryGameSessions` request fields, implement the first Stardew handler.
+
+## Session Log: 2026-09-02
+
+Built and confirmed:
+
+- `cmd/npln` + `internal/npln/*` (server, identity, auth, friends, sessions, gamesync) and `proto/*`
+  (copied NPLN bindings, notice preserved). `go build ./...`, `go vet ./...`, `go test -race
+  ./internal/npln/` all pass. Identity round-trip test in `internal/npln/identity_test.go`.
+- `scripts/launch-citron.sh`, `scripts/launch-ryujinx.sh` (`--menu` mode), `docs/local-stack.md`.
+- `nextendo-local`: added `stardew` (18501) and `stun` (coturn) services; account bundle fixes
+  (`NEXTENDO_DATA_DIR`, `internal_net.conf` + static IP, drop `NEXTENDO_INTERNAL_KEY`). npln cert
+  reissued with SAN `gamesync.npln.nintendo.net`. `compose.yml.bak-*` backups left from concurrent
+  edits by another session.
+- Two verified local accounts made friends via the account API: `stardewhost` (1800000005),
+  `stardewjoin` (1800000007). Second Ryujinx data dir `~/ryujinx-instances/stardew-join`.
+
+Confirmed flows: authentication, friends, farm hosting + full gamesync transport (see Flow sections).
+
+Open blocker: joining — the farm is returned and received but filtered out client-side. Filter
+decompiled (Experiment 2026-09-02); a clean contradiction means the analyzed function is probably not
+the true display path. Runtime memory capture works (sudo; guest RAM = largest `/dev/shm/Ryujinx-*`
+shm; freeze-120ms-after-query to catch the parse). Scratch MUST be on `/mnt/media/nextendo-research/`
+— filling `/tmp` tmpfs with dumps kills the shell tool (playbook §5); this happened this session.
+
+Emulator instability: the second (joiner) Ryujinx instance died repeatedly (memory pressure on the
+29 GB host with the full stack running). Host emulator freezes on quit (unimplemented cloud save).
+GDB stub: read-only works, breakpoints crash the emulator — do not use breakpoints.
+
+Lessons added to shared docs and project memory: shell-killing tmpfs rule, Ghidra function-vs-string
+address convention, guest-RAM shm identification, HostMappedUnsafe mirror bases, the join-filter
+model + the contradiction to resolve first.
