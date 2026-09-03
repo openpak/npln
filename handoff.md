@@ -6,6 +6,46 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-03 (session 6b — **LIVE host-vs-joiner job differential: the joiner dies in `AttachMeshJob`,
+  before NAT traversal ever starts**): host relaunched (`scratch/host-run8.log`), farm
+  `3a7e9415-5bf9-401d-8721-dc991225f1dc` hosted, joiner (the long-running instance, ~9 h uptime)
+  joined at 16:09:27 and failed in **12 s** — faster than the ~25 s stalls of session 4.
+  Both consoles read live with `readsess.py` + `piajobs.py` while it happened.
+  - **HOST (healthy):** glue state 9, Session +0x84 = 1, local station == host station
+    (`0x6b49d203` idx 23). Jobs: `NatTraversalJob::ProcessSuccess` **and** `WaitNatTraversal`,
+    `WanCreateNetworkJob::WaitResolution`, `CreateSessionJob::CompleteProcess`,
+    `UpdateSessionPropertyJob`/`NetUpdateNetworkPropertyJob::WaitUpdateNetworkProperty` (the lobby
+    flush working), `NplndLoginJob::WaitLogin` — **and `TurnJob::WaitServerConfig`**.
+  - **JOINER (failed):** glue state 7 during the attempt, then 1 (torn down); all stations 0.
+    Jobs: **`AttachMeshJob::CompleteFailure`**, `NplnBackgroundProcessJob::WaitConnectNetwork`,
+    `NetConnectNetworkJob::WaitConnectNetwork`, `TurnJob::WaitServerConfig` **and**
+    `TurnJob::StepResolveServerAddress`, then `ChangeStateJob::CleanupSession` +
+    `NplndLoginJob::WaitLogout`. **No `NatTraversalJob` state present at all.**
+  - **Two conclusions.** (1) `TurnJob::WaitServerConfig` is a NORMAL RESIDENT STATE — the healthy
+    host sits in it too. Session 5's "the joiner is blocked in WaitServerConfig waiting on an nplnd
+    relay config" is dead, and the joiner even advanced to `StepResolveServerAddress`. (2) The joiner
+    fails inside **`AttachMeshJob`**, i.e. BEFORE NAT traversal is ever started — which is why no
+    joiner-originated transport probe has ever appeared in any capture. The probe absence is a
+    symptom, not the fault.
+  - **Server side is clean and rules itself out:** the joiner did the full sequence (JoinGameSession,
+    IssueToken, KeepUserSession, `__pus` write, `AllocateIceServerSet`, `GetDocument docs/__gs/f`,
+    `__stu` write) and RECEIVED the host's 207-B roster push (station id `0x6b49d203`) at 16:09:27.
+    It then closed its KeepUserSession at 16:09:39 without ever answering. Note the host keeps
+    rewriting its roster into the joiner's mailbox once a second for a full minute afterwards; those
+    writes are correctly NOT pushed (change-only dedup) since the content is identical.
+  - **NEXT:** read the failing job's error. `AttachMeshJob` keeps its result at **job+0x100**
+    (`fn_76e6de4(param_1 + 0x100, ...)` in `am1 0x7c3dc60`, `am10 0x7c3fb04`, `am11 0x7c3fd08`), and
+    the step id is the byte at **job+0xd2** (1 = fixed-data, 7 = CreateMesh, 9/10 = JoinMesh,
+    11 = failure, 16 = CompleteFailure). Extend `piajobs.py` to print, for each job object whose
+    +0x48 diag pointer is an `AttachMeshJob::` string, the u32 at +0x100 and the byte at +0xd2 — that
+    names the failing step and its Pia error code directly. The 12 s window is enough if the probe is
+    armed before the join click. Candidate first suspect: `WaitGameSessionFixedData` (step 1) reading
+    our synthesized `docs/__gs/f` (`addr` = `127.0.0.2`, `p` = `18501`, `rs` = sha256 of the gsid,
+    `mcn` = "Farm4Player"), since that is the first thing the job does and the only field group we
+    invent wholesale. **Also re-run with a FRESHLY restarted joiner** — this instance had ~9 h uptime
+    and several prior failed joins, and it died faster than session 4's, so staleness is a live
+    variable that must be excluded before trusting the 12 s figure.
+
 - 2026-09-03 (session 6 — **the `:34343` "nplnd relay" was TELEMETRY; that plan is cancelled**):
   static RE only, no emulator driven. Three results, in order of consequence.
   - **`:34343` is Pia's MONITORING server, not nplnd.** Sessions 4 and 5 built their whole plan on
