@@ -1272,11 +1272,25 @@ podman logs -f nextendo-local_npln_1
 
 ## Next Steps
 
+-2. **(session 6c) START HERE: decrypt the failure telemetry.** The joiner's `AttachMeshJob` funnels
+   every failing step through `ProcessSendMonitoringData` before `CompleteFailure`, so the job object
+   no longer names the step that failed. But that funnel step BUILDS A MONITORING REPORT, and the
+   report is the `:34343` datagram whose AES-128-GCM we already broke. Procedure, no live probing
+   needed beyond one capture:
+   a. Restart BOTH emulators (a stale joiner changes the symptom — see the session-6c entry).
+   b. Arm `sudo tcpdump -X -i any udp port 34343 -w scratch/mon-fail.pcap` BEFORE the join click.
+   c. Host a farm, join, let it fail (~25-30 s on a fresh joiner).
+   d. Decrypt with `scratch/tools/piadec.py` and read the error out of the report body. The datagram
+      sent AT the failure is the one that matters; earlier ones are routine telemetry.
+   If the report does not carry it, fall back to static RE: read am2 (`0x7c3e010`) and the funnel
+   entry points am10 (`0x7c3fb04`) / am11 (`0x7c3fd08`) to find which offset receives the Result
+   BEFORE the state pair is overwritten. Do NOT resume guessing job offsets — `+0xd2` is not a step
+   id, and three probes built on that assumption all failed.
+
 -1. **(session 6) CANCELLED: do not implement `cmd/nplnd`.** The `:34343` traffic this item was
    built on is Pia telemetry (`MonitoringServerAddressResolveJob` fn 0x75dd5e4 /
    `MonitoringDataSendJob` step table 0xbd50800), not an nplnd relay login, and it is unanswered on
-   real hardware too. See the 2026-09-03 session-6 status entry. The open blocker is instead: the
-   joiner never answers the host's 93-byte transport probes. Next actions are listed there.
+   real hardware too. See the 2026-09-03 session-6 status entry.
 
 0. **(session 4) Live test of the lobby-data mechanism** — host + joiner on the shared profiles:
    a. Host a farm. While hosting, run `sudo python3 /mnt/media/nextendo-research/scratch/tools/
