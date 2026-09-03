@@ -6,6 +6,65 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-03 (session 6c — **joiner staleness is a real confounder; AttachMeshJob object layout
+  MEASURED; the failure funnel hides the original error, but telemetry should carry it**):
+  five live joins driven by the user against a relaunched host. Read-only probing only.
+  - **STALENESS MATTERS — always restart the joiner before a test.** The ~9 h joiner instance failed
+    in **12 s**; freshly launched joiners last **25-30 s**, sustain a bidirectional mailbox (78 B and
+    94 B messages BOTH ways, every few seconds) and get **successful TURN ALLOCATEs on both
+    consoles**. Runs: 16:09:27→39 (12 s, stale) · 18:15:33→18:16:02 · 18:20:19→49 · 18:23:41→53 ·
+    18:27:57→18:28:27. Session 6b's "12 s" figure came from the stale instance and should not be
+    treated as the normal failure time.
+  - **AttachMeshJob object layout, MEASURED in guest RAM** (not inferred — `scratch/tools/jobdump.py`
+    then `jobdiff.py`; one confirmed object, snapshot `scratch/jobsnap_1473981_NOW.txt`):
+    ```
+    +0x000 vtable            0x13f1d640
+    +0x008 ptr               0x14e876b0
+    +0x030 arg               +0x038 CURRENT step fn   0x10144414 = fn 0x7c3e414
+    +0x048 CURRENT state string
+    +0x050 saved arg         +0x058 PREVIOUS step fn  0x10144010 = fn 0x7c3e010 (am2)
+    +0x068 PREVIOUS state string
+    +0x088 NplndFacade       0x14e963c8   (matches facdump's facade address — the identity check)
+    +0x0a0 1 · +0x0a8/+0x0b0 0xffffffff patterns · +0x100 0x0000000100000000
+    +0x110 0xffffffffffffffff · +0x128/+0x130 tick counters · +0x138 0xc3
+    ```
+  - **The failure funnel loses the original error.** The one real job was in `CompleteFailure`,
+    entered FROM `ProcessSendMonitoringData` (previous step fn `0x7c3e010`). Every failing step
+    routes through that telemetry step before completing, so the saved-state pair only ever shows
+    the last two hops of the funnel — never the step that actually failed. The Result at
+    `+0x100/+0x108/+0x110` reads as SUCCESS (code 0, location `0xffffffff…`), so the error is NOT
+    stored there by the time the job settles.
+  - **Two traps that cost this session three runs and several bogus readings — do not repeat:**
+    (1) **`+0xd2` is NOT a step id.** It measures 0 on genuine jobs. Three probe hypotheses were
+    built on it (step id, multi-offset search, structural filter) and all rejected every real
+    object. Only the raw dump settled the layout. (2) Ryujinx maps guest RAM at **several host
+    addresses**, so one object appears 3× (0x7e1b…, 0x7e9b…, 0x7f1b…), and the PREVIOUS-state field
+    at +0x68 creates a phantom "object" at +0x20. Dedupe by guest offset before counting.
+  - **Tooling** (all in `scratch/tools/`, never the repo): `jobdump.py <pid> [prefix]` dumps raw
+    bytes around each matched state pointer — this is what revealed the layout, and it is the tool
+    to trust. `jobdiff.py <pid> [prefix] [--tag NAME]` snapshots every matching object in full to
+    `scratch/jobsnap_<pid>_<tag>.txt` for diffing. `attachprobe.py` is **superseded and unreliable**
+    — it encodes the wrong `+0xd2` assumption; delete or ignore it.
+    Practical notes: a scan is ONE linear pass over ~11 GB and takes 30-60 s, so it can miss a short
+    window entirely — but job objects PERSIST after the failure, so snapshot right AFTER the join
+    dies rather than trying to catch it live. And never `pkill -f attachprobe`: the pattern matches
+    the calling shell's own command line and kills it (exit 144); kill by pid.
+  - **NEXT — offline first, no console needed.** The error must be found where the funnel puts it,
+    and there is a strong lead: the funnel's own step is `ProcessSendMonitoringData`, i.e. it builds
+    a **monitoring report** — and that report is exactly the `:34343` datagram whose AES-128-GCM
+    encryption session 6 already broke (static keytab, `scratch/tools/piadec.py`). So the failure
+    reason is likely READABLE: capture `udp port 34343` during a join (`tcpdump -X`), decrypt the
+    datagram sent at the moment of failure, and read the error out of the telemetry payload. That
+    closes the loop with the session-6 finding that `:34343` is telemetry. Do this before any more
+    live probing. Secondary: read am2 (`0x7c3e010`) and the funnel entry points (am10 `0x7c3fb04`,
+    am11 `0x7c3fd08`) to find which offset receives the Result BEFORE `ProcessSendMonitoringData`
+    overwrites the state pair.
+  - **Server:** still no proven defect. Across all five joins it answered every RPC, relayed the
+    mailbox both ways, and coturn allocated for both consoles. The one field group we invent and
+    have never validated remains `docs/__gs/f` (`addr`=127.0.0.2, `p`=18501 — OUR gRPC endpoint, not
+    a Pia relay; plus `rs`, `mcn`, `maxu`). Suspicious given the joiner passes through
+    `WaitSetupRelayAddress`, but unproven — do not change it speculatively.
+
 - 2026-09-03 (session 6b — **LIVE host-vs-joiner job differential: the joiner dies in `AttachMeshJob`,
   before NAT traversal ever starts**): host relaunched (`scratch/host-run8.log`), farm
   `3a7e9415-5bf9-401d-8721-dc991225f1dc` hosted, joiner (the long-running instance, ~9 h uptime)
