@@ -6,6 +6,96 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-03 (session 6 — **the `:34343` "nplnd relay" was TELEMETRY; that plan is cancelled**):
+  static RE only, no emulator driven. Three results, in order of consequence.
+  - **`:34343` is Pia's MONITORING server, not nplnd.** Sessions 4 and 5 built their whole plan on
+    "every console sends 292-388 B UDP to `g2122d301.lp1.p.srv.nintendo.net:34343`, that is the
+    nplnd P2P login, implement `cmd/nplnd` and answer it". That is wrong. The port constant `0x8627`
+    lives in fn `0x75dd5e4`, and the function that installs that step names itself: fn `0x75dd45c`
+    references the diag string at `0x987e580` =
+    **`MonitoringServerAddressResolveJob::StepResolveMonitoringServerAddress`**. The datagrams
+    themselves are built by `MonitoringDataSendJob`: its step table is at `0xbd50800..0xbd50828`,
+    `StepMakeReport` = fn `0x75dcd84` (diag string `0x988000c`), `StepSendReport` = fn `0x75dce98`
+    (diag string `0x988759e`), and `StepSendReport` calls the AES/deflate builder `encB 0x75dbdf0`
+    twice (dry-run for size, then for real) — the very function session 5 reversed and labelled
+    "the nplnd login builder". So those datagrams are fire-and-forget **telemetry reports**, which
+    is exactly why nobody answers them and why the HOST reaches glue state 9 with them unanswered.
+    **`cmd/nplnd` must NOT be built.** The Pia AES-128-GCM work from session 5 stays valid and is
+    still the way to read these packets; only the naming and the plan were wrong.
+  - **The joiner's TURN config is NOT starved by nplnd either.** Session 5 argued
+    `TurnJob::WaitServerConfig` waits on an nplnd login reply via `IceServerConfigGetter`. The live
+    facade dump taken that session (`scratch/facdump_joiner_1899686/facade_*.bin`) already contains
+    our coturn host `10.87.0.2` twice, the credential
+    `1788388968:tenants/t-9f607adf-lp1/users/u-rxroqs444xrkmhpny2na` and its base64 HMAC — i.e. the
+    ICE set our gRPC `AllocateIceServerSet` returned is sitting in the facade. `TurnJob` polls the
+    getter through vtable slot `0x30` (`turnPoll 0x7ac049c` -> `IceServerConfigGetter` slot 6,
+    `ice6 0x7c3d2c0`) and returns "pending" (5) only while that call yields `0x10408`; the getter's
+    accessors (`ice2 0x7c3d150`, `ice3 0x7c3d208`) gate on the byte at getter+0xf11, and `ice6`
+    gates on the cached-flag byte at +0x1e2/+0xf10 — a plain async-request state machine, no nplnd
+    dependency in the path. Confirmed on the wire too: in `scratch/udp-join3.log` the JOINER does a
+    full STUN+TURN exchange from `10.87.0.2:63525` (20 B Binding, 176 B Allocate, 84 B replies).
+  - **What the joiner actually fails to do: answer the host's probes.** Same capture: the host
+    sends 93-byte transport probes `10.87.0.2:57630 -> 10.87.0.2:64157` 22 times over ~11 s and the
+    joiner (bound `Udp/64157`, `joiner-run7.log:742`) sends nothing back, ever — there is no
+    joiner-originated 93-byte packet in any capture. Mailbox signaling is healthy and finite (the
+    21:28 join: host 207-B roster, joiner 9-B `01 12`, then 78-B `32ab9864` messages both ways
+    every ~5 s, then only host->joiner) so the change-only push fix from session 4 holds. Pia jobs
+    mapped this session for the next step: `AttachMeshJob` steps `0x7c3db30` (GetGameSessionFixedData),
+    `0x7c3dc60` (WaitGameSessionFixedData), `0x7c3fb04`/`0x7c3fd08` (CreateMesh/JoinMesh + WaitJoinMesh),
+    `0x7c3feec` (WaitJoinMesh body); `NatTraversalJob` `0x76fbdb0` (StartNatTraversal), `0x76fbe58`
+    (Wait), `0x76fc088` (Retry), `0x76fc240` (ProcessSuccess), request sender `0x76fd4a0`, station
+    table walk `0x76fcc90`/`0x76fcd24`/`0x76fcd90`. The joiner's mailbox reader is
+    `sturead 0x7b57718` (fields suid/susid/sussid/suscid/pl, path `__pgn/<pgn>/__stu`) consumed by
+    `stuConsume 0x7b54bb0`.
+  - **NEXT:** find why the joiner never emits a transport probe. Two concrete lines: (a) drive a live
+    join and dump `NatTraversalJob`/`AttachMeshJob` state with `tools/piajobs.py` at 1 s intervals to
+    see which step it parks in and whether the station table (`0x76fcc90` walk) ever gets the host's
+    entry — the 207-B roster carries station ids 1+2, so check that `stuConsume` accepted it;
+    (b) decrypt the 78-B mailbox messages. Their key is NOT the static keytab (verified: brute-forced
+    the 16 table keys plus `rs`/gsid/HMAC derivations against 17 captured packets, zero GCM tag
+    matches), so it is a per-session key — find where the session transport key is installed
+    (`hdrDcaller 0x766b8d0` / `hdrEcaller 0x766914c` pass a key object at `param_1+0x50`, class
+    `nn::pia::transport::PacketWriter`/`PacketReader`) and read it from live guest memory.
+    Also note `docs/__gs/f` `rs` is ours to choose (sha256 of the gsid) and the game cross-checks it
+    between watch and point reads, so it must stay stable.
+
+- 2026-09-03 (session 5 — **Pia P2P packet encryption BROKEN; nplnd is the joiner's relay-config gate**):
+  the `nn::pia` on-wire encryption is fully reversed, so every `32 ab 98 64` datagram (the nplnd
+  `:34343` login and the mailbox NAT-traversal messages) can now be decrypted and read.
+  - **Crypto (reproducible, clean-room from the local research binary):** per-message **AES-128-GCM**.
+    Header format = Pia version 15 (kinnay wiki "6.32 - 7.2"): `magic(4) | flags(1) | dvid(2) |
+    svid(2) | pid(2) | footsz(1) | nonce(8) | tag(8)`. **Key** = `keytab[ hdr[14] & 0x0f ]` from a
+    static 16x16 byte table at ELF rodata `0x98c2eae` (read by AES setup `fn 0x75dbdf0`, table base
+    `&UNK_099c2eae + (b&0xf)*0x10`). **Nonce (12B)** = `hdr[6:14]` (8B header nonce) `|| LE32(0xfa85d05b)`
+    (the fixed nplnd network id, literal `uStack_7c=0xfa85d05b` in `fn 0x75dbdf0`). **Body** = raw
+    **DEFLATE** with 1 prefix byte skipped (`zlib wbits=-15`, plaintext[1:]); the `flags` low nibble is
+    the version/compress marker. Packet build/parse: `hdrD 0x75eaf04` (encrypt+deflate), `hdrE 0x75eb1d4`
+    (decrypt+inflate), `hdrC 0x75eac20` (magic/len check), header init `hdrA 0x75eaa8c`.
+  - **Decrypted the 3 captured `:34343` login datagrams**: each inflates to an identical-shaped **929-byte
+    Pia login bundle** (`2a 2c 00 ff 01 03 a0 …`, `0xff` = absent-field padding; per-session bytes in
+    `0x0b0..0x3a0` carry station/candidate/port data — e.g. `00 00 27 10` = port 10000, `00 00 03 e8` =
+    1000). Tool: `scratch/tools/piadec.py <tcpdump-Xlog>` (loads the key table from the binary at runtime;
+    the table and decrypted blobs stay in `scratch/`, never the repo).
+  - **Re-scoped the blocker with a live mid-join job dump** (`joinprobe.sh` + `piajobs.py`, read-only):
+    the **HOST reaches glue state 9 / `NatTraversalJob::ProcessSuccess` / session up with its OWN nplnd
+    login equally unanswered** — so nplnd login is NOT a hard gate by itself. The **JOINER** sits at glue
+    7 / session 0 / stations 0, parked in `NatTraversalJob::WaitNatTraversal` **and** `TurnJob::WaitServerConfig`
+    **and** `JoinSessionJob::WaitConnectNetwork`. The joiner needs a **relay** (it can't reach the host
+    directly under emulation); the TURN server **config** in NPLN mode is delivered by nplnd's
+    `IceServerConfigGetter` (a member of the 0x23d0-byte `NplndFacade`, ctor `fn 0x7c3bb7c`), not by our
+    gRPC `AllocateIceServerSet`. So `TurnJob::WaitServerConfig` waits on the nplnd login reply → no relay
+    candidate → NAT traversal never completes → join stalls 2318-1201. The host doesn't need a relay, which
+    is why it proceeds without nplnd.
+  - **NEXT (needs the user to drive a live join to test):** build a minimal `cmd/nplnd` UDP service on
+    `127.0.0.1:34343` that (a) decrypts the login (crypto above), (b) returns the login-ack the client's
+    receive path expects, carrying an ICE/TURN server config that points both consoles at our patched
+    coturn (`10.87.0.2:3478`, HMAC creds). Still to RE for the response: the nplnd login **reply** format
+    — read it from the nplnd socket reader (socket opened by `fn 0x75dd5e4`, port `0x8627`) and
+    `NplndLoginJob` steps (vtable `0xba6e878`; `ExecuteCore 0x75e3910` runs step fn at job+0x38, success
+    sets job+0xe bit0). Route `g2122d301.lp1.p.srv.nintendo.net` → 127.0.0.1 (already resolved there).
+    Clean decompiles in `~/ghidra-projects/out3/` (hdr*/pr*/rc*/sv*/nplndlogin*/cry*/enc*/facade*/bigctor);
+    tooling in `scratch/tools/` (piadec.py, facdump.py, ehfuncs/xref/gdec/vtfind/vtclass/readsess/piajobs).
+
 - 2026-09-02 (session 4, LATEST — the real P2P gate is Pia's **nplnd** service): after fixing
   coturn (patched image: ALLOCATE without REQUESTED-TRANSPORT → UDP; TURN allocations now succeed
   for both consoles), the server race (copy-on-write), the duplicate-push feedback loop (pushes are
@@ -1076,28 +1166,11 @@ podman logs -f nextendo-local_npln_1
 
 ## Next Steps
 
--1. **(session 4, latest) Implement Pia's nplnd relay service** — the last P2P gate. Facts: every
-   console sends UDP datagrams (292–388 B) to `g2122d301.lp1.p.srv.nintendo.net`:34343 (port
-   hardcoded in ELF fn 0x75dd5e4; the emulator routes that host to 127.0.0.1); Pia classes
-   `nn::pia::nplnd::{NplnPlugin,NplndService,NplndProtocol,NplndRelayClient,NplndLoginJob,
-   AttachMeshJob,DetachMeshJob,NplndHostMigrationJob,NplndPlayerInfo,IceServerConfigGetter}`
-   (vtables via tools/vtfind.py: relay client 0xba6f1a8, protocol 0xba6eb40, service 0xba6f250,
-   login job 0xba6e878). Joiner parks in `NplnBackgroundProcessJob::WaitConnectNetwork` until the
-   relay answers. Plan: (a) capture payloads (`scratch/nplnd-34343.log`, armed with tcpdump -X);
-   (b) decompile NplndRelayClient/NplndProtocol send+recv to get the login/attach-mesh/relay
-   message formats and the expected replies; (c) write `cmd/nplnd` (UDP :34343) in this repo:
-   login ack, attach-mesh ack, and packet relaying between attached stations of a session;
-   CAPTURED (scratch/nplnd-34343.log, 2026-09-02 21:42): the login datagram is 292 B: UDP payload =
-   magic `32 ab 98 64`, byte `10`, 21 zero bytes (nonce/session slot?), `00 0f 00 01 00 0f 00 00`,
-   `2c 00 fc 01`, then ~236 B of ciphertext — same magic as the 78/94-B mailbox signaling, so
-   nplnd and the NAT-traversal messages share one encrypted framing. A relay cannot answer without
-   the key; candidates: the 32-byte room secret `rs` we return in `docs/__gs/f` (we generate it,
-   so we would know it), the `_Pia_SystemData` 16-byte id, or the ICE/TURN credentials. Start the
-   RE at NplndProtocol (vtable 0xba6eb40; big methods 0x75f1830/0x75f19f0/0x76f9a74/0x76f9cf0)
-   and look for the key-derivation call sites (SHA/AES over `rs`).
-   (d) route `g2122d301.lp1.p.srv.nintendo.net` to it in the emulator route table (the shared
-   launcher already resolves *.nintendo.net to NEXTENDO_SERVER_IP=127.0.0.1, so listening on
-   127.0.0.1:34343 is enough) and add it to nextendo-local.
+-1. **(session 6) CANCELLED: do not implement `cmd/nplnd`.** The `:34343` traffic this item was
+   built on is Pia telemetry (`MonitoringServerAddressResolveJob` fn 0x75dd5e4 /
+   `MonitoringDataSendJob` step table 0xbd50800), not an nplnd relay login, and it is unanswered on
+   real hardware too. See the 2026-09-03 session-6 status entry. The open blocker is instead: the
+   joiner never answers the host's 93-byte transport probes. Next actions are listed there.
 
 0. **(session 4) Live test of the lobby-data mechanism** — host + joiner on the shared profiles:
    a. Host a farm. While hosting, run `sudo python3 /mnt/media/nextendo-research/scratch/tools/
