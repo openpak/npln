@@ -38,8 +38,15 @@ Build an independently written, open-source compatibility service for the networ
     the step id is the byte at **job+0xd2** (1 = fixed-data, 7 = CreateMesh, 9/10 = JoinMesh,
     11 = failure, 16 = CompleteFailure). Extend `piajobs.py` to print, for each job object whose
     +0x48 diag pointer is an `AttachMeshJob::` string, the u32 at +0x100 and the byte at +0xd2 — that
-    names the failing step and its Pia error code directly. The 12 s window is enough if the probe is
-    armed before the join click. Candidate first suspect: `WaitGameSessionFixedData` (step 1) reading
+    names the failing step and its Pia error code directly. **Written this session:**
+    `scratch/tools/attachprobe.py [host|joiner|pid] [--watch [secs]]` does exactly that (finds each
+    job by its +0x48 diag pointer, prints +0xd2 step id and the +0x100 result, `--watch` loops so it
+    can be armed BEFORE the join click; `PIA_JOB_PREFIX` selects a different job class). **Its
+    memory-scanning path is UNVALIDATED** — both emulators exited before it could be run against a
+    live process, so the first job of the next session is to confirm it against a known-good state
+    (e.g. `PIA_JOB_PREFIX=NatTraversalJob attachprobe.py host` on a hosting console should print
+    `ProcessSuccess` with result 0) before trusting anything it says about a failure.
+    The 12 s window is enough if the probe is armed before the join click. Candidate first suspect: `WaitGameSessionFixedData` (step 1) reading
     our synthesized `docs/__gs/f` (`addr` = `127.0.0.2`, `p` = `18501`, `rs` = sha256 of the gsid,
     `mcn` = "Farm4Player"), since that is the first thing the job does and the only field group we
     invent wholesale. **Also re-run with a FRESHLY restarted joiner** — this instance had ~9 h uptime
