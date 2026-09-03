@@ -6,6 +6,75 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-03 (session 7 — **local stack rebuilt after a machine reset; live `:34343` telemetry
+  CAPTURED AND DECRYPTED for the first time; the error-code field traced to a struct offset, not
+  yet read live**): this machine had lost state since session 6c — nextendo-local's containers
+  were down, `tcpdump`, `python-cryptography`, and a JDK were no longer installed, and passwordless
+  sudo was gone. All rebuilt (see **Environment rebuild** below). Fresh joiner still fails in a
+  consistent **12-13 s**, not session 6c's 25-30 s — that earlier timing was not a reliable
+  constant, staleness alone doesn't explain it (this joiner was freshly relaunched each time).
+  - **Captured `udp port 34343` during a live failing join and decrypted it** (`piadec.py`) —
+    confirms session 6c's lead was right in kind: the joiner DOES send Pia monitoring reports
+    during the failing `AttachMeshJob`, at exactly the moment `KeepUserSession` closes. Two reports
+    landed in one capture window, ~140ms apart, both inflating to the same 929-byte shape as
+    session 5's "login bundle" (now understood per session 6 to be the generic monitoring-report
+    format, not a login). Raw decrypted bytes are in `scratch/34343-session7b.log` (never the repo).
+  - **Traced the report-building call chain via clean decompile** (`~/ghidra-projects/out3/`:
+    `stepresult_75dbd00.c`, `stepmakereport_75dcd84.c`, `reportbuf_75dfc40.c`, `tickA_75de150.c`):
+    `reportbuf_75dfc40()` returns `&reportArray[idx]` with a **0x3e0-byte stride** (matches the
+    929-byte decoded shape). The entry point is `stepresult(jobPtr, resultCode)` at ELF `0x75dbd00`
+    (no diag string of its own): it writes two tick/duration values into the CURRENT report buffer
+    at buffer**+0xb0** and **+0xb4** (via `tickA 0x75de150` = a ratio of two globals, likely a
+    ms-per-tick conversion), sets `*(int*)(jobPtr+0x24) = resultCode`, and — only if the job has a
+    valid inner sub-object at `jobPtr+0x28` and a couple of gates pass (`fn_76db7a4`, `fn_76d7aa0`
+    at +0x5f8/+0x618) — calls `mkReport_75dcd84(out, jobPtr+0x28, jobPtr, resultCode)`.
+  - **`mkReport` (`MonitoringDataSendJob::StepMakeReport`, diag string confirms the name) gates on
+    the JOB POINTER being present**, not on the result code as session 6c's function-name alone
+    suggested: `param_3==0` (null job) → returns pending code `0x10407`; `job->+0x10==1` (a
+    detach/shutdown flag) → returns `0x10408` (both look like generic Pia async-pending codes, not
+    errors — consistent with session 6's note that `0x10408` is `TurnJob`'s ordinary "pending"
+    return). Otherwise it stores `(jobPtr+0x28)[0x17] = jobPtr` (a self-reference, 8 bytes at
+    struct-relative **+0xB8**) and `*(u32*)((jobPtr+0x28)+0x18*4) = resultCode` — **so the actual
+    Pia result/error code for whatever job called `stepresult` lands at (jobPtr+0x28)+0xC0, i.e.
+    jobPtr+0xE8**, a location on the FAILING JOB ITSELF, not inside the wire report buffer we can
+    decrypt. This is a different, more direct target than decoding the wire bytes.
+  - **`jobPtr` here is some outer container job that embeds a `MonitoringDataSendJob`-like
+    sub-object at +0x28 and two more sub-objects at +0x5f8/+0x618** — NOT AttachMeshJob itself
+    (AttachMeshJob's own layout, measured in session 6c, has its diag pointer at +0x48 and no +0x28
+    sub-object in that convention). Best guess from prior sessions' job traces: this is
+    `NplnBackgroundProcessJob` (the container session 4/5/6 already saw wrapping `WaitConnectNetwork`
+    / `AttachMeshJob`), but that is UNCONFIRMED — the next live read should verify the class name via
+    `jobdump.py <joinpid> NplnBackgroundProcessJob` (or try container prefixes seen in job traces:
+    `NplnBackgroundProcessJob`, `JoinSessionJob`) and then dump **container+0xE8** as a `u32` right
+    after a join fails. That single field, if read, should be the actual Pia error/result code
+    directly — no wire decrypt needed.
+  - **Byte-diffing the two captured wire reports (secondary, weaker lead — superseded by the struct
+    trace above but noted in case it's still useful):** the two reports differed at decoded-byte
+    offset **0x1a4/0x301 = 0x2f77 = 12151 (decimal)**, i.e. milliseconds — matching the observed
+    ~12.15 s failure almost exactly, so that field is very likely an elapsed/uptime counter, not the
+    error. A flag byte at **~0x31a** is `0xff` (absent) in the earlier report and `0x01` in the
+    final one — plausibly a "job settled" flag, not itself an error code.
+  - **Environment rebuild this session** (do these once per fresh machine/session, they were all
+    missing): nextendo-local's `dockerfile_inline` services (`stardew`, `stun`, `nncs`) fail to
+    build under the `docker-compose` CLI plugin (`podman compose`) with a spurious
+    "Dockerfile path" symlink error — **build them manually** with `podman build -t
+    nextendo-local-<svc> -t nextendo-local_<svc> -f <dockerfile> <context>` (the compose file's
+    `dockerfile_inline:` block, copied to a temp file, or `./stun`'s real Dockerfile as-is), then
+    `podman compose up -d --no-build` / `podman compose --profile stun --profile nncs up -d
+    --no-build` picks up the pre-built images. **`nncs` (the `nncs` profile) must be started too** —
+    without it the NAT-check UDP probes at boot time out and Stardew shows an error applet before
+    ever reaching NPLN; the launcher already warns about this but it's easy to miss. Packages
+    needed and NOT preinstalled: `tcpdump`, `python-cryptography` (for `piadec.py`), `jdk-openjdk`
+    (for `pyghidra`/`gdec.py` — **use the pinned `~/.local/opt/jdk-21.0.12.1+1` via `JAVA_HOME`, not
+    a freshly-installed newer JDK**, since Ghidra 12.1.3 expects it). No standing passwordless-sudo
+    file this session — **use `pkexec <cmd>` per-command instead** (per-machine choice, not a
+    project convention change). Also: the shared-profile launcher's `NEXTENDO_ALLOW_SHARED=1` guard
+    fires normally when host+joiner are both intentionally up — expected, not a bug.
+  - **NEXT:** live-read `container+0xE8` (u32) on the object found by `jobdump.py <joinpid>
+    NplnBackgroundProcessJob` (verify the class name first — it may need a different prefix)
+    immediately after a join fails; that should be the literal Pia error/result code. Do this before
+    any more wire-report byte-diffing — the struct trace is a much shorter path to the same answer.
+
 - 2026-09-03 (session 6c — **joiner staleness is a real confounder; AttachMeshJob object layout
   MEASURED; the failure funnel hides the original error, but telemetry should carry it**):
   five live joins driven by the user against a relaunched host. Read-only probing only.
