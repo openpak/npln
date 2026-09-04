@@ -6,6 +6,111 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-04 (session 8 — **live struct offset chase (jobPtr+0xE8 etc.) DEAD-ENDS on 3 job types;
+  second wire capture reproduces the settle-flag but the "error code" region reads zero, not a
+  code — new hypothesis: Pia/mesh may be SUCCEEDING and the game itself rejects post-attach**):
+  Ryujinx host/joiner were freshly relaunched this session; local stack containers already up.
+  - **Live-read `jobPtr+0xE8` (the offset session 7 derived) on all three container candidates —
+    all zero.** Confirmed via `jobdump.py 302386 <prefix>`, cross-validated layout using the shared
+    `+0x08 ptr` (0x14e876b0, identical across every job type) and `+0x88 NplndFacade` (0x14e963c8)
+    fields as anchors:
+    - `NplnBackgroundProcessJob::CompleteFailureProcess` — jobPtr+0x28 (the "valid inner sub-object"
+      gate) reads **null**, so mkReport's write path can't have fired; this job is NOT the
+      container session 7 guessed.
+    - `JoinSessionJobBase::CompleteFailure` (PREVIOUS state `JoinSessionJob::ProcessSendMonitoringData`
+      — matches the funnel name exactly) — jobPtr+0x28 also **null**; jobPtr+0xE8 reads
+      `0xffffffffffffffff` (looks like an unset sentinel, not a written code); the self-reference
+      field at jobPtr+0xE0 (which the "otherwise" branch is supposed to write) is **0**, meaning
+      that branch never executed for this instance either.
+    - `AttachMeshJob::CompleteFailure` (PREVIOUS state also `ProcessSendMonitoringData`) — jobPtr+0x24
+      (the unconditional `stepresult` write, independent of the gated mkReport path) reads **0**.
+  - **Session 7's own arithmetic has a bug worth flagging, not resolving further:** it derives
+    `(jobPtr+0x28)+0x18*4` and separately states the result is `(jobPtr+0x28)+0xC0` — `0x18*4=0x60`,
+    not `0xC0`. Whichever is right, neither offset produced a plausible code on live reads above, so
+    don't trust this derivation without re-deriving from the decompile.
+  - **Pivoted to a value-search instead of more offset-guessing:** `piajobs.py`'s live job-state scan
+    incidentally also caught what look like Pia **result-name strings** in the same rodata window —
+    `Protocol`, `ResourceExhausted`, `DataLoss`, `Unknown`, `Ok` (3 occurrences each — matching the
+    3 shm-mirror count of our failing jobs) and `Cancelled` (24, too common to be specific). Searched
+    ±0x2c0 bytes around all three job objects' bases for a pointer to any of these exact string
+    addresses — **no hits**. Either the reference is transient (register/local, never stored back to
+    the object) or it lives outside the window searched.
+  - **Second live wire capture** (`scratch/mon-fail2.pcap` → `mon-fail2.txt`, decrypted via
+    `piadec.py`/`scratch tools`): 2 reports, 123ms apart, same 929-byte shape as session 7.
+    - **Reproduces session 7's settle-flag independently:** decrypted offset **0x31a** goes
+      `0xff -> 0x01` between the two reports — second session confirming the same field.
+    - Elapsed-timer field at **0x1a4** reads `0x2f86` = 12166 ms, consistent with the "fresh joiner
+      fails in ~12-13s" timing already established.
+    - The only OTHER region that flips from all-`0xff` (unset) to real data exactly when the job
+      settles is **0x30f-0x316** (8 bytes) — but it lands on **all-zero**, not a distinguishing code.
+  - **Pattern across both live-memory and wire-decrypt evidence this session: every candidate "error
+    code" location reads either the unset sentinel (0xFFFFFFFF) or 0 — never a nonzero Pia error.**
+  - **NEW HYPOTHESIS, not yet tested:** the Pia/mesh layer may be reporting SUCCESS (result 0 = Ok)
+    for this join, and the actual failure decision happens in GAME-SIDE logic after attach succeeds
+    (e.g. a version or session-data validation check), not inside Pia's job/monitoring system at
+    all. This would explain why no nonzero error code has turned up anywhere probed so far. Testable
+    without more struct-offset guessing: check whether `AttachMeshJob`/`JoinSessionJob` ever reach a
+    state indicating the mesh was actually established (station assignment, per session 4's
+    `readsess.py` local/host station fields) shortly before `CompleteFailure`, and look for
+    game-layer (not Pia-layer) checks — e.g. `_Pia_SystemData`/session validation callbacks — that
+    run right after attach and could themselves synthesize the failure.
+  - **Environment note:** `pkexec` for short-lived reads (`readsess.py`, `jobdump.py`) authorizes
+    without a visible prompt reliably; `pkexec tcpdump` (long-running) repeatedly hit a GUI polkit
+    dialog that closed/timed out before the user could respond — worked only when the user ran
+    `sudo tcpdump` directly in their own interactive terminal instead of through this tool's `pkexec`.
+    Prefer that path for any future long-running root capture.
+  - **STATE MACHINE FOUND (static RE, `~/ghidra-projects/out3/critbuilder_1ac2350.c`, guest VA
+    0x9fc8350) — this is the real mechanism, not a guess.** This function is `SwitchNetworkGlue`'s
+    per-tick driver; it `switch`es on `state(+0x68)` and for state **7** does:
+    ```c
+    if (iVar9 == 7) {
+      uVar11 = func_0x0770c8ac(uVar19);        // poll: is the one pending async task done?
+      if ((uVar11 & 1) != 0) {                  // done
+        func_0x0770c8c4(&uStack_a40,uVar19);    // fetch its int result code into uStack_a40
+        if ((int)uStack_a40 != 0) {             // nonzero => error
+          ...fn_76e6c78 (format) + func_0x01bc395c (== glueerr_1ac395c, sets state=0xc)...
+        }
+        *(param_1+0x68) = 9;  *(param_1+0x6d) = 1;   // zero => SUCCESS: state->9, isHost=1
+      }
+      // else: task not ready yet — state simply stays 7, nothing else happens this tick
+    }
+    ```
+    `uVar19 = uRam000000000e6fb568` is a single shared "current pending async task" global reused
+    across states 2/5/6/7/0xb/0xc — same poll/fetch pair (`func_0x0770c8ac`/`func_0x0770c8c4`)
+    everywhere, just checked at different states. **The joiner is stuck at 7 because that task's
+    ready-poll never flips true** — not because a result is present and hidden; there is nothing to
+    decrypt or offset-hunt for at this state, the task genuinely never completes. `gluecreate_1ac5070`
+    (state 4->7, see below) is what starts it. The host reaching 9 with `isHost=1` set only happens
+    via this exact same branch, confirming the reading.
+  - **`gluecreate_1ac5070_1ac5070.c`** (guest VA 0x9fcb070) is the state 4->7 transition: gated on
+    entry `state==4`, branches on `mode(+0x70)` byte, then calls `func_0x0770b160(&iStack_68, uVar2,
+    ...)` where `uVar2 = uRam000000000e6fb568` — the SAME global `critbuilder`'s state-7 branch later
+    polls. This is almost certainly "start async task", i.e. the call that arms the thing state 7
+    waits on.
+  - **Tried and FAILED to resolve `func_0x0770b160`/`func_0x0770c8ac`/`func_0x0770c8c4` this
+    session — do not trust their names as fact.** `gdec.py`'s approach (find the eh_frame range
+    *containing* the call-target VA, decompile the function starting at that range's beginning) gave
+    wrong answers here: VA `0x770b160` resolved to a function spanning `0x770b110..0x770b1e8` that is
+    an `nn::async::Executable` DESTRUCTOR (confirms the subsystem uses Nintendo SDK's
+    `nn::async::Executable` task framework — that part is real and useful), not a task-starter.
+    VA `0x770c8ac` and `0x770c8c4` both resolved to the SAME function (`0x770c784..0x770c90c`),
+    which decompiles as a generic field-copy/swap operator unrelated to polling. Likely cause: these
+    call targets aren't at clean eh_frame-registered function entries (mid-function labels, or
+    `ehfuncs.py`'s lookup attributed them to the wrong adjacent range) — `gdec.py` always decompiles
+    the START of whatever range it finds, not the exact requested VA, so a wrong range silently gives
+    a wrong function with no error. Needs a different resolution method (e.g. checking Ghidra's own
+    disassembly at the exact VA instead of trusting the eh_frame containing-range heuristic) before
+    building anything further on what these three calls actually do.
+  - **HYPOTHESIS TESTED AND REFUTED, same session:** ran `readsess.py` on host and joiner right after
+    a live failure. Host: glue `state(+0x68)=9` ("session up"), local/host station both
+    `0x6b49d203`/idx 21 (assigned, matching). Joiner, same moment: `state(+0x68)=7` (not 9), local
+    AND host station both **0x0/0** — no station was ever assigned. So the "Pia succeeds, game
+    rejects after" idea from earlier in this session is wrong: the mesh attach genuinely never
+    completes on the joiner. This IS useful, ungated signal though — the joiner's glue state stalls
+    at **7**, never reaching the host's **9**. That's a small, nameable enum (values 0-9 seen so
+    far), not a speculative struct offset — pinning down what states 7/8/9 mean from the state
+    machine's transition function is a tractable next step, unlike the job-struct chase above.
+
 - 2026-09-03 (session 7 — **local stack rebuilt after a machine reset; live `:34343` telemetry
   CAPTURED AND DECRYPTED for the first time; the error-code field traced to a struct offset, not
   yet read live**): this machine had lost state since session 6c — nextendo-local's containers
@@ -1341,7 +1446,33 @@ podman logs -f nextendo-local_npln_1
 
 ## Next Steps
 
--2. **(session 6c) START HERE: decrypt the failure telemetry.** The joiner's `AttachMeshJob` funnels
+-3. **(session 8) START HERE: fix the function-resolution method, THEN decompile `func_0x0770b160`
+   / `func_0x0770c8ac` / `func_0x0770c8c4`.** The glue state machine is now FOUND, not guessed
+   (`critbuilder_1ac2350.c`, see session-8 entry) — state 7 is "waiting on one pending async task
+   (an `nn::async::Executable`)"; the joiner never leaves it because that task's ready-poll never
+   flips true. `gluecreate_1ac5070` starts it (state 4->7) via `func_0x0770b160(&iStack_68,
+   uRam...fb568, alStack_620)`; `critbuilder`'s state 7/2/5/6/0xb/0xc branches all poll the same
+   task via `func_0x0770c8ac`/`func_0x0770c8c4`. Naive VA-lookup (`gdec.py` as used by prior
+   sessions for `am*`/`glue*`) gave WRONG functions for these three specific addresses this session
+   (see the "Tried and FAILED" note above) — don't repeat that mistake:
+   a. First fix resolution: check what's actually at these VAs in Ghidra directly (disassemble the
+      exact address, don't rely on `ehfuncs.func_of()`'s containing-range guess) before decompiling.
+      They may be mid-function labels, PLT/GOT-indirected, or need the analyzed (not headless
+      unanalyzed) project.
+   b. Once resolved: `func_0x0770b160` should reveal what network operation state-7's task actually
+      performs (this is THE question — what is the joiner actually waiting for). `alStack_620` is
+      built from `param_2` (gluecreate's 2nd arg) via `func_0x076ecca8` — trace `param_2` at the
+      call site in whatever calls `gluecreate` to learn what's being described (candidate: the
+      target session/farm being joined).
+   c. Cross-check against the job states already known live (`AttachMeshJob::ProcessSendMonitoringData
+      -> CompleteFailure`, `JoinSessionJob::ProcessSendMonitoringData -> CompleteFailure`) to see
+      which glue-state transition they correspond to.
+   d. Session 7/8's struct-offset chase (`jobPtr+0xE8` etc.) is superseded by the state-machine
+      finding — don't resume it.
+   e. `pkexec tcpdump` (long-running) is unreliable through this tool — have the user run
+      `sudo tcpdump` directly in their own terminal for any future capture.
+
+-2. **(session 6c, SUPERSEDED by session 8 above) decrypt the failure telemetry.** The joiner's `AttachMeshJob` funnels
    every failing step through `ProcessSendMonitoringData` before `CompleteFailure`, so the job object
    no longer names the step that failed. But that funnel step BUILDS A MONITORING REPORT, and the
    report is the `:34343` datagram whose AES-128-GCM we already broke. Procedure, no live probing
