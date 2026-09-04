@@ -410,6 +410,32 @@ func (g *sessionServer) JoinGameSession(ctx context.Context, req *mmpb.JoinGameS
 	}, nil
 }
 
+// dropMember removes a departed player from the farm's member list; when the host (rank 1, first
+// member) goes, or nobody is left, the farm is gone too — otherwise QueryGameSessions keeps
+// listing a farm nobody hosts and joiners time out against it. Locks g.mu only.
+func (g *sessionServer) dropMember(gsid, user string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	list := g.members[gsid]
+	if len(list) == 0 {
+		return
+	}
+	if list[0].GetUser() == user {
+		delete(g.sessions, gsid)
+		delete(g.members, gsid)
+		log.Printf("[MM] host %s left: farm %s closed", lastSeg(user), gsid)
+		return
+	}
+	kept := list[:0]
+	for _, m := range list {
+		if m.GetUser() != user {
+			kept = append(kept, m)
+		}
+	}
+	g.members[gsid] = kept
+	log.Printf("[MM] %s left farm %s (%d left)", lastSeg(user), gsid, len(kept))
+}
+
 func memberOf(list []*mmpb.UserSession, user string) bool {
 	for _, m := range list {
 		if m.GetUser() == user {

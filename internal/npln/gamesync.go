@@ -324,15 +324,22 @@ func (g *gamesyncServer) fields(name, streamUss string) *commonpb.MapValue {
 // without it each console knows only itself and the mesh join times out at "connecting".
 func (g *gamesyncServer) withStation(gsid, uss string, m *commonpb.MapValue) *commonpb.MapValue {
 	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.withStationLocked(gsid, uss, m)
+}
+
+// withStationLocked: caller holds g.mu. Every member document that leaves the server goes
+// through here — the initial listing, the wake re-pushes AND the write-path delivery — so a
+// peer never sees the console's placeholder ids, not even for one push.
+func (g *gamesyncServer) withStationLocked(gsid, uss string, m *commonpb.MapValue) *commonpb.MapValue {
 	st := g.store[gsid+"|docs/__pgn/All/__stu/"+uss]
-	g.mu.Unlock()
 	out := mergeFields(nil, m)
 	// The session ids are server-owned. A console writes its own member document with
 	// upcsid=0 (later an empty map) and only ucsid/ussid set; Pia's NplnPlugin keys the
 	// NAT/TURN station tables on upcsid (the lowest one is the host), so a peer served the
 	// console's placeholder builds a station with id 0, never sets up its relay to the host,
 	// and the join times out at WaitSetupRelayAddress (2318-1201). Overlay the rank.
-	if s := g.lookup(uss); s != nil && s.rank > 0 {
+	if s := g.sess[uss]; s != nil && s.rank > 0 {
 		r := gsInt(int64(s.rank))
 		out.Fields["ussid"], out.Fields["ucsid"], out.Fields["upcsid"] = r, r, r
 	}
@@ -481,12 +488,16 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 	defer func() {
 		g.mu.Lock()
 		delete(g.watchers, w)
+		gone := g.sess[streamUss]
 		delete(g.sess, streamUss) // the stream IS the session: closed stream = player gone
 		for _, n := range []string{"docs/__pgn/All/__pus/" + streamUss, "docs/__us/" + streamUss} {
 			delete(g.store, w.gsid+"|"+n)
 			g.deliver(w.gsid, n, "DELETED", nil) // tell the others (the host) this station is gone
 		}
 		g.mu.Unlock()
+		if gone != nil {
+			g.mm.dropMember(gone.gsid, gone.uid) // matchmaking membership follows the gamesync session
+		}
 		g.wakeFarm(w.gsid)
 		log.Printf("[GS] KeepUserSession closed uss=%s", streamUss)
 	}()
@@ -554,6 +565,7 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 					return err
 				}
 			}
+			log.Printf("[GS] target %s LISTED to=%s", tid, lastSeg(streamUss))
 			if err := send(targetChange(tid, gspb.TargetChange_LISTED)); err != nil {
 				return err
 			}
@@ -576,6 +588,15 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 // logPush traces mailbox/station document deliveries (docs/__pgn/All/__stu/<uss>) so a lost
 // signaling message can be told apart from one the client ignored.
 func logPush(streamUss, tid, kind, name string, m *commonpb.MapValue) {
+	if strings.Contains(name, "/__pus/") {
+		keys := make([]string, 0, len(m.GetFields()))
+		for k := range m.GetFields() {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		log.Printf("[GS] push to=%s tid=%s %s %s fields=%s upcsid=%v", lastSeg(streamUss), tid, kind, lastSeg(name), strings.Join(keys, ","), m.GetFields()["upcsid"].GetIntegerValue())
+		return
+	}
 	if !strings.Contains(name, "/__stu/") && kind != "DELETED" {
 		return
 	}
@@ -693,7 +714,11 @@ func (g *gamesyncServer) apply(ctx context.Context, ops []*gspb.WriteOperation) 
 			kind = "DELETED"
 		}
 		log.Printf("[GS] write farm=%s %s %s fields=%s", gsid, kind, opName(op), fieldKeys(g.store[k]))
-		g.deliver(gsid, opName(op), kind, g.store[k])
+		doc := g.store[k]
+		if n := opName(op); doc != nil && (strings.Contains(n, "/__pus/") || strings.Contains(n, "/__us/")) {
+			doc = g.withStationLocked(gsid, ussFromDocPath(n), doc) // never deliver placeholder ids (upcsid=0)
+		}
+		g.deliver(gsid, opName(op), kind, doc)
 		if os.Getenv("NPLN_GS_DIAG") != "" {
 			log.Printf("[GS][DIAG] %s = %s", opName(op), prototext.MarshalOptions{Multiline: false}.Format(g.store[k]))
 		}
