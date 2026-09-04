@@ -149,6 +149,10 @@ func NewServer(creds credentials.TransportCredentials) *grpc.Server {
 		// The client pings often, also without streams; grpc-go's default policy answers with
 		// GOAWAY(ENHANCE_YOUR_CALM) and kills every in-flight RPC (measured on the reference server).
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 5 * time.Second, PermitWithoutStream: true}),
+		// Probe the console ourselves: a client that vanishes without closing (power loss,
+		// emulator killed) keeps its KeepUserSession stream — and its farm seat — until the
+		// connection is declared dead. 15 s idle ping + 10 s timeout = gone within ~25 s.
+		grpc.KeepaliveParams(keepalive.ServerParameters{Time: 15 * time.Second, Timeout: 10 * time.Second}),
 	}
 	if creds != nil {
 		opts = append(opts, grpc.Creds(creds))

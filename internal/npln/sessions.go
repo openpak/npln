@@ -420,7 +420,7 @@ func (g *sessionServer) dropMember(gsid, user string) {
 	if len(list) == 0 {
 		return
 	}
-	if list[0].GetUser() == user {
+	if lastSeg(list[0].GetUser()) == lastSeg(user) {
 		delete(g.sessions, gsid)
 		delete(g.members, gsid)
 		log.Printf("[MM] host %s left: farm %s closed", lastSeg(user), gsid)
@@ -428,7 +428,7 @@ func (g *sessionServer) dropMember(gsid, user string) {
 	}
 	kept := list[:0]
 	for _, m := range list {
-		if m.GetUser() != user {
+		if lastSeg(m.GetUser()) != lastSeg(user) {
 			kept = append(kept, m)
 		}
 	}
