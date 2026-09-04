@@ -6,6 +6,42 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-04 (session 9c — **LIVE READ, SAME SITTING: the state machine is NOT the bug — the async
+  connect genuinely started and is genuinely still pending at the real network layer, below anything
+  decompiled so far**): user hosted + joined live (Ryujinx host/joiner already running, joiner driven
+  to Co-op → Join and left to stall). One clean `pkexec`-root read via a new tool
+  (`scratch/tools/readtask.py`, reads the global task-context pointer + the whole chain traced in
+  9/9b) while the joiner sat in the stall:
+  - **Glue state = 7**, confirmed (matches the visible stall).
+  - **taskCtx local state (+0x60) = 5** — this field is ONLY ever set by `b160`/`sessB` AFTER
+    `func_0x0770d948` returns SUCCESS (session-9b trace: `if (*param_1 != 0) return;` guards it). Since
+    it reads 5, the ENTIRE static gate chain traced in session 9b actually ran and succeeded once:
+    `d948`'s `SessionB+0x3c==4` gate passed, `cb30` passed its busy/capability gates and its first
+    virtual call (`target->vtbl[0x20]`), and `f1f8` passed its own null-check and second virtual call
+    (`facilityObj->vtbl[0x40]`), recorded a start tick, and installed its poll continuation.
+  - **The `c8c4`-polled status object: state(+0)=3 (in the busy range {2,3,4}), status(+4)=0x648e**
+    — NOT one of the five known terminal constants (`0xa467,0xcc63,0xac64,0xc47f,0xc485`). So the task
+    is not secretly terminal-and-unread; it is legitimately, still, actively waiting.
+  - **Correction to session 9b's live-read plan**: `d948`'s gate is NOT on the object I'd been calling
+    "Session" at `taskCtxPtr+0x40` directly — it's on `*(long*)(thatObject+0x80)+0x3c` (one more hop),
+    and `cb30`'s actual "Session" argument is reached through yet another hop off THAT object (a
+    global fallback substituted if the derived pointer is null). My first script version read
+    `+0xd8` etc. off the wrong (too-shallow) object; harmless here since the state=5/status=0x648e
+    result already answers the real question, but the exact 3-hop chain (`taskCtxPtr+0x40` →
+    `+0x80` deref → `+0x3c` gate / `+0x18` chain with global fallback) needs re-deriving precisely
+    before trying to read `+0xd8`/the vtable pointers meaningfully.
+  - **CONCLUSION: the SwitchNetworkGlue/async-task state machine traced across sessions 8-9c is
+    exonerated.** It is not where the bug lives. The bug is in whatever the two vtable-dispatched
+    calls actually do at the socket/protocol level — i.e. back to a P2P/mesh-connectivity question,
+    consistent with session 4's late finding that the host probes the joiner's UDP port every 500ms
+    while the joiner never answers until relay allocation succeeds. **NEXT: a live packet capture
+    during the exact same stall** (`sudo tcpdump` in the user's own terminal per the existing lesson,
+    not `pkexec`) to see whether the joiner emits ANY connect/punch traffic at all once state 7 is
+    reached, and to what address/port. This is a different, more promising angle than continuing to
+    decompile the vtable targets blind.
+  - Tool added: `scratch/tools/readtask.py` (root, read-only, no freeze — extends `readsess.py` with
+    the task-context global `G_TASKCTX_PTR = G_MAIN + 0xe5fb568`).
+
 - 2026-09-04 (session 9b — **traced the state-7 task all the way to its concrete "start connecting"
   call; the last hop is a vtable dispatch that needs a live read, not more static tracing**): follow-on
   to session 9 in the same sitting, still static-only.
@@ -1549,33 +1585,32 @@ podman logs -f nextendo-local_npln_1
 
 ## Next Steps
 
--5. **(session 9b) START HERE: ONE live read while the joiner is stuck in glue state 7.** The whole
-   static chain is now traced as far as it can go without runtime data: `gluecreate` → `sessB`
-   (`b160_760b160.c`) → `d948_760d948.c` (gates on Pia Session state `session+0xd8==4`) → `cb30_763cb30.c`
-   (busy/capability gates, then a **virtual call** `target->vtbl[0x20]`) → `f1f8_76421f8.c` (a
-   **second virtual call**, `facilityObj->vtbl[0x40]`, then records a start tick and installs a
-   poll-continuation). Both virtual calls dispatch to a concrete class chosen at runtime — that can't
-   be resolved statically without knowing which vtable got installed. Read, in this priority order
-   (needs a fresh joiner parked in glue state 7 — see the testing lessons in the memory notes: restart
-   both emulators first, a stale instance changes the symptom):
-   a. **The `c8c4`-compared status field**: pointer chain `*(long*)(taskCtxPtr+0x58)`, then offset 0 =
-      small state (busy while ∈{2,3,4}), offset 4 = the status code compared against
-      `0xa467,0xcc63,0xac64,0xc47f,0xc485`. If it's already one of those five, the task is secretly
-      TERMINAL and the bug is downstream (something not consuming the result); if it's anything else,
-      the task is genuinely still in flight.
-   b. **The start tick**: `f1f8` stores it via `func_0x076e49c0` into the object at `session+0x68`
-      (offset `+0xf0` off that object). Compare against current tick to see how long it's actually
-      been running — rules a fast-fail-then-silently-hang scenario in or out.
-   c. **The two vtable pointers**: at `*(long*)(session[0x10]+0x30)` (the `cb30` dispatch target) and
-      at the sub-object `f1f8` reaches through the manager at `session+0x68`. Just read the pointer
-      value (don't need to follow it into code) — gives a class identity to grep for in `.rodata`
-      RTTI/typeinfo strings, which is enough to find and decompile the concrete implementation
-      statically afterward.
-   d. Session 7/8's struct-offset chase (`jobPtr+0xE8` etc.) is superseded by the state-machine
+-6. **(session 9c) START HERE: packet capture during the live state-7 stall, NOT more decompiling.**
+   The whole state-machine chase (sessions 8-9c) is DONE and its verdict is in: a live read
+   (`scratch/tools/readtask.py`) during an actual stall showed the async connect task genuinely
+   started successfully (every static gate in the chain passed) and is genuinely still pending
+   (poll state 3 = busy, status 0x648e = not one of the five known terminal codes) — the bug is
+   NOT in any of the decompiled gating/state-machine logic. It's in whatever the two runtime vtable
+   dispatches (`cb30`'s `target->vtbl[0x20]`, `f1f8`'s `facilityObj->vtbl[0x40]`) actually do at the
+   socket/protocol level. This matches session 4's late finding (host probes the joiner's UDP port
+   every 500ms; joiner never answers until relay allocation succeeds) — treat this as the same
+   underlying P2P/mesh-connectivity gap, not a new mystery.
+   a. **Capture**: have the user run `sudo tcpdump -i any -w scratch/state7.pcap` directly in their
+      own terminal (per the existing lesson — `pkexec`/`sudo` through this tool is unreliable for
+      long-running captures) spanning host+join+the full stall window. Look for: does the joiner emit
+      ANY outbound UDP once glue hits state 7 (to the TURN relay, to the host's advertised address, to
+      anything)? If NOTHING goes out, the vtable call itself never reaches the socket layer (a
+      deeper logic/config gap, findable by finally resolving the two vtable pointers below). If
+      packets DO go out with no reply, it's a reachability/NAT/relay problem downstream of our code.
+   b. **Only if (a) shows outbound traffic and you need to identify the concrete class**: re-derive
+      the exact pointer chain first — `d948`'s gate is on `*(long*)(taskCtxPtr+0x40)+0x80)+0x3c`
+      (one hop deeper than session 9b assumed), and `cb30`'s actual session-like argument is reached
+      through a further `+0x18`-chain off that with a global fallback (see session-9c handoff entry)
+      — read that chain live, then the vtable pointer at its `+0x10`/`+0x30`, to grep `.rodata`
+      RTTI for a class name and decompile the concrete implementation.
+   c. Session 7/8's struct-offset chase (`jobPtr+0xE8` etc.) is superseded by the state-machine
       finding — don't resume it.
-   e. `pkexec tcpdump` (long-running) is unreliable through this tool — have the user run
-      `sudo tcpdump` directly in their own terminal for any future capture.
-   f. **Tooling note**: the "zero BL callers" dead end from session 9's first pass was a hex-arithmetic
+   d. **Tooling note**: the "zero BL callers" dead end from session 9's first pass was a hex-arithmetic
       mistake on the agent's part (`0x0773cb30-0x100000` computed by hand as `0x663cb30` instead of the
       correct `0x763cb30`), not a real gap in `ehfuncs.func_of()` — always compute that subtraction
       with `python3 -c "print(hex(x-0x100000))"`, never by hand.
