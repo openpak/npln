@@ -77,14 +77,49 @@ Build an independently written, open-source compatibility service for the networ
     players see each other, movement and actions flow both ways.** The minute or so of small-packet
     traffic right after glue state 9 was just the world sync settling, not a blocker. Stardew
     Valley Switch multiplayer runs fully on this clean-room NPLN server + coturn/nncs stack.
-  - **NEXT (hardening, in rough priority):** (1) leave/rejoin cycles and a second joiner (3+
-    players) — check the ghost-station DELETED path and rank reuse; (2) the stale-joiner case: a
-    console that failed once keeps old NplnProtocol state (+0x311, +0x15c seq) until its objects
-    are freed — with joins now succeeding this should not recur, but verify a failed→retry join;
-    (3) the ~15 s the TurnJob spends before its first Allocate (`TurnJob::WaitServerConfig`) —
-    harmless on LAN but worth shaving for WAN; (4) host migration (`NplndHostMigrationJob`) when
-    the host quits; (5) strip `NPLN_GS_DIAG` payload logging before any public deployment (it
-    prints station blobs).
+  - **Session 12b (same day, 17:37–21:20 UTC) — disconnect/rejoin hardening, three more server
+    fixes, all deployed and verified live:**
+    - **Flaky rejoin (2318-1201 on roughly every other rejoin) — ROOT CAUSE + FIX.** The
+      per-push logging showed the write path (`WriteDocuments` → `deliver()`) pushed the
+      console-written `__pus` document to both consoles with the placeholder `upcsid=0` — the
+      rank overlay only applied to listings and wake re-pushes. For one push the peers saw a
+      participant with index 0 (= "host"), and whether the plugin ran inside that window was a
+      race. Fix: `withStationLocked` is applied on the write-path delivery too (commit 6380077).
+      After it: 5/5 quick quit→rejoin cycles connected within 1 s (21:10–21:14), including a
+      "reload the game with the character online" case, which the game turns into a normal
+      delete+close. Slot order in `WanConnectionStatus` no longer matters (a host-first order
+      succeeded at 21:09:58).
+    - **Farm never closed when the host quit** (QueryGameSessions kept listing it): nothing
+      removed matchmaking members on stream close. `dropMember` (sessions.go) now removes the
+      member on gamesync stream close and closes the farm when the host (rank 1) goes — first
+      version compared the full user name with the short uid and never matched ("2 left"); fixed
+      to compare `lastSeg` (b59864b). Verified: "host … left: farm … closed", next query → 0.
+    - **Vanished consoles**: the gRPC server only *permitted* client pings; it never probed.
+      Added `KeepaliveParams{Time 15 s, Timeout 10 s}` (server.go) so a console that dies without
+      closing its connection loses its seat within ~25 s (not yet exercised live).
+    - Diagnostic logging added: every `__pus` push (`fields=…, upcsid=…`) and `target N LISTED`.
+      DELETED pushes print `upcsid=0` because they carry no fields — not a placeholder.
+    - **Environment lessons (cost ~1 h):** the emulators must be launched through
+      `scripts/launch-ryujinx.sh` on the `host`/`joiner` profiles signed into OutboundHost
+      (1800000003) / OutboundJoiner (1800000004). Those profiles had lost `nextendo_account.txt`
+      (bare launches, "identity not provable (no valid nnex claim)"); the original passwords were
+      never recorded, so they were reset via the account service's `/api/forgot` + `/api/reset`
+      (dev mode logs the reset link) — new credentials in
+      `~/.local/share/stardew-nextendo-research/local-accounts.txt`. Signing in from the Nextendo
+      menu created a SECOND emulator user profile (new user id → empty save set → "the farm is not
+      there"); fix = set `profile_user_id=00000000000000010000000000000000` in
+      `nextendo_account.txt` and remove the duplicate from `system/Profiles.json` (the Test farm
+      is save dir 6, owner user …0001, per `bis/system/save/8000000000000000/1/imkvdb.arc`).
+      `pkill -f` patterns that match your own bash kill the launcher; `pkexec` prompts time out
+      when the user is away.
+    - Tools this part: `leavepoll.py`, `netstpoll.py` (roster gates + relay ring), `sttbl.py`,
+      `nattbl.py`; logs `leavepoll-*.log`, `netstpoll-joiner*.log`.
+  - **NEXT (hardening):** (1) host quits **while the joiner is still inside** — not yet observed
+    (the one attempt had the joiner leave first); watch for `NplndHostMigrationJob` and what the
+    joiner shows; (2) exercise the keepalive drop: kill a console outright and confirm the seat is
+    freed in ~25 s; (3) a second joiner (3+ players); (4) the ~15 s TurnJob delay before its first
+    Allocate (`TurnJob::WaitServerConfig`); (5) strip `NPLN_GS_DIAG` payload logging before any
+    public deployment (it prints station blobs).
   - Still open, lower priority: why the TurnJob needs ~15 s before its first Allocate
     (`TurnJob::WaitServerConfig` polls the `IceServerConfigGetter` slot 0x30 until it stops returning
     0x10408); with NAT traversal now succeeding the relay path may not matter on a LAN.
