@@ -6,6 +6,58 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-04 (session 9 — **VA-resolution bug fixed; `func_0x0770b160`/`c8ac`/`c8c4` decompiled clean;
+  the state-7 async task's starter and its network primitive are now traced two levels deep**):
+  no emulator run this session (static RE only). Root cause of session 8's bad decompiles found: the
+  addresses in critbuilder's decompiled C body (`func_0x0770b160` etc.) are **Ghidra addresses**
+  (VA+0x100000), so `gdec.py`/`ehfuncs.py` (which key off raw ELF VA) must be called with the address
+  **minus 0x100000**, not the literal `func_0x…` digits. Session 8 fed the raw digits straight through
+  (an implicit double-add of the base), landing 1 MB off in an unrelated function — that's the whole
+  "wrong function" bug, not a flaw in the eh_frame method itself.
+  - Correctly resolved and cleanly decompiled (`~/ghidra-projects/out3/`): `b160_760b160.c`
+    (=`func_0x0770b160`), `c8ac_760c8ac.c`, `c8c4_760c8c4.c`. Call graph now matches the session-8
+    model exactly: `b160` is called only from `gluecreate_1ac5070` (the glue's 4→7 transition);
+    `c8ac`/`c8c4` are called only from `critbuilder_1ac2350`'s poll branches.
+  - **`b160` (called "sessB") and its twin `sessA_760af18` (called from state 4→? elsewhere) are a
+    matched pair**: both take `(result_out, taskCtxPtr, extra)`, both gate on `*(taskCtxPtr+0x40)`
+    (a Session pointer) being non-null and on a state field `*(int*)(taskCtxPtr+0x58 deref)` != 1
+    ("already running" guard), both lazily call `stnsetupA` to init the state object once, then call a
+    "real op" function (`sessA`→`func_0x0770d0b8`, `sessB`→`func_0x0770d948`), and on success both
+    register the task with an executor (lock mutex at `session+8+0x78`, init a list at `session+0x18`
+    if untouched, append via `func_0x076dafc0`, unlock) and stamp the task-local state — `sessA` sets
+    it to 3, `sessB` to 5. This confirms the session-8 "nn::async::Executable" theory as the actual
+    mechanism, not a guess.
+  - **`c8ac_760c8ac`** = the poll predicate: `state - 2 < 3` (unsigned), i.e. "busy" while the
+    task-local state ∈ {2,3,4}. **`c8c4_760c8c4`** = the result reader: compares a *second* field
+    (the task's detail/status code, a hash-like value, not the small state int) against five literal
+    constants (`0xa467,0xcc63,0xac64,0xc47f,0xc485`); if it matches one of the five, copies the real
+    payload (an 8-byte + 4-byte pair — looks like `nn::Result{module,description}`) out; otherwise
+    defaults to a zero/"unknown" result. **These five constants are the next lead**: they're almost
+    certainly the task's terminal-status enum (something like Initialized/Executing/Canceling/
+    Canceled/Completed or similar), and knowing which one the joiner's stuck task actually holds would
+    show whether it's still "running" (never reaches a terminal status — matches state 7 hanging
+    forever) or is secretly terminal-but-unread.
+  - **One level deeper, decompiled `d948_760d948.c`** (`sessB`'s "real op" call, i.e. what
+    `gluecreate`'s state-7 task actually starts): gates on `*(int*)(taskCtxPtr[0x10]+0x3c) == 4` (the
+    Pia *Session* object, reached via a different pointer chase, must itself be in state 4) before
+    calling `func_0x0773cb30(result, sessionAddrPtr, param_4)` — the actual network primitive. On
+    success it swaps in a new vtable/continuation pointer (`taskCtxPtr[7]=&UNK_0770db60`), sets the
+    task-local state field to 5 (matches `sessB`'s caller), stores `param_3` (a station-ish value) and
+    calls `stnsetupB`, then invokes a virtual method (index 0x10, "Start"/"AddRef"-shaped) on the task
+    object. `sessA`'s twin `d0b8_760d0b8.c` was decompiled too but not yet read closely.
+  - **Dead end, flagged rather than chased further**: tried to decompile `func_0x0773cb30` (the actual
+    network primitive `d948` calls) and its own precondition check `func_0x0770cbc8`. For BOTH, my
+    `ehfuncs.func_of()` resolves the address to the *middle* of a much larger containing function with
+    **zero BL callers found anywhere in .text** — i.e. nothing in the binary appears to call that
+    "containing function"'s start via a direct branch, which shouldn't be possible if `d948` really
+    calls it. Likely cause: these two targets are called indirectly (PLT/GOT stub, or a relocation my
+    BL-only scanner doesn't see) rather than via a direct `BL`, so `gdec.py`'s "containing eh_frame
+    range" heuristic silently gives the wrong function even though the b160/c8ac/c8c4/d948 case above
+    was genuinely correct. Don't trust `ehfuncs.func_of()` on a call target until its BL-caller list is
+    non-empty and includes the expected caller — that's the real discriminator, not just "does a range
+    contain the address."
+  - Tools unchanged (`/mnt/media/nextendo-research/scratch/tools/{ehfuncs,gdec}.py`); new decompiles in
+    `~/ghidra-projects/out3/` alongside session 8's.
 - 2026-09-04 (session 8 — **live struct offset chase (jobPtr+0xE8 etc.) DEAD-ENDS on 3 job types;
   second wire capture reproduces the settle-flag but the "error code" region reads zero, not a
   code — new hypothesis: Pia/mesh may be SUCCEEDING and the game itself rejects post-attach**):
@@ -1446,27 +1498,33 @@ podman logs -f nextendo-local_npln_1
 
 ## Next Steps
 
--3. **(session 8) START HERE: fix the function-resolution method, THEN decompile `func_0x0770b160`
-   / `func_0x0770c8ac` / `func_0x0770c8c4`.** The glue state machine is now FOUND, not guessed
-   (`critbuilder_1ac2350.c`, see session-8 entry) — state 7 is "waiting on one pending async task
-   (an `nn::async::Executable`)"; the joiner never leaves it because that task's ready-poll never
-   flips true. `gluecreate_1ac5070` starts it (state 4->7) via `func_0x0770b160(&iStack_68,
-   uRam...fb568, alStack_620)`; `critbuilder`'s state 7/2/5/6/0xb/0xc branches all poll the same
-   task via `func_0x0770c8ac`/`func_0x0770c8c4`. Naive VA-lookup (`gdec.py` as used by prior
-   sessions for `am*`/`glue*`) gave WRONG functions for these three specific addresses this session
-   (see the "Tried and FAILED" note above) — don't repeat that mistake:
-   a. First fix resolution: check what's actually at these VAs in Ghidra directly (disassemble the
-      exact address, don't rely on `ehfuncs.func_of()`'s containing-range guess) before decompiling.
-      They may be mid-function labels, PLT/GOT-indirected, or need the analyzed (not headless
-      unanalyzed) project.
-   b. Once resolved: `func_0x0770b160` should reveal what network operation state-7's task actually
-      performs (this is THE question — what is the joiner actually waiting for). `alStack_620` is
-      built from `param_2` (gluecreate's 2nd arg) via `func_0x076ecca8` — trace `param_2` at the
-      call site in whatever calls `gluecreate` to learn what's being described (candidate: the
-      target session/farm being joined).
-   c. Cross-check against the job states already known live (`AttachMeshJob::ProcessSendMonitoringData
-      -> CompleteFailure`, `JoinSessionJob::ProcessSendMonitoringData -> CompleteFailure`) to see
-      which glue-state transition they correspond to.
+-4. **(session 9) START HERE: identify the task's terminal-status enum, then get ONE live read of it.**
+   Session 9 fixed the VA-resolution bug (see session-9 entry: `func_0x…` names in critbuilder's body
+   are Ghidra addresses = ELF VA + 0x100000; feed `gdec.py`/`ehfuncs.py` the ELF VA, not the raw
+   digits) and traced the state-7 task two levels deep: `gluecreate` → `sessB`(`b160_760b160.c`) →
+   `d948_760d948.c` (gates on the Pia Session being in state 4, then calls the real network primitive)
+   → task-local state set to 5. `c8c4_760c8c4.c` reads a *second* status field on the task and
+   compares it against five literal constants `0xa467, 0xcc63, 0xac64, 0xc47f, 0xc485`; matching one
+   of them is what lets it report a real terminal result instead of defaulting to zero/"unknown".
+   a. Figure out what those five constants mean — likely a small closed enum (e.g. a
+      Initialized/Executing/Canceling/Canceled/Completed-shaped `nn::async` status). Try: search
+      `main.elf` rodata for adjacent/paired string labels near their xrefs, or diff them against any
+      known `nn::async::Executable` status enum from public SDK headers/leaks if available.
+   b. Then ONE live read (needs a fresh joiner mid-stall, per the emulator/testing lessons below):
+      dump the task object at the pointer chain used by `c8ac`/`c8c4`
+      (`*(long*)(taskCtxPtr+0x58)`, then offset 0 = small state, offset 4 = the status code `c8c4`
+      reads) while the joiner is parked in glue state 7. If the status code is already one of the five
+      known constants, the task IS terminal and something downstream just isn't consuming the result
+      (a different bug than "never completes"); if it's something else entirely, the task is
+      genuinely still in flight and the real question moves to *why* (network primitive
+      `func_0x0773cb30` never firing / never being polled again — see the dead end below).
+   c. **Do not trust `ehfuncs.func_of()` on a call target unless its BL-caller list is non-empty and
+      contains the actual caller.** It resolved `func_0x0773cb30` (the network primitive `d948` calls)
+      and its precondition check `func_0x0770cbc8` to containing functions with ZERO BL callers found
+      anywhere in `.text` — almost certainly an indirect call (PLT/GOT/vtable) the BL-only scanner
+      can't see, so the "containing range" it returned is very likely the wrong function. Needs a
+      different resolution method (disassemble the exact VA directly in Ghidra, or find the indirect
+      call site and its register source) before decompiling either of those two.
    d. Session 7/8's struct-offset chase (`jobPtr+0xE8` etc.) is superseded by the state-machine
       finding — don't resume it.
    e. `pkexec tcpdump` (long-running) is unreliable through this tool — have the user run
