@@ -114,6 +114,15 @@ Build an independently written, open-source compatibility service for the networ
       when the user is away.
     - Tools this part: `leavepoll.py`, `netstpoll.py` (roster gates + relay ring), `sttbl.py`,
       `nattbl.py`; logs `leavepoll-*.log`, `netstpoll-joiner*.log`.
+  - **Production plan written (`docs/production.md`, `deploy/oci/`, `deploy/sni-router-stardew.patch`):**
+    official emulator builds map `*.nintendo.net` to `NEXTENDO_SERVER_IP` with the port untouched
+    (the `host=ip:port` route file is local-testing only — `DnsMitmResolver.cs`), so the tenant
+    lands on the main server's `:443` and sni-router needs a `t-9f607adf-lp1` rule; gamesync/relay
+    is reached at `NPLN_RELAY_HOST:PORT` directly (no DNS); the box must run the PATCHED coturn;
+    the account server is called over `NEXTENDO_ACCOUNT_URL` with `X-Internal-Key` (9c5b193).
+    Late finding of the same evening: the last rejoin drop was a SECOND server bug — `withStation`
+    merged the host's MAILBOX blob (`__stu/<uss>` `pl`, written by others) into the host's member
+    doc; removed (39271c1). Keepalive drop measured live: frozen console gone in 19 s.
   - **NEXT (hardening):** (1) host quits **while the joiner is still inside** — not yet observed
     (the one attempt had the joiner leave first); watch for `NplndHostMigrationJob` and what the
     joiner shows; (2) exercise the keepalive drop: kill a console outright and confirm the seat is

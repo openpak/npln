@@ -43,3 +43,5 @@ dist/
 *.swp
 .DS_Store
 
+deploy/oci/.env
+deploy/oci/certs/

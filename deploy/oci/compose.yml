@@ -1,0 +1,60 @@
+# stardew-nextendo on a single public box (tested target: OCI Ampere A1, 4 OCPU / 24 GB,
+# Ubuntu, arm64) plugged into the PRODUCTION Nextendo Network. See docs/production.md.
+#
+# Everything the game reaches directly lives here: the NPLN tenant (gRPC/TLS), the gamesync
+# session relay (same listener, a second public port is NOT needed), and STUN/TURN. Account,
+# BAAS, friends and the NAT-check responder are the shared production services.
+#
+#   cp example.env .env && edit          # never commit .env
+#   docker compose up -d --build
+services:
+  stardew:
+    build:
+      context: ../..
+      dockerfile: deploy/oci/Dockerfile
+    restart: unless-stopped
+    network_mode: host                    # gRPC on NPLN_LISTEN, UDP latency probes; simplest on a bare VM
+    environment:
+      NPLN_LISTEN: ":18501"               # sni-router forwards the tenant SNI here; gamesync uses the same port
+      CERT_FILE: /certs/npln.pem          # SAN: t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net, gamesync.npln.nintendo.net
+      KEY_FILE: /certs/npln.key
+      NPLN_JWT_KEY: /data/npln_jwt_es256.key
+      NEXTENDO_ACCOUNT_URL: ${NEXTENDO_ACCOUNT_URL:-https://nextendo.network}
+      NEXTENDO_SECRET: ${NEXTENDO_SECRET}
+      NEXTENDO_INTERNAL_KEY: ${NEXTENDO_INTERNAL_KEY}
+      NPLN_RELAY_HOST: ${PUBLIC_IP}
+      NPLN_RELAY_PORT: "18501"
+      NPLN_STUN_HOST: ${PUBLIC_IP}
+      NPLN_TURN_HOST: ${PUBLIC_IP}
+      NPLN_TURN_SECRET: ${NPLN_TURN_SECRET}
+      NPLN_LATENCY_HOST: ${PUBLIC_IP}
+      GRPC_GO_LOG_SEVERITY_LEVEL: warning
+      # NPLN_GS_DIAG: "1"                 # NEVER in production: logs station blobs and payloads
+    volumes:
+      - ./certs:/certs:ro
+      - stardew-data:/data
+
+  turn:
+    # coturn with the Pia interoperability patch (ALLOCATE without REQUESTED-TRANSPORT).
+    build:
+      context: .
+      dockerfile: Dockerfile.coturn
+    restart: unless-stopped
+    network_mode: host                    # relay ports 49152-65535/udp must reach the box directly
+    command:
+      - "-n"
+      - "--no-tls"
+      - "--no-dtls"
+      - "--listening-port=3478"
+      - "--use-auth-secret"
+      - "--static-auth-secret=${NPLN_TURN_SECRET}"
+      - "--realm=nextendo.network"
+      - "--fingerprint"
+      - "--relay-ip=${PUBLIC_IP}"
+      - "--external-ip=${PUBLIC_IP}"       # OCI VMs sit behind 1:1 NAT: advertise the public address
+      - "--min-port=49152"
+      - "--max-port=65535"
+      - "--log-file=stdout"
+
+volumes:
+  stardew-data:
