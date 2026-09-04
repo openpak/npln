@@ -6,6 +6,71 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-04 (session 10 — **the "state-7 stall" was a modal error applet; 2318-1201 decoded exactly;
+  one real server bug (ghost stations) FOUND AND FIXED; the true blocker re-characterised on a clean
+  run: the joiner never acts on the host's mailbox reply**):
+  - **Not a hang.** `hyprctl clients -j` showed the joiner window `Error Code: 2318-1201`; the user
+    confirmed Join → Connecting → 1201 → glue parks at 7 until OK. Sessions 9c-9f watched a dialog.
+    Always check for an `Error Code:` window before calling anything a stall.
+  - **2318-1201 = Pia result `0x648e` = AttachMeshJob wait-for-connect TIMEOUT.** The immediate 2318
+    (`0x90e`) occurs at exactly one site (`0x75e982c`, Pia's error-code builder, so module 318 is
+    Pia's own); the 23 KB converter `0x75e7144` returns full codes as ints (`0x648e→23181201`,
+    `0x6488→23181200`, `0x648f→23181202`). `0x648e` is emitted by `am4_7c3ed28` when the tick passes
+    the deadline at job+0x128 while polling `facade->vtbl[0x220]` (= NplnProtocol+0x198, the pending
+    connect result, still all-zero live) — location `0x250a6b1c438` is stamped in the live job
+    objects. `0x6479` is the same timeout with the inner object still busy; `0x6c05` = cancelled.
+  - **Pointer chain resolved live** (`scratch/tools/readtask2.py`, `readdeep.py`): taskCtx → sess →
+    inner(+0x80) → *(+0x18) → cbSession `0x160e8900` (`nn::pia::session::Session`) → mgr(+0x68) →
+    (+0x80)+0x30 = **`nn::pia::npln::NplnFacade` `0x14e963c8`** (slot 8 = `0x75ef280`) → facade+0x30 =
+    **`nn::pia::npln::NplnProtocol` `0x15e15c28`** (`fstart_7814`) → `ncnstart_30f4` →
+    `NetConnectNetworkJob` in `WaitConnectNetwork` (`ncnwait_3268`). Every layer is one nested async
+    wrapper with the same {state, status} object shape; `c8c4` copies status(+4) straight into the
+    Result, so `0x648e` was visible as "busy status" all along. NplnProtocol fields: +0x128 Session,
+    +0x130 NplnFacade, +0x1460 station table (count@0, entry-ptr array@8, local id@0x18; entry =
+    {id@0, peer@8, state@0x10}), **+0x1470 `nn::pia::nplnd::NplndRelayClient`**, **+0x1500
+    `nn::pia::turn::TurnProtocol`** (secondary vtable `0xba5e678`), +0x1268/+0x1288 requested/current
+    network id `{ff×8, index, 0x4e96}`.
+  - **Server bug FIXED (`internal/npln/gamesync.go`, deployed 15:34 UTC):** a departing joiner's
+    `DeleteDocument` on `__pus/<uss>` was relayed as UPDATED-with-empty-fields and a dropped stream
+    sent nothing, so the host's Pia session kept a ghost station and wrote 78-B NAT-traversal
+    messages into a dead mailbox (`__stu/03a2f353…`) for 40+ minutes; every later joiner got NO 207-B
+    roster, never wrote to the host mailbox, and timed out — that ghost state is what 9c-9f measured.
+    `deliver()` now takes a kind and pushes `DocumentChange_DELETED`; stream close deletes+pushes
+    `__pus`/`__us`. Verified live: fresh join gets the roster in <1 s, 78-B messages flow both ways,
+    host stops writing after the DELETED push. Container rebuilt manually (dockerfile in compose is
+    `golang:1.26-alpine` + `go build ./cmd/npln`; note the compose file has several
+    `dockerfile_inline` blocks — copy the stardew one, not the first).
+  - **Real blocker, on a CLEAN run** (`scratch/rejoin2-lo.pcap`, `joinstrace2.log`,
+    `mailbox-1534.txt`): host → joiner 207-B roster (`01 11 00 b0`, stations {ff×8|1, 0x4e96} host and
+    {ff×8|2, 0x4e96} joiner, host constant id `6b49d203`), joiner → host 9-B `01 12 … 02 01`, then
+    78-B `32ab9864 90 2200 <svid> …` both ways every ~5 s (joiner svid 0, host svid 0x12; later
+    variants `9053`/`9032`). Host starts a `wan::NatTraversalJob` and probes the joiner's Pia port
+    (93-B, 127.0.0.1 and 10.87.0.2, 14 s). **The joiner's Pia socket (fd 315, a fresh bind per join)
+    never attempts a single sendto and receives nothing but NNCS** — no NatTraversalJob ever exists on
+    the joiner (`piajobs.py`), it just re-sends the 78-B request every 5 s until the 30-s deadline
+    (12 s on a stale joiner). Both consoles get a valid TURN Allocate Success (+10/+15 s) and never use
+    it; the joiner's `__mt/nat_traversal` report `{rc:10, re:true}` (decoded in `natrepcc_7c40560.c`:
+    13 = no TurnProtocol, 11 = TurnProtocol errored, 12 = facade result set, station state 0xd → 1,
+    0xe → 10, or 2 if the relay still reports allocated) is written after cleanup, so it only says
+    "NAT traversal failed". :34343 datagrams are telemetry only (host-create, and at failure).
+  - **Connect-path logic (static):** `NplnProtocol` slot 122 (`rr4_76fab68`, shared with WanProtocol/
+    NplndProtocol) picks `TurnProtocol->vtbl[0x38]` only when `tsec8_7abba54` finds the station in
+    TurnProtocol's per-station table (+0x8d0, stride 0x238) in state 4, else
+    `NplndRelayClient->vtbl[0x50]` (`rc10_7c43084` → `relaysend_b_7c3c218` → `rsend_7c3a820`, which
+    appends a byte and hands the packet to the sender at client+0x18 `vtbl[0x80]` addressed by
+    stationInfo+0xb4) — i.e. **the 78-B mailbox packets ARE the NplndRelayClient channel**; the
+    "relay" is our gamesync mailbox. Relay flag (Session+0x529 ← setup byte +10 ← Session+0x144)
+    is 1 on BOTH consoles (ctor default `set144a_7609010`, glue sets it again via
+    `set144b_760bfe0` from `gluesess_1ac1260`), so it is not the host/joiner discriminator.
+  - **Why the joiner ignores the host's reply is the open question.** The host decrypts the joiner's
+    packets fine (it probes), so the key is symmetric. Brute force of the 16 static keytab keys ×
+    header layouts × nonce suffixes (incl. 0x4e96, host constant id) against the captured 78-B
+    packets: zero hits (same as session 4) — the key is per-session and lives only in memory.
+  - Tools this session: `readtask2.py` (corrected chain), `readdeep.py`, `natpoll.py` (fixed to poll
+    NplnProtocol; the one run polled the wrong object), `mailbox-1534.txt` (full pl bytes both ways,
+    from the server's DIAG log). Root python has no numpy: `pkexec env PYTHONPATH=/home/tobagin/.local/lib/python3.14/site-packages python3 …`
+    for `piajobs.py`/`jobdump.py`/`facdump.py`. `gdec.py` tags must not contain the VA.
+
 - 2026-09-04 (session 9e/9f — **SYSCALL TRACE, PROPERLY CORRELATED: the UDP sockets meant to carry
   the P2P/mesh connection are created and bound, then NEVER connected or sent on, for the entire
   stall — confirmed at the socket-API level, not just inferred from the wire**): user asked whether
@@ -1672,7 +1737,35 @@ podman logs -f nextendo-local_npln_1
 
 ## Next Steps
 
--7. **(session 9f) START HERE: resolve the concrete vtable implementation — the connect logic sets up
+-8. **(session 10) START HERE: decrypt the 78-B mailbox packets with the live per-session key, then
+   find why the joiner never turns the host's reply into a `wan::NatTraversalJob`.** Everything
+   before this is settled (see the session-10 entry): signaling is healthy, the ghost-station server
+   bug is fixed, the joiner's Pia socket never sends. Concrete plan:
+   a. Get the key: the sender object at `NplndRelayClient+0x18` (`rsend_7c3a820` calls its
+      `vtbl[0x80]`) builds the Pia packet; session 4 located the key object at `PacketWriter+0x50`
+      (`hdrDcaller 0x766b8d0` / `hdrEcaller 0x766914c`, classes `nn::pia::transport::PacketWriter`/
+      `PacketReader`). Read it live from the joiner (pid 302386 — reuse `readdeep.py`'s `cls()` to
+      walk NplndRelayClient `0x15e394b8` → sender → +0x50) DURING a join (objects may be rebuilt per
+      join), and also check the nonce suffix (the mailbox packets are not the :34343 format —
+      `piadec.py`'s `hdr[4:6]`-as-plen layout does not apply; header is probably
+      magic|flags|dvid|svid|pid|footsz|nonce8 = 20 B).
+   b. Decrypt both directions from `scratch/mailbox-1534.txt`: what the joiner requests (candidates it
+      advertises) and what the host answers (its candidates: expect 10.87.0.2:60134 / 127.0.0.1:60134).
+   c. Find the joiner's receive path: `sturead_7b57718` → `stuConsume_7b54bb0` → NplndRelayClient
+      receive → dispatch to `wan::NatTraversalProtocol` (vtable `0xba1f0f8`), and where it would create
+      `wan::NatTraversalJob` (vtable `0xba1f628`; `xref.refs_to` found no direct adrp ref — look for the
+      ctor via `vtable+0x10` or a factory). Candidate reasons the reply is dropped: svid/dvid mismatch
+      against the station table, a candidate filter rejecting addresses equal to the joiner's own
+      (both consoles share 10.87.0.2 and mapped 127.0.0.1), or the message type (`dvid` 0x22/0x53/0x32)
+      not being the one the joiner waits for.
+   d. Poll live with the fixed `natpoll.py` during the join (station states 0xd/0xe, TurnProtocol
+      per-station table, whether `+0x14ca` flips) — run it with `pkexec … > log` and expect output only
+      at exit (python buffers).
+   e. Do NOT re-investigate: the relay flag (1 on both), TURN (Allocate Success both sides), NNCS (same
+      answers both sides), :34343 (telemetry), the gRPC "relay" leg to 127.0.0.2 (just a second
+      channel), or the 9c-9f "never sends" traces (ghost-state artefacts).
+
+-7. **(session 9f, SUPERSEDED by session 10)** resolve the concrete vtable implementation — the connect logic sets up
    its UDP sockets and then never uses them.** CONFIRMED three independent ways now (session 9c's
    live memory read, 9d's packet capture, 9f's properly-correlated syscall trace — see the session 9f
    entry above for the exact socket/connect/bind timeline): the async connect task marks itself

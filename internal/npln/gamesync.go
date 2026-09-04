@@ -63,9 +63,12 @@ type target struct {
 	docs      []string
 }
 
-// deliver pushes a just-written document, once, to every stream of the farm that watches it
-// (by name, or through a collection target). Caller holds g.mu.
-func (g *gamesyncServer) deliver(gsid, name string, m *commonpb.MapValue) {
+// deliver pushes a just-written (kind UPDATED) or just-removed (kind DELETED) document, once, to
+// every stream of the farm that watches it (by name, or through a collection target). Caller holds
+// g.mu. DELETED matters: the host's Pia session keeps a departed joiner as a ghost station (and
+// keeps writing NAT-traversal messages into its dead mailbox) until it sees the participant's
+// __pus document go away, and every later joiner then gets no roster and times out (2318-1201).
+func (g *gamesyncServer) deliver(gsid, name, kind string, m *commonpb.MapValue) {
 	for w := range g.watchers {
 		if w.gsid != gsid || w.push == nil || w.tmu == nil {
 			continue
@@ -84,7 +87,7 @@ func (g *gamesyncServer) deliver(gsid, name string, m *commonpb.MapValue) {
 		}
 		w.tmu.Unlock()
 		for _, tid := range hits {
-			go w.push(tid, "UPDATED", name, m) //nolint:errcheck // stream errors end the stream itself
+			go w.push(tid, kind, name, m) //nolint:errcheck // stream errors end the stream itself
 		}
 	}
 }
@@ -457,8 +460,11 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 		}
 		logPush(streamUss, tid, kind, name, m)
 		dc := gspb.DocumentChange_UPDATED
-		if kind == "EXIST" {
+		switch kind {
+		case "EXIST":
 			dc = gspb.DocumentChange_EXIST
+		case "DELETED":
+			dc = gspb.DocumentChange_DELETED
 		}
 		return send(change(tid, dc, doc(name, m, timestamppb.Now())))
 	}
@@ -469,6 +475,10 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 		g.mu.Lock()
 		delete(g.watchers, w)
 		delete(g.sess, streamUss) // the stream IS the session: closed stream = player gone
+		for _, n := range []string{"docs/__pgn/All/__pus/" + streamUss, "docs/__us/" + streamUss} {
+			delete(g.store, w.gsid+"|"+n)
+			g.deliver(w.gsid, n, "DELETED", nil) // tell the others (the host) this station is gone
+		}
 		g.mu.Unlock()
 		g.wakeFarm(w.gsid)
 		log.Printf("[GS] KeepUserSession closed uss=%s", streamUss)
@@ -559,7 +569,7 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 // logPush traces mailbox/station document deliveries (docs/__pgn/All/__stu/<uss>) so a lost
 // signaling message can be told apart from one the client ignored.
 func logPush(streamUss, tid, kind, name string, m *commonpb.MapValue) {
-	if !strings.Contains(name, "/__stu/") {
+	if !strings.Contains(name, "/__stu/") && kind != "DELETED" {
 		return
 	}
 	pl := m.GetFields()["pl"].GetBytesValue()
@@ -671,8 +681,12 @@ func (g *gamesyncServer) apply(ctx context.Context, ops []*gspb.WriteOperation) 
 		default:
 			results = append(results, &gspb.WriteResult{})
 		}
-		log.Printf("[GS] write farm=%s %s fields=%s", gsid, opName(op), fieldKeys(g.store[k]))
-		g.deliver(gsid, opName(op), g.store[k])
+		kind := "UPDATED"
+		if op.GetDeleteDocument() != nil {
+			kind = "DELETED"
+		}
+		log.Printf("[GS] write farm=%s %s %s fields=%s", gsid, kind, opName(op), fieldKeys(g.store[k]))
+		g.deliver(gsid, opName(op), kind, g.store[k])
 		if os.Getenv("NPLN_GS_DIAG") != "" {
 			log.Printf("[GS][DIAG] %s = %s", opName(op), prototext.MarshalOptions{Multiline: false}.Format(g.store[k]))
 		}
