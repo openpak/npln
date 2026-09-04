@@ -68,9 +68,18 @@ Build an independently written, open-source compatibility service for the networ
     [1]{id=2,peer=6b49d204,state=0xd}`), AttachMeshJob object went idle 0.25 s after the host id
     landed, joiner glue state 9, streams stayed open, no error window; live jobs show
     `WanConnectNetworkJob::CompleteProcess`, `StartupSessionJob::CompleteProcess`,
-    `NatTraversalJob::ProcessSuccess`. Game-level outcome (farm loads / farmhand plays) to be
-    confirmed by the user; if anything is still off, the next layer is the game's own
-    `_Pia_SystemData` / farmhand handshake, not Pia.
+    `NatTraversalJob::ProcessSuccess`. User confirmed: **both consoles show as connected.**
+    Transport verified live: direct UDP both ways between the two Pia ports (10.87.0.2:53066 ↔
+    :63021, ~16 pkt/s each way, 61–317 B), `pktstats.py` = ~1500 decrypt-ok / 0 fail on each side,
+    `readsess.py` local+host stations assigned on both (host `6b49d203`/21, joiner `6b49d204`/42),
+    host wrote `__gs/m` `_Pia_SystemData` with participant count 2.
+  - **NEW BLOCKER (game layer): the players do not appear on each other's screen.** The Pia mesh
+    is fully up, but only small packets flow — no world/farmhand payload. Next: find what
+    Stardew's `SwitchNetworkGlue` sends/expects after glue state 9 (its game messages ride Pia's
+    reliable protocol; `critbuilder_1ac2350` state 9 = "flush"), and whether it waits on an NPLN
+    document (`__gs/m` prp `farmhands`/`newFarmhands`, player names via friends) before the
+    farmhand handshake. Start by capturing the 61–141 B UDP payloads (session key from
+    `livering.py`/`pktring.py`) to see whether any game-level message is ever sent.
   - Still open, lower priority: why the TurnJob needs ~15 s before its first Allocate
     (`TurnJob::WaitServerConfig` polls the `IceServerConfigGetter` slot 0x30 until it stops returning
     0x10408); with NAT traversal now succeeding the relay path may not matter on a LAN.
