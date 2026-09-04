@@ -73,13 +73,18 @@ Build an independently written, open-source compatibility service for the networ
     :63021, ~16 pkt/s each way, 61–317 B), `pktstats.py` = ~1500 decrypt-ok / 0 fail on each side,
     `readsess.py` local+host stations assigned on both (host `6b49d203`/21, joiner `6b49d204`/42),
     host wrote `__gs/m` `_Pia_SystemData` with participant count 2.
-  - **NEW BLOCKER (game layer): the players do not appear on each other's screen.** The Pia mesh
-    is fully up, but only small packets flow — no world/farmhand payload. Next: find what
-    Stardew's `SwitchNetworkGlue` sends/expects after glue state 9 (its game messages ride Pia's
-    reliable protocol; `critbuilder_1ac2350` state 9 = "flush"), and whether it waits on an NPLN
-    document (`__gs/m` prp `farmhands`/`newFarmhands`, player names via friends) before the
-    farmhand handshake. Start by capturing the 61–141 B UDP payloads (session key from
-    `livering.py`/`pktring.py`) to see whether any game-level message is ever sent.
+  - **CO-OP WORKS END TO END (user-confirmed ~17:40 UTC): the joiner is in the host's farm, both
+    players see each other, movement and actions flow both ways.** The minute or so of small-packet
+    traffic right after glue state 9 was just the world sync settling, not a blocker. Stardew
+    Valley Switch multiplayer runs fully on this clean-room NPLN server + coturn/nncs stack.
+  - **NEXT (hardening, in rough priority):** (1) leave/rejoin cycles and a second joiner (3+
+    players) — check the ghost-station DELETED path and rank reuse; (2) the stale-joiner case: a
+    console that failed once keeps old NplnProtocol state (+0x311, +0x15c seq) until its objects
+    are freed — with joins now succeeding this should not recur, but verify a failed→retry join;
+    (3) the ~15 s the TurnJob spends before its first Allocate (`TurnJob::WaitServerConfig`) —
+    harmless on LAN but worth shaving for WAN; (4) host migration (`NplndHostMigrationJob`) when
+    the host quits; (5) strip `NPLN_GS_DIAG` payload logging before any public deployment (it
+    prints station blobs).
   - Still open, lower priority: why the TurnJob needs ~15 s before its first Allocate
     (`TurnJob::WaitServerConfig` polls the `IceServerConfigGetter` slot 0x30 until it stops returning
     0x10408); with NAT traversal now succeeding the relay path may not matter on a LAN.
