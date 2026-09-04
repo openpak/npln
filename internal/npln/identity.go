@@ -114,7 +114,14 @@ type Friend struct {
 }
 
 func lookupAccount(pid uint64) (*Account, error) {
-	resp, err := httpc.Get(fmt.Sprintf("%s/internal/npln-friends?pid=%d", accountURL, pid))
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/internal/npln-friends?pid=%d", accountURL, pid), nil)
+	if err != nil {
+		return nil, err
+	}
+	if k := os.Getenv("NEXTENDO_INTERNAL_KEY"); k != "" { // the account server's off-network caller key
+		req.Header.Set("X-Internal-Key", k)
+	}
+	resp, err := httpc.Do(req)
 	if err != nil {
 		return nil, err
 	}
