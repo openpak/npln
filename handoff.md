@@ -6,6 +6,50 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-04 (session 9e/9f — **SYSCALL TRACE, PROPERLY CORRELATED: the UDP sockets meant to carry
+  the P2P/mesh connection are created and bound, then NEVER connected or sent on, for the entire
+  stall — confirmed at the socket-API level, not just inferred from the wire**): user asked whether
+  we could read the process's network activity directly rather than infer from the wire; installed
+  `strace` (`pkexec pacman -S strace`, not present on this box before).
+  - `ss -tuapn` (needs `pkexec` — Ryujinx is non-dumpable, same reason memory reads need root) showed
+    the joiner (pid 302386) holds a few UNCONN UDP sockets on ephemeral ports plus one ESTAB TCP to
+    `127.0.0.1:8099` (the account API, routine). Unfiltered `strace -f -e trace=network` was useless —
+    drowned in continuous `recvmsg`/`recvfrom` EAGAIN polling (netlink-shaped payloads, .NET
+    runtime/interface-change-notification noise) plus benign SIGSEGV chatter from Ryujinx's own JIT
+    fault-handling (always present, unrelated to networking). Narrowed to
+    `-e trace=connect,sendto,sendmsg,socket,bind`.
+  - **First pass (session 9e) was a false start, corrected by the user**: ran the narrowed trace for
+    20s against the pid from the earlier packet-capture session and got zero hits — but the user then
+    said they'd actually been sitting at the main menu, and a `readtask.py` read moments later showed
+    glue state 4 (idle), not 7. That first "zero hits" result was uncorrelated with the actual stall
+    and is worthless on its own — **always confirm the live glue state brackets the trace window**,
+    don't trust a trace result without checking what state the game was actually in.
+  - **Session 9f, done right**: started `pkexec strace -f -tt -e trace=connect,sendto,sendmsg,socket,
+    bind,getsockopt,setsockopt -o joinstrace.log -p 302386` BACKGROUNDED (`run_in_background` — lets
+    the polkit prompt resolve without a blocking-tool-call timeout, and lets the trace run for as long
+    as needed) BEFORE the user attempted the join, stopped it after, and immediately confirmed via
+    `readtask.py` that glue state really was 7 (local task state 5, busy status 3/`0x648e`) right at
+    that moment — properly bracketed this time. Reading the full log: thread **302887** is the one
+    doing Stardew's actual networking (every other thread's socket churn is Ryujinx's own
+    AF_NETLINK/AF_UNIX interface-monitoring noise, or routine 8099 account-API reconnects). Its
+    complete timeline: creates+binds a UDP socket (`t=04.7s`, ephemeral port) → two TCP `connect()`s
+    to the NPLN server `127.0.0.1:18501` (`t=15.3s`, `t=15.4s`, both succeed) → three MORE UDP
+    sockets created+bound at `t=14.6s/15.3s/32.9s` (exactly the local-port-allocation pattern you'd
+    expect before ICE candidate gathering) → one more TCP `connect()` to `127.0.0.2:18501`
+    (`t=20.9s`, matches this stack's `NPLN_RELAY_HOST=127.0.0.2` setting) → **then NOTHING**: no
+    `connect()`, `sendto()`, or `sendmsg()` on any of those four UDP sockets for the rest of the trace
+    (through `t=50s`, well past the confirmed state-7 read).
+  - **Verdict, now airtight**: the P2P/mesh UDP sockets are allocated (socket+bind) but never used —
+    never connected, never sent on. This isn't "packets get lost," it's "no attempt is ever made,"
+    confirmed at the syscall level and properly time-correlated with a live state-7 read for the first
+    time. Combined with session 9d's packet capture (nothing on the wire) and 9c's memory read (task
+    believes it started), all three independent methods now agree precisely.
+  - **How to apply**: strace is installed on n5air. Filter to
+    `-e trace=connect,sendto,sendmsg,socket,bind` (unfiltered `trace=network` is unusable noise on a
+    .NET/JIT process like Ryujinx); background it with `pkexec` + `run_in_background` rather than
+    foreground it; ALWAYS bracket with a `readtask.py` glue-state read taken right after stopping the
+    trace, don't assume the process was in the state you think it was.
+
 - 2026-09-04 (session 9d — **PACKET CAPTURE, SAME SITTING: the vtable-dispatched connect call never
   touches the network at all — 19 seconds of total silence right through the stall window**): user
   ran `pkexec tcpdump -i any -w scratch/state7.pcap udp` (system-wide, no host filter — necessary
@@ -1628,17 +1672,18 @@ podman logs -f nextendo-local_npln_1
 
 ## Next Steps
 
--7. **(session 9d) START HERE: resolve the concrete vtable implementation — the connect call never
-   reaches the socket layer at all.** CONFIRMED by packet capture (session 9d) + two live reads
-   bracketing it (session 9c and 9d, same task object, ~10+ minutes apart, values byte-for-byte
-   identical): the async connect task marks itself started (taskCtx local state 5) and sits "busy"
-   (poll state 3, status `0x648e`, not a terminal code) indefinitely, while emitting **zero** network
-   traffic of any kind — no STUN/TURN beyond one unrelated routine keepalive refresh, no
-   ChannelBind/CreatePermission/Send/Data indication, no direct UDP to any address, from either side,
-   for the entire ~19s+ window watched. This is NOT a reachability/NAT/relay problem — a call that
-   never sends a packet isn't blocked on the network, it's failing (or looping/no-opping) before it
-   gets that far. session 4's "host probes joiner every 500ms" finding is from an OLDER symptom
-   (an explicit failure code) and no longer describes this stall; don't assume it still applies.
+-7. **(session 9f) START HERE: resolve the concrete vtable implementation — the connect logic sets up
+   its UDP sockets and then never uses them.** CONFIRMED three independent ways now (session 9c's
+   live memory read, 9d's packet capture, 9f's properly-correlated syscall trace — see the session 9f
+   entry above for the exact socket/connect/bind timeline): the async connect task marks itself
+   started (taskCtx local state 5) and sits "busy" (poll state 3, status `0x648e`, not a terminal
+   code); the TCP session to the NPLN server (`18501`, both `127.0.0.1` and `127.0.0.2`) connects
+   fine; several UDP sockets get created and bound (the local-port-allocation step you'd expect before
+   ICE gathering); and then **none of those UDP sockets are ever connected or sent on**, for the
+   entire stall. This is NOT a reachability/NAT/relay problem — a call that never sends a packet isn't
+   blocked on the network, it's failing (or looping/no-opping) before it gets that far. session 4's
+   "host probes joiner every 500ms" finding is from an OLDER symptom (an explicit failure code) and
+   no longer describes this stall; don't assume it still applies.
    a. **Re-derive the exact pointer chain precisely** (session 9c's version was one hop too shallow):
       `d948`'s gate is `*(long*)(*(long*)(taskCtxPtr+0x40)+0x80)+0x3c == 4`, and `cb30`'s actual
       "Session"-like argument (where `+0xd8`/`+0x510`/`+0x528`/`+0x52a` live) is reached through a
@@ -1659,12 +1704,14 @@ podman logs -f nextendo-local_npln_1
       re-checking which of the two actually ran.
    d. Session 7/8's struct-offset chase (`jobPtr+0xE8` etc.) is superseded by the state-machine
       finding — don't resume it.
-   e. **Live-read discipline (new lesson, 9d)**: `readtask.py`'s first read after a gap sometimes
-      comes back with an implausible value (session 9d saw glue state flip to 1 with a null task
-      pointer, then flip right back to 7 with the identical task object seconds later on a bare
-      re-run) — a stale `candidate bases` cache entry or a scan catching Ryujinx mid a memory-mapping
-      change, not a real state transition. Always take a second read before trusting an unexpected
-      change; don't write up a single anomalous read as a conclusion.
+   e. **Live-read discipline (lesson from 9d/9e/9f, revised)**: the glue state genuinely moves around
+      between reads — seen at 1 (session 9d, right after a capture), 7 (9c, 9d's re-read, 9f), and 4
+      (9e, while the user was actually sitting at the main menu). Session 9d's "flip back to 7 right
+      away" was called a misread at the time; given 9e's later confirmed-idle (state 4) read, that
+      call is now uncertain — it may equally have been a real idle moment the user then backed out of
+      again. Don't assume any single read reflects the current state without asking the user or
+      re-reading; never trust a trace/capture result without a `readtask.py` read taken right after it
+      to confirm what state the game was actually in during the window.
    f. **Tooling note**: the "zero BL callers" dead end from session 9's first pass was a hex-arithmetic
       mistake on the agent's part (`0x0773cb30-0x100000` computed by hand as `0x663cb30` instead of the
       correct `0x763cb30`), not a real gap in `ehfuncs.func_of()`.
