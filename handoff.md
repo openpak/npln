@@ -6,6 +6,137 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-04 (session 12 — **ROOT CAUSE FOUND AND FIXED SERVER-SIDE: Pia keys its NAT/TURN station
+  tables on the `upcsid` field of each participant's `__pus` document, the consoles write `upcsid: 0`
+  into their own document, and our server served that placeholder back to the peer, so the joiner
+  built the host's station with id 0 and could never set up a relay to it. After forcing
+  `ussid/ucsid/upcsid = rank` on every served member document, a join went through: both NAT tables
+  hold each other's real ids, the joiner's glue reads state 9 (same as the host), no error applet.**
+  Whole session was static RE + live polling on the same joiner (pid 302386) / host (pid 3211831).
+  - **Session-11 belief corrected: the network connect does complete on the joiner.** The
+    `NplnBackgroundProcessJob` (NplnProtocol+0x260, vtable `0xba5e150`) runs
+    StartConnectNetwork(`bpWaitConn_7ab5140`, arms slot 25) → WaitConnectNetwork(`bpDisp_7aafd40`,
+    polls an async request at job+0x27d8) → the request's completion callback is
+    `nn::pia::nplnd::NplnPlugin` slot 5 (`g8540_7c38540`, via `ga35c_7c3a35c`): it takes the
+    participant list, uses the **lowest `upcsid` as the host**, sets role 1/2, adds one station per
+    participant (`addsta_7c38f70` → `natAdd_76fc9f0(NplnProtocol+0x1460, upcsid)`), and then
+    `connOk_7c3c380` **starts the AttachMeshJob** (`am0_7c3db30`). Participant entry layout (parser
+    `pusParse_7b572e8`): +0 valid, +8 `uid`, +0x48 `ussid`, +0x4c `ucsid`, +0x50 `upcsid`, +0x58
+    `pgn`, +0x78 `pusa`; getters `0x7b5743c/54/5c/64` read valid/ussid/ucsid/upcsid.
+  - **The 12-s failure = `AttachMeshJob::WaitHostConstantId` (`am4_7c3ed28`)**, deadline 12000 ms set
+    in `am3_7c3e4c0` (10000/15000 only in mode 0x1b). It polls NplnFacade slot 0x220
+    (`hostIdGet_75f0964` → NplnProtocol+0x198/+0x1a0 = host {constant id, index}). Constant ids are
+    the account principal ids: `0x6b49d203` = 1800000003 (host user), `0x6b49d204` = the joiner. On
+    timeout am4 cancels the connect and the code lands in NplnPlugin+0x6a4, which `bpErrMap_7ab04c0`
+    copies into the job (that is why `0x648e` with am4's location `0x250a6b1c438` sat in the job).
+  - **The host id reaches the joiner via the 207-B mailbox roster** (`01 11 …`), handled by
+    NplnProtocol slot 117 (`rcRecv_7c427c8` → `np40a4_75f40a4`). Wire header (BE, 30 B,
+    `rosterDes_75ff0d0`): ver u8, type u8 (0x11), len u16, seq u32 @4, hostIdx u16 @8, hostConstId u64
+    @0xa, sessionId u64 @0x12, flag u8 @0x1a, stationCount u16 @0x1b (=8), bool @0x1d, then 8×22-B
+    station slots. Accept path stores +0x198/+0x1a0, +0x15c = seq, and acks with type 0x12
+    (`rosterAck_75f35f4`); a duplicate seq only re-acks; any failed gate drops silently. Gates: type,
+    length, seq > +0x15c, `np+0x200->vtbl[0x50]`/ideq with the caller's id, count == +0x121e,
+    non-empty table at +0x1b0, per-station parse, and the joiner's requested network id (+0x1268,
+    `{ff×8, upcsid, 0x4e96}`) present among the slots. The session-id check (slot 0x3a0) and the
+    +0x311 "connected" gate (slot 0x3b8) are both `return 0` stubs for NplnProtocol. The joiner learns
+    the 8-byte session id from the first accepted roster (`rcRecv` sets NplnSessionProperty+0x90).
+  - **Live runs this session** (`nplnpoll.py`, `rosterpoll.py`, `turnpoll.py`, `nattbl.py`,
+    `sessid.py`, `bpread.py`, `livevt.py` in `scratch/tools/`; logs `nplnpoll-joiner-s12.log`,
+    `rosterpoll-joiner-s12.log`, `turnpoll-joiner-s12*.log`):
+    - 16:36 (stale joiner): roster never accepted, no ack, WaitHostConstantId → 0x648e at 12 s.
+    - 17:17 (after the joiner's objects were freed): roster accepted in <1 s (seq 6, host id/idx
+      `6b49d203/0x17`, my id `6b49d204/0x2e`), AttachMeshJob state 4 for 15 s (TurnJob:
+      WaitServerConfig → StepResolveServerAddress; the joiner's TURN Allocate only went out at +15.5 s),
+      then WaitSetupRelayAddress (`am10_7c3fb04`, waits TurnProtocol slot 3 `tsec3_7abb1d8` = every
+      ring station in state 4) for 14.5 s until the TURN watchdog `e648eA_7ab9870` raised 0x648e
+      (station state <2 for >14000 ms). **The TurnProtocol work ring held one station id: 0**, and
+      the live NAT table (`nattbl.py`) showed the joiner's host entry as `{id=0, peer=0, state=0xe}`
+      while the host had no joiner entry at all. `rr1_76fb810` pushes every +0x1460 entry in state
+      0xe into the ring, so the id came straight from the `__pus` `upcsid` field.
+    - Server docs at that moment: host `__pus` = `ucsid:1, upcsid:0 (then an empty map), ussid:1`,
+      joiner = `ucsid:2, upcsid:0/{}, ussid:2` — written by the consoles themselves; our
+      `fields()` returned the stored doc verbatim (the synthesized `userSessionFields` only applies
+      when nothing is stored).
+  - **Fix (`internal/npln/gamesync.go` `withStation`, deployed 17:26 UTC):** every served
+    `__pus`/`__us` document gets `ussid`, `ucsid`, `upcsid` overlaid with the participant's rank.
+    Rebuilt manually: compose's `dockerfile_inline` is not supported by the docker-compose provider
+    podman uses here — write the Dockerfile to a temp file, `podman build -t
+    localhost/nextendo-local-stardew:latest -f <file> <repo>`, then `podman compose up -d --no-build
+    --force-recreate stardew`. The restart wipes the in-memory farm; the host must re-host.
+  - **Result (17:27 join, host re-hosted):** roster pushes both ways within the same second, NAT
+    tables correct on both sides (`joiner: [1]{id=1,peer=6b49d203,state=0xd}`, `host:
+    [1]{id=2,peer=6b49d204,state=0xd}`), AttachMeshJob object went idle 0.25 s after the host id
+    landed, joiner glue state 9, streams stayed open, no error window; live jobs show
+    `WanConnectNetworkJob::CompleteProcess`, `StartupSessionJob::CompleteProcess`,
+    `NatTraversalJob::ProcessSuccess`. Game-level outcome (farm loads / farmhand plays) to be
+    confirmed by the user; if anything is still off, the next layer is the game's own
+    `_Pia_SystemData` / farmhand handshake, not Pia.
+  - Still open, lower priority: why the TurnJob needs ~15 s before its first Allocate
+    (`TurnJob::WaitServerConfig` polls the `IceServerConfigGetter` slot 0x30 until it stops returning
+    0x10408); with NAT traversal now succeeding the relay path may not matter on a LAN.
+  - Hex-arithmetic reminder that bit me twice more: Ghidra `func_0x07cXXXXX` is VA `0x7bXXXXX`
+    (subtract 0x100000, borrow across the nibble).
+
+- 2026-09-04 (session 11 — **the mailbox is DECRYPTED, both directions, live: the per-session
+  transport key is recovered and the "78-B mailbox packets" are wan::NatTraversalProtocolMessages.
+  Signaling is HEALTHY — both consoles exchange candidate addresses and CONSUME them. Two
+  session-10 beliefs are REFUTED: the joiner DOES act on the host's reply, and it DOES run a
+  NatTraversalJob. The real structural gap: the joiner never gets a local station.**):
+  the host had crashed and was relaunched (`host-run11.log`, pid was 3211831); joiner reused
+  (pid 302386). One clean host+join, captured at the moment the joiner wrote `__mt/nat_traversal`.
+  - **Per-session key (both consoles, symmetric): `2d90ce940bc277399b42f8c6b0764d14`.** It is NOT
+    from the static keytab — it lives only in RAM at `SessionPacketReader+0x14` / `SessionPacketWriter
+    +0x14` (both classes `nn::pia::session::…`), 16 bytes, and `+0x10`=1 means encryption on. AES-GCM;
+    nonce = `u32(NplnProtocol+0x2d8 -> +0x90)` prefix `|| packet+0x15` (8-B header nonce). Derivation
+    traced statically: send path `wos3_7702e64`/`wis3_7704308` build the nonce via `nid_75f2410`
+    (reads `net+0x2d8 -> +0x90`), `net` = `WanInputStream+0x60` = the NplnProtocol.
+  - **How to read it live (no wire capture needed):** `tools/vtscan.py --range=10000000-20000000 <pid>
+    13f22928 13f229d8` finds the live `SessionPacketReader`(vt `0x13f22928`) and `SessionPacketWriter`
+    (vt `0x13f229d8`); `tools/pktring.py <pid> <reader> <writer>` dumps key, nonce prefix, the
+    StationManager (`transport+0x120`, class `SessionStationManagerInternal`; local at `+0xa0`,
+    station list head `+0x20`/node `{+8 next,+0x10 station}`, station `{+0x10 addr,+0x38 id,+0x40 u16
+    idx,+0x48 state}`) AND the receive ring (`reader+0x48`: array `+0x10` stride `0x1d18`, cap `+0x18`,
+    start `+0x24`; packet: `+0x8` magic `64 98 ab 32`, `+0xc` flags(bit7=still-encrypted, so 0x10 =
+    already decrypted in place), `+0xe`/`+0x10` u16 dst/src station index, `+0x14` footsz, `+0x15`
+    nonce8, `+0x1d` tag8, `+0x4d` body, `+0x1c90` len, `+0x1ce0` consumed). `tools/livering.py <pid>`
+    does the scan+dump in one shot. Full decode + parser in `scratch/mailbox-decoded-1624.md`,
+    `livering-{host,joiner}-postfail.txt`. **These are keys/captures — scratch only, never the repo.**
+  - **Decoded messages (body = `0600` <type> <payload> … `<stationId4><idx2>`):**
+    - type `0x2a` = "advertise my address": the station's two candidates `10.87.0.2:P` and
+      `127.0.0.1:P`, then its station id. Host→joiner advertised `10.87.0.2:62297`/`127.0.0.1:62297`
+      (station `6b49d203`, idx 23); joiner→host advertised `10.87.0.2:57168`/`127.0.0.1:57168`
+      (station `6b49d204`, idx 41).
+    - type `0x29` = connectivity-check / candidate-pair (carries candidate pairs, other reflexive
+      ports e.g. 52089/58171 host, 64295/55710 joiner).
+    - **Both rings read `consumed=01` for every message** — reception AND processing happen both ways.
+      So the relay signaling path works end to end; the session-10 "joiner never acts on the host's
+      reply / never sends" reading was wrong (it was measuring a stale/torn-down instance).
+  - **The real gap, seen live at failure:** host `StationManager.local(+0xa0)` = assigned (id
+    `6b49d203`, idx 23, state 2); **joiner `StationManager.local(+0xa0)` = 0x0** — the joiner never
+    creates its own local station, so no mesh member exists on its side and `AttachMeshJob` funnels to
+    `CompleteFailure` after the 30-s deadline.
+  - **`piajobs.py 302386` at failure shows the joiner DID run the NAT path:** live strings include
+    `NatTraversalJob::WaitNatTraversal`, `NatTraversalJob::ProcessSuccess`, `TurnJob::WaitServerConfig`,
+    `TurnJob::StepResolveServerAddress`, `NplndLoginJob::WaitLogin`, `AttachMeshJob::CompleteFailure`.
+    So a `wan::NatTraversalJob` exists on the joiner (refuting session 10's "no NatTraversalJob ever
+    exists on the joiner"). It even reaches `ProcessSuccess`, yet no local station is assigned.
+  - **NEXT:** find where the joiner is supposed to create/assign its local station and why it doesn't.
+    Concrete: (1) on the host, `local` station is built during connect; on the joiner it stays null —
+    decompile the station-manager "add/assign local station" path (`SessionStationManagerInternal`
+    ctor + the add-station call reached from `AttachMeshJob`/`NatTraversalJob::ProcessSuccess`) and
+    read, live during a stall, why the joiner's branch is skipped. (2) The type `0x2a`/`0x29` handler
+    that turns a received advertise into a station entry: the receive dispatch is
+    `disp11_7669920` -> `hdisp_766a0f0` (inserts into the per-reader message list) and the
+    station lookup is `findidx_7679c40`(by u16 index)/`findaddr_7679d40`(by address). Check whether the
+    joiner ever calls the "create local station" vs only "peer station" path. `pktring.py` already
+    reads the station table live, so bracket a stall and watch `local(+0xa0)`.
+  - Tools added this session (`scratch/tools/`): `pktstats.py` (per-thread Pia decrypt-ok/fail
+    counters, table `G_MAIN+0xbd50740` stride `0x16c`, ok`+0xac`/fail`+0xb0`), `vtscan.py`
+    (`--range=lo-hi` fast window scan for a vtable-fns value), `pktring.py`, `livering.py`. New
+    decompiles in `~/ghidra-projects/out3/` (relay send/recv, header crypto `hdrA..hdrE`, packet
+    reader vtables `rxA_7668ce0`/`tailc_76429f0`/`pr13`/`spr*`, stream nonce `nid`/`wos3`/`wis3`,
+    station lookups). NOTE: `pkexec` runs from `/root` — always pass tool paths ABSOLUTE.
+
 - 2026-09-04 (session 10 — **the "state-7 stall" was a modal error applet; 2318-1201 decoded exactly;
   one real server bug (ghost stations) FOUND AND FIXED; the true blocker re-characterised on a clean
   run: the joiner never acts on the host's mailbox reply**):

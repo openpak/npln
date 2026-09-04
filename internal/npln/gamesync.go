@@ -326,12 +326,19 @@ func (g *gamesyncServer) withStation(gsid, uss string, m *commonpb.MapValue) *co
 	g.mu.Lock()
 	st := g.store[gsid+"|docs/__pgn/All/__stu/"+uss]
 	g.mu.Unlock()
-	pl := st.GetFields()["pl"]
-	if pl == nil || len(pl.GetBytesValue()) == 0 {
-		return m
-	}
 	out := mergeFields(nil, m)
-	out.Fields["pl"] = pl
+	// The session ids are server-owned. A console writes its own member document with
+	// upcsid=0 (later an empty map) and only ucsid/ussid set; Pia's NplnPlugin keys the
+	// NAT/TURN station tables on upcsid (the lowest one is the host), so a peer served the
+	// console's placeholder builds a station with id 0, never sets up its relay to the host,
+	// and the join times out at WaitSetupRelayAddress (2318-1201). Overlay the rank.
+	if s := g.lookup(uss); s != nil && s.rank > 0 {
+		r := gsInt(int64(s.rank))
+		out.Fields["ussid"], out.Fields["ucsid"], out.Fields["upcsid"] = r, r, r
+	}
+	if pl := st.GetFields()["pl"]; pl != nil && len(pl.GetBytesValue()) > 0 {
+		out.Fields["pl"] = pl
+	}
 	return out
 }
 
