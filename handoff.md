@@ -6,6 +6,57 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-04 (session 9b — **traced the state-7 task all the way to its concrete "start connecting"
+  call; the last hop is a vtable dispatch that needs a live read, not more static tracing**): follow-on
+  to session 9 in the same sitting, still static-only.
+  - The "dead end" flagged in session 9 (`func_0x0773cb30` resolving to a huge unrelated function with
+    zero callers) was **my own hex-subtraction mistake**, not a tooling gap: `0x0773cb30 - 0x100000 =
+    0x763cb30`, not `0x663cb30` as I'd computed by hand. At the correct VA it resolves cleanly with
+    exactly one caller (`d948`, as expected) and decompiles to a normal, sane function. Re-decompiling
+    `d948`/`d0b8` afterward also fixed their calls to `cbc8`/`cb30` to show real names instead of
+    `func_0x…` placeholders (`~/ghidra-projects/out3/cbc8_760cbc8.c`, `cb30_763cb30.c`).
+  - **`cbc8_760cbc8`**: trivial precondition check (`session+0x80` non-null, `param_3` non-null),
+    returns error `0x10407` on a null arg (a distinct code from the `0x10408` "not ready" seen
+    elsewhere — `0x10407` = null-argument, `0x10408` = wrong-state/busy, consistently across every
+    function in this chain).
+  - **`cb30_763cb30`** (the function `d948` calls to actually start the op) is the real gate chain:
+    (1) null-check `param_3` (the target/peer descriptor); (2) **virtual call** `target->vtbl[0x20]
+    (result, target, isInitiatorFlag)` — the first real network dispatch, `isInitiatorFlag` read from
+    `session+0x510` and defaulted true if `session+0x511` is unset; failure here returns the error
+    immediately; (3) if that succeeds, re-fetch the task/state object at `session+0xd0` and check
+    `*task == 1` (busy — same "1 = already active" sentinel confirmed from session 9's sessA/sessB
+    read) → error; (4) check two more session flags (`+0x528`, `+0x52a`, capability/already-started
+    gates) → error if unset/already-done; (5) only then, lazily re-init the task via `stnsetupA` and
+    call **`func_0x077421f8`** — the actual "start creating the connection" primitive — and on success
+    stamp `session+0xd8 = 4` (this is the exact field `d948` gates on being `== 4` before it will even
+    attempt this whole chain — so `0xd8` is the session's own small state counter, and 4 means "mesh
+    connect kicked off") and `session+0x52a = 1` (one-shot latch).
+  - **`f1f8_76421f8`** (`func_0x077421f8`, the deepest node reached): after a null-arg check, makes
+    **a second virtual call** — `(*(*(long**)(mgr+0x10])+0x30))->vtbl[0x40](result, that_obj,
+    mgr+0x12)` — on a sub-object reached through the manager, at a DIFFERENT vtable slot (+0x40).
+    On success: stores the task pointer into the manager, sets a one-byte flag at `mgr+0xc9`, calls
+    `stnsetupB` on the task (mirrors `d948`'s use of `stnsetupB`), does a second virtual call
+    (`mgr->vtbl[0x10](mgr, 1)`, `AddRef`/`Start`-shaped), **records a start tick**
+    (`func_0x076e49c0` → stored at `mgr+0xf0`) — genuine timeout/elapsed-time bookkeeping, not a
+    stub — then swaps in a continuation pointer (`mgr[7]=&UNK_0774234c`, the address right after this
+    function — the classic "resume here on the next poll tick" pattern already seen in `d948`/`f1f8`'s
+    siblings).
+  - **Where static tracing stops**: both virtual calls (`cb30`'s vtbl+0x20 on the *target*, `f1f8`'s
+    vtbl+0x40 on a *facility sub-object*) are polymorphic — the concrete implementation depends on
+    which class was constructed at runtime, which is NOT statically knowable without either (a) a
+    live read of the vtable pointer to identify + decompile the concrete class, or (b) finding a
+    single unique vtable literal for that interface in `.rodata` if only one implementation exists in
+    this binary (unchecked). This is the natural handoff point to a live capture.
+  - **NEXT (needs a live joiner, stuck in glue state 7)**: read, in order of value: (1) the task's
+    start tick (`mgr+0xf0` off the object at `session+0x68`) vs current tick — confirms whether the op
+    genuinely started and how long it's been stuck; (2) the `c8c4`-compared status field (task+4) —
+    is it one of the five known terminal constants (task secretly done, downstream bug) or something
+    else (still in flight); (3) the vtable pointer at `*(long**)(session[0x10]+0x30)` / at the
+    `f1f8`-reached sub-object — read the pointer itself (no need to follow it into code) to at least
+    get a class identity to grep for in the binary's RTTI/typeinfo strings.
+  - Decompiles this round: `cbc8_760cbc8.c`, `cb30_763cb30.c` (corrected from session 9's wrong one),
+    `f1f8_76421f8.c`, plus re-decompiled `d948_760d948.c`/`d0b8_760d0b8.c` with fixed callee names.
+
 - 2026-09-04 (session 9 — **VA-resolution bug fixed; `func_0x0770b160`/`c8ac`/`c8c4` decompiled clean;
   the state-7 async task's starter and its network primitive are now traced two levels deep**):
   no emulator run this session (static RE only). Root cause of session 8's bad decompiles found: the
@@ -1498,37 +1549,36 @@ podman logs -f nextendo-local_npln_1
 
 ## Next Steps
 
--4. **(session 9) START HERE: identify the task's terminal-status enum, then get ONE live read of it.**
-   Session 9 fixed the VA-resolution bug (see session-9 entry: `func_0x…` names in critbuilder's body
-   are Ghidra addresses = ELF VA + 0x100000; feed `gdec.py`/`ehfuncs.py` the ELF VA, not the raw
-   digits) and traced the state-7 task two levels deep: `gluecreate` → `sessB`(`b160_760b160.c`) →
-   `d948_760d948.c` (gates on the Pia Session being in state 4, then calls the real network primitive)
-   → task-local state set to 5. `c8c4_760c8c4.c` reads a *second* status field on the task and
-   compares it against five literal constants `0xa467, 0xcc63, 0xac64, 0xc47f, 0xc485`; matching one
-   of them is what lets it report a real terminal result instead of defaulting to zero/"unknown".
-   a. Figure out what those five constants mean — likely a small closed enum (e.g. a
-      Initialized/Executing/Canceling/Canceled/Completed-shaped `nn::async` status). Try: search
-      `main.elf` rodata for adjacent/paired string labels near their xrefs, or diff them against any
-      known `nn::async::Executable` status enum from public SDK headers/leaks if available.
-   b. Then ONE live read (needs a fresh joiner mid-stall, per the emulator/testing lessons below):
-      dump the task object at the pointer chain used by `c8ac`/`c8c4`
-      (`*(long*)(taskCtxPtr+0x58)`, then offset 0 = small state, offset 4 = the status code `c8c4`
-      reads) while the joiner is parked in glue state 7. If the status code is already one of the five
-      known constants, the task IS terminal and something downstream just isn't consuming the result
-      (a different bug than "never completes"); if it's something else entirely, the task is
-      genuinely still in flight and the real question moves to *why* (network primitive
-      `func_0x0773cb30` never firing / never being polled again — see the dead end below).
-   c. **Do not trust `ehfuncs.func_of()` on a call target unless its BL-caller list is non-empty and
-      contains the actual caller.** It resolved `func_0x0773cb30` (the network primitive `d948` calls)
-      and its precondition check `func_0x0770cbc8` to containing functions with ZERO BL callers found
-      anywhere in `.text` — almost certainly an indirect call (PLT/GOT/vtable) the BL-only scanner
-      can't see, so the "containing range" it returned is very likely the wrong function. Needs a
-      different resolution method (disassemble the exact VA directly in Ghidra, or find the indirect
-      call site and its register source) before decompiling either of those two.
+-5. **(session 9b) START HERE: ONE live read while the joiner is stuck in glue state 7.** The whole
+   static chain is now traced as far as it can go without runtime data: `gluecreate` → `sessB`
+   (`b160_760b160.c`) → `d948_760d948.c` (gates on Pia Session state `session+0xd8==4`) → `cb30_763cb30.c`
+   (busy/capability gates, then a **virtual call** `target->vtbl[0x20]`) → `f1f8_76421f8.c` (a
+   **second virtual call**, `facilityObj->vtbl[0x40]`, then records a start tick and installs a
+   poll-continuation). Both virtual calls dispatch to a concrete class chosen at runtime — that can't
+   be resolved statically without knowing which vtable got installed. Read, in this priority order
+   (needs a fresh joiner parked in glue state 7 — see the testing lessons in the memory notes: restart
+   both emulators first, a stale instance changes the symptom):
+   a. **The `c8c4`-compared status field**: pointer chain `*(long*)(taskCtxPtr+0x58)`, then offset 0 =
+      small state (busy while ∈{2,3,4}), offset 4 = the status code compared against
+      `0xa467,0xcc63,0xac64,0xc47f,0xc485`. If it's already one of those five, the task is secretly
+      TERMINAL and the bug is downstream (something not consuming the result); if it's anything else,
+      the task is genuinely still in flight.
+   b. **The start tick**: `f1f8` stores it via `func_0x076e49c0` into the object at `session+0x68`
+      (offset `+0xf0` off that object). Compare against current tick to see how long it's actually
+      been running — rules a fast-fail-then-silently-hang scenario in or out.
+   c. **The two vtable pointers**: at `*(long*)(session[0x10]+0x30)` (the `cb30` dispatch target) and
+      at the sub-object `f1f8` reaches through the manager at `session+0x68`. Just read the pointer
+      value (don't need to follow it into code) — gives a class identity to grep for in `.rodata`
+      RTTI/typeinfo strings, which is enough to find and decompile the concrete implementation
+      statically afterward.
    d. Session 7/8's struct-offset chase (`jobPtr+0xE8` etc.) is superseded by the state-machine
       finding — don't resume it.
    e. `pkexec tcpdump` (long-running) is unreliable through this tool — have the user run
       `sudo tcpdump` directly in their own terminal for any future capture.
+   f. **Tooling note**: the "zero BL callers" dead end from session 9's first pass was a hex-arithmetic
+      mistake on the agent's part (`0x0773cb30-0x100000` computed by hand as `0x663cb30` instead of the
+      correct `0x763cb30`), not a real gap in `ehfuncs.func_of()` — always compute that subtraction
+      with `python3 -c "print(hex(x-0x100000))"`, never by hand.
 
 -2. **(session 6c, SUPERSEDED by session 8 above) decrypt the failure telemetry.** The joiner's `AttachMeshJob` funnels
    every failing step through `ProcessSendMonitoringData` before `CompleteFailure`, so the job object
