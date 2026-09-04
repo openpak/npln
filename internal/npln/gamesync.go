@@ -343,9 +343,12 @@ func (g *gamesyncServer) withStationLocked(gsid, uss string, m *commonpb.MapValu
 		r := gsInt(int64(s.rank))
 		out.Fields["ussid"], out.Fields["ucsid"], out.Fields["upcsid"] = r, r, r
 	}
-	if pl := st.GetFields()["pl"]; pl != nil && len(pl.GetBytesValue()) > 0 {
-		out.Fields["pl"] = pl
-	}
+	// docs/__pgn/All/__stu/<uss> is that player's MAILBOX — other consoles write relay
+	// messages (roster, acks, NAT traversal) into it — not a station blob the player published.
+	// Merging its `pl` into the member document handed a rejoining console the previous
+	// joiner's last message glued onto the host's entry, and the roster was then dropped
+	// (measured 2026-09-04 21:27: identical listings except for that field). Never merge it.
+	_ = st
 	return out
 }
 
