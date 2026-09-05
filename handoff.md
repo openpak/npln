@@ -6,6 +6,67 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-05 (session 13 — **production box prepped, three upstream PRs open, nnex proof moved to
+  the account server, citron re-tested and still blocked at 2321-4992**). No RE this session.
+  - **Commits here:** `d83dc12` drops coturn's `--relay-ip` (on OCI the public IP is 1:1 NAT and
+    not on any interface, so binding relays on it fails; `--external-ip` alone is right).
+    `753bfdb` removes `NEXTENDO_SECRET` entirely: `pidFromNexToken` now POSTs the nx2 token to the
+    account server's `/internal/pid-by-nex-token` with `X-Internal-Key`; refresh tokens are MACed
+    with a key derived from the persisted ES256 signing key. Local stack validated: the new image
+    runs and the account container answers the endpoint from inside the compose network (a bogus
+    token gets 401 "jeton nex invalide"). An emulator login on the new flow is still to be run.
+  - **Upstream PRs (all from forks under `tobagin`, the user has no push rights on the org; all
+    English, minimal, no attribution):**
+    - nextendo-account **#8** `Add /internal/pid-by-nex-token` — the endpoint existed only in the
+      account repo's UNCOMMITTED working tree (alongside Outbound's photon-room/invitations WIP,
+      which stays there for the Outbound side to PR). Ours is the trimmed 22-line version.
+    - sni-router **#3** `Route the Stardew Valley NPLN tenant to BACKEND_STARDEW` — the
+      `deploy/sni-router-stardew.patch` file has header-less hunks (git apply rejects it); the PR
+      is the applied version. After merge the main server needs `BACKEND_STARDEW=<box>:18501`.
+    - Ryujinx-Nextendo **#23** `Stardew Valley: built-in patches for in-game TLS and the NPLN SDK`
+      — `NextendoStardewPatches.cs` + the `ModLoader` hook were UNTRACKED locally and absent
+      upstream: no official build could reach the tenant (in-game static OpenSSL rejects the
+      replacement chain; then the SDK's "certificate accepted" byte cancels pre-HEADERS). Verified
+      the working `~/ryujinx/Ryujinx` binary embeds the class. Trimmed to 66 lines, HLE builds
+      clean. Method stays `Verser` to match the S3 class the loader calls.
+  - **Production box = the user's `qw-eu` (ubuntu@145.241.199.19, OCI A1.Flex 4/24, Ubuntu 24.04
+    arm64, London), NOT a dedicated VM:** still runs openpak (14 containers, localhost-only),
+    qw-cloudflared (kept for tunnels), rookery-agent, host Caddy on 80/443, system zerotier
+    (`tobagin-network`, 10.212.63.196). 29 `qw-*` quadlets stopped and parked in
+    `~/.config/containers/systemd.disabled/`. Fixed a 44-day hung `apt-get update` (CLOSE-WAIT
+    sockets, mirrors fine) that held the lock; unattended-upgrades then applied 98 packages.
+    Prepped: repo rsynced to `~/stardew-nextendo` (no git remote; `--exclude .git --exclude
+    deploy/oci/.env --exclude deploy/oci/certs`), iptables-persistent rules TCP 18501 / UDP 3478 /
+    UDP 49152-65535, `deploy/oci/.env` (PUBLIC_IP, random TURN secret, INTERNAL_KEY still
+    `change-me`), both images built with `podman compose build`, coturn UP and answering STUN
+    locally, `podman-restart` user service enabled.
+  - **Still blocked on the user:** (1) OCI security list ingress for those three port ranges —
+    external probes never reach the VM (iptables counters stay 0); (2) cert+key from the Nextendo
+    CA into `deploy/oci/certs/` (Ryujinx clients would accept anything thanks to patch #23, real
+    hardware under Prelude would not); (3) `NEXTENDO_INTERNAL_KEY`; (4) merge+deploy PR #8 and
+    reach `/internal/*` PRIVATELY — the production proxy returns 404 for every internal route and
+    nextendo-docs/ARCHITECTURE.md says they must never be public; the box already sits on the
+    user's ZeroTier network, so joining the main server to it and pointing `NEXTENDO_ACCOUNT_URL`
+    at its ZeroTier address needs no proxy change; (5) sni-router PR #3 + backend env.
+  - **citron re-test (both personas, local stack):** base 1.2.34 dies ~6 s in with an uncaught
+    .NET AggregateException before any networking; on 1.6.15.13 both patches work (TLS completes,
+    h2 established on the local server) and the game then closes every connection with zero RPCs
+    → 2321-4992, identical to 2026-09-02. Upstream citron has neither the patches nor a fix;
+    Ryujinx remains the only client. The joiner citron persona's `qt-config.ini` pointed at
+    production and was pinned to 127.0.0.1 (backup `qt-config.ini.bak-prod-2026-09-05`).
+  - **Environment notes:** ssh needs a tty or GUI for the key passphrase — `ksshaskpass` is now
+    installed; recipe: `ssh-agent -a /tmp/claude-1000/agent-stardew.sock`, then
+    `SSH_ASKPASS=/usr/bin/ksshaskpass SSH_ASKPASS_REQUIRE=force ssh-add ~/.ssh/id_ed25519`. gh's
+    stored credential helper points at a missing `/usr/bin/gh`; push with
+    `git -c credential.helper= -c credential.helper="!$(command -v gh) auth git-credential"`. The
+    local stack now starts with `podman compose` (docker-compose provider → hyphenated names
+    `nextendo-local-stardew-1`, image `localhost/nextendo-local-stardew`); build the Stardew image
+    with `podman build -f deploy/oci/Dockerfile .` and tag both `nextendo-local-stardew` and
+    `nextendo-local_stardew`. Emulators: start them to the game list, never pass the NSP.
+  - **NEXT:** unchanged hardening list from session 12b (host quits with joiner inside, keepalive
+    kill test, 3+ players), plus: run one emulator login on the new nnex flow locally, then the
+    production bring-up once the five blockers above clear.
+
 - 2026-09-04 (session 12 — **ROOT CAUSE FOUND AND FIXED SERVER-SIDE: Pia keys its NAT/TURN station
   tables on the `upcsid` field of each participant's `__pus` document, the consoles write `upcsid: 0`
   into their own document, and our server served that placeholder back to the peer, so the joiner
