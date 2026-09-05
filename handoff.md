@@ -6,6 +6,50 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-05 (session 14 — **nnex-via-account-server flow verified with real logins, the whole
+  session-12b hardening list passed, 3 players in one farm, and a first-join flakiness root-caused
+  and fixed (`7896f63`)**). No RE this session; everything on the local stack with Ryujinx.
+  - **New auth flow works live:** OutboundHost (pid 1800000003), OutboundJoiner (1800000004) and
+    stardewhost (1800000005) all resolved through `/internal/pid-by-nex-token` with no
+    `NEXTENDO_SECRET` anywhere. Endpoint answers 401 for a bogus token from inside the stardew
+    container.
+  - **Hardening results:** (1) host quits normally with the joiner inside → `[MM] host … left: farm
+    … closed`, joiner's docs deleted and both keep-sessions closed within 1 s; the joiner shows the
+    game's own "server closed the connection", no error applet. (2) Keep-alive: `kill -STOP` on the
+    joiner → seat freed in **25 s** (15 s ping + 10 s timeout), others notified with DELETED pushes.
+    `kill -STOP` on the host with two farmhands inside → farmhands left on their own at 13 s (Pia
+    silence), server closed the farm at 24 s; `kill -CONT` afterwards took the host straight back
+    to the main menu (unsaved day lost — it never saved the two cabins). (3) **Three players**:
+    stardewhost joined as rank 3 (profile `~/ryujinx-instances/stardew`, needs
+    `NEXTENDO_ALLOW_SHARED=1`), ranks/upcsid 1..4 served correctly; the joiner rejoined after its
+    kill as rank 4 on the first attempt. A fourth seat exists (`stardew-join` profile = stardewjoin,
+    pid 1800000007) but was not exercised.
+  - **First-join flakiness root-caused (also seen 20:21 tonight and as the "stale joiner" in
+    session 12):** the host's roster was CORRECT (seq, host id, session id, slot for the new
+    upcsid), the joiner just dropped the first delivery, and Pia re-wrote the identical 207-B roster
+    every second for 12 s — all swallowed by the per-stream content dedup in `w.push`, so
+    WaitHostConstantId hit 12 s → 2318-1201. Fix `7896f63`: `deliver` (the write path) forces
+    delivery for `__stu` mailbox docs; the 3-s re-push loop keeps its dedup (that loop was the real
+    source of the session-12b write storm). After redeploy: 40 pushes in 15 min, joins first-try.
+  - **Farm listing facts learned:** the farm list is a friends-only query (`users=` = the caller's
+    friend list), so a new tester must be friended first — done for stardewhost via the account
+    server's `/internal/friend-request` + `/internal/friend-accept` (`{"from":…,"to":…}` /
+    `{"pid":…,"from":…,"accept":true}` from inside `nextendo-local-account-1`). The GAME then
+    filters client-side on `_Pia_SystemData`: a friend's farm shows only if your id is in
+    `farmhands` or `newFarmhands` is `True`. Cabins cost 4000g on this build; the host only
+    republishes the properties on join/leave/day change, NOT when a cabin is built, so after
+    building one make someone leave+rejoin (or sleep) before the newcomer refreshes.
+  - **Save editing (host profile):** Switch saves live in
+    `~/ryujinx-instances/host/bis/user/save/0000000000000006/{0,1}/Test_448041634/Test_448041634`,
+    plain zlib over the PC-style XML, two identical journal copies — edit both while the game sits
+    at the main menu. Added 40000g + 300 Wood/Stone (backup in the session scratchpad only).
+  - **Left running at hand-off:** three Ryujinx instances (host 819639, joiner 962011, third
+    851328) and the local stack. PRs #8 / #3 / #23 still open, zero comments. Box unchanged.
+  - **NEXT:** (1) re-test the third player once the host republishes (joiner leave+rejoin) and
+    try the 4th seat; (2) session-12b leftovers: the ~15 s `TurnJob::WaitServerConfig` delay, strip
+    `NPLN_GS_DIAG` payload logging before any public deployment; (3) production bring-up once the
+    five user-side blockers from session 13 clear.
+
 - 2026-09-05 (session 13 — **production box prepped, three upstream PRs open, nnex proof moved to
   the account server, citron re-tested and still blocked at 2321-4992**). No RE this session.
   - **Commits here:** `d83dc12` drops coturn's `--relay-ip` (on OCI the public IP is 1:1 NAT and
