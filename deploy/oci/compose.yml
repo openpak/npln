@@ -50,8 +50,7 @@ services:
       - "--static-auth-secret=${NPLN_TURN_SECRET}"
       - "--realm=nextendo.network"
       - "--fingerprint"
-      - "--relay-ip=${PUBLIC_IP}"
-      - "--external-ip=${PUBLIC_IP}"       # OCI VMs sit behind 1:1 NAT: advertise the public address
+      - "--external-ip=${PUBLIC_IP}"       # behind 1:1 NAT: relays bind locally, advertise the public IP
       - "--min-port=49152"
       - "--max-port=65535"
       - "--log-file=stdout"
