@@ -23,11 +23,10 @@ Files: `deploy/oci/`. Nothing here needs the local podman stack.
 
 ## Server-to-server
 
-- `NEXTENDO_SECRET` = the production account server's secret (verifies the `nnex` claim).
-- `NEXTENDO_INTERNAL_KEY` = the account server's off-network caller key. This box is outside the
-  account server's internal network, so `/internal/npln-friends` is called with `X-Internal-Key`
-  (commit 9c5b193). The account server must have `NEXTENDO_INTERNAL_KEY` set and the route
-  reachable through its public proxy (Splatoon 3 already uses this path).
+- `NEXTENDO_INTERNAL_KEY` = the account server's off-network caller key, sent as `X-Internal-Key`.
+  The account server proves the `nnex` claim (`POST /internal/pid-by-nex-token`) and serves the
+  friend graph (`/internal/npln-friends`); both routes must be reachable through its public
+  proxy. The account secret never lives on this box.
 
 ## Certificates
 

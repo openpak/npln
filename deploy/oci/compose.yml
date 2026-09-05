@@ -20,7 +20,6 @@ services:
       KEY_FILE: /certs/npln.key
       NPLN_JWT_KEY: /data/npln_jwt_es256.key
       NEXTENDO_ACCOUNT_URL: ${NEXTENDO_ACCOUNT_URL:-https://nextendo.network}
-      NEXTENDO_SECRET: ${NEXTENDO_SECRET}
       NEXTENDO_INTERNAL_KEY: ${NEXTENDO_INTERNAL_KEY}
       NPLN_RELAY_HOST: ${PUBLIC_IP}
       NPLN_RELAY_PORT: "18501"

@@ -3,13 +3,14 @@ package npln
 // identity — who is calling, and the tokens that prove it.
 //
 //   - The emulator's BAAS id_token carries, in its "nnex" claim, the nx2 token nextendo-account
-//     signed with the shared NEXTENDO_SECRET ("nx2.<b64(pid.username.expiry)>.<b64(hmac)>").
-//     That HMAC is the proof; the id_token's own RS256 signature is not checked here.
+//     signed by nextendo-account ("nx2.<b64(pid.username.expiry)>.<b64(hmac)>"). The account
+//     server verifies that HMAC for us; the id_token's own RS256 signature is not checked here.
 //   - The account server's /internal/npln-friends gate then requires a verified account.
 //   - We answer with an ES256 JWT in Nintendo's shape (npln.authorization allow ["**"]); the
 //     client decodes it to learn its rights, and echoes it as `authorization: bearer` on every call.
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -40,7 +41,6 @@ import (
 const tokenTTL = 8 * time.Hour // Nintendo's exp-iat = 28800s
 
 var (
-	secret     = []byte(os.Getenv("NEXTENDO_SECRET"))
 	accountURL = envOr("NEXTENDO_ACCOUNT_URL", "http://account:8080")
 	httpc      = &http.Client{Timeout: 5 * time.Second}
 )
@@ -68,33 +68,33 @@ func pidFromNnex(idToken string) (uint64, bool) {
 	return pidFromNexToken(claims.Nnex)
 }
 
-func pidFromNexToken(s string) (uint64, bool) {
-	if len(secret) == 0 || !strings.HasPrefix(s, "nx2.") {
+// pidFromNexToken has the account server prove an nx2 token, so NEXTENDO_SECRET never lives here.
+func pidFromNexToken(token string) (uint64, bool) {
+	if !strings.HasPrefix(token, "nx2.") {
 		return 0, false
 	}
-	parts := strings.Split(s[4:], ".")
-	if len(parts) != 2 {
-		return 0, false
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(parts[0])
+	body, _ := json.Marshal(map[string]string{"token": token})
+	req, err := http.NewRequest(http.MethodPost, accountURL+"/internal/pid-by-nex-token", bytes.NewReader(body))
 	if err != nil {
 		return 0, false
 	}
-	mac := hmac.New(sha256.New, secret)
-	mac.Write([]byte("nex:" + string(raw)))
-	if !hmac.Equal([]byte(b64u(mac.Sum(nil))), []byte(parts[1])) {
+	req.Header.Set("Content-Type", "application/json")
+	if k := os.Getenv("NEXTENDO_INTERNAL_KEY"); k != "" {
+		req.Header.Set("X-Internal-Key", k)
+	}
+	resp, err := httpc.Do(req)
+	if err != nil {
+		log.Printf("[Auth] pid-by-nex-token: %v", err)
 		return 0, false
 	}
-	f := strings.SplitN(string(raw), ".", 3) // pid.username.expiry
-	if len(f) != 3 {
+	defer resp.Body.Close()
+	var out struct {
+		PID uint64 `json:"pid"`
+	}
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&out) != nil || out.PID == 0 {
 		return 0, false
 	}
-	pid, err := strconv.ParseUint(f[0], 10, 64)
-	exp, eerr := strconv.ParseInt(f[2], 10, 64)
-	if err != nil || pid == 0 || eerr != nil || time.Now().Unix() > exp {
-		return 0, false
-	}
-	return pid, true
+	return out.PID, true
 }
 
 // Account is the account server's view of a player (its /internal/npln-friends reply).
@@ -262,8 +262,14 @@ func mintSessionToken(uid, tenant, gsName, userSess, team, attrJSON, ltcyJSON st
 		})
 }
 
+// refreshKey MACs our refresh tokens; derived from the persisted ES256 key so restarts keep them valid.
+func refreshKey() []byte {
+	sum := sha256.Sum256(append([]byte("nextendo-npln-refresh:"), signingKey().D.Bytes()...))
+	return sum[:]
+}
+
 func newToken(pid uint64, userPath, tenant string) *authpb.Token {
-	mac := hmac.New(sha256.New, secret)
+	mac := hmac.New(sha256.New, refreshKey())
 	body := fmt.Sprintf("nextendo-npln-refresh.%d", pid)
 	mac.Write([]byte(body))
 	return &authpb.Token{
@@ -279,7 +285,7 @@ func pidFromRefresh(tok string) (uint64, bool) {
 	if i <= 0 || !strings.HasPrefix(tok, "nextendo-npln-refresh.") {
 		return 0, false
 	}
-	mac := hmac.New(sha256.New, secret)
+	mac := hmac.New(sha256.New, refreshKey())
 	mac.Write([]byte(tok[:i]))
 	if !hmac.Equal([]byte(b64u(mac.Sum(nil))), []byte(tok[i+1:])) {
 		return 0, false

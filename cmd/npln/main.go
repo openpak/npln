@@ -3,7 +3,7 @@
 //	NPLN_LISTEN            listen address (default :18501)
 //	CERT_FILE / KEY_FILE   TLS cert covering the tenant host t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net
 //	NEXTENDO_ACCOUNT_URL   account server base URL (server-to-server)
-//	NEXTENDO_SECRET        shared with the account server; proves the emulator's nnex claim
+//	NEXTENDO_INTERNAL_KEY  the account server's off-network caller key (unset inside its network)
 //	NPLN_JWT_KEY           path of the persisted ES256 signing key
 //	NPLN_RELAY_HOST/PORT, NPLN_STUN_HOST/PORT, NPLN_TURN_HOST/PORT, NPLN_LATENCY_HOST  session endpoints
 package main
@@ -31,9 +31,6 @@ func main() {
 	cert, err := tls.LoadX509KeyPair(env("CERT_FILE", "npln.pem"), env("KEY_FILE", "npln.key"))
 	if err != nil {
 		log.Fatalf("load TLS cert: %v", err)
-	}
-	if os.Getenv("NEXTENDO_SECRET") == "" {
-		log.Fatal("NEXTENDO_SECRET is required (shared with the account server)")
 	}
 	creds := credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{cert},

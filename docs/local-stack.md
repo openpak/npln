@@ -47,7 +47,7 @@ ss -lun | grep -E ':(10025|10125) '
 2. The emulator's fabricated BAAS id_token carries that token in an `nnex`
    claim and is signed with `secrets/baas_signing_key.pem` — the same key
    `baas-jwks` publishes, so a local `jku` check also passes.
-3. `npln` verifies the `nnex` claim with the `NEXTENDO_SECRET` it shares with
+3. `npln` has the account server verify the `nnex` claim (`/internal/pid-by-nex-token`), which it signed with
    `account`, then requires the account to be verified (`/internal/npln-friends`).
    Local test account: `stardewhost`, pid 1800000005, verified
    (credentials outside the repo, `~/.local/share/stardew-nextendo-research/`).
@@ -84,7 +84,7 @@ production link in `~/.config/citron` / `~/ryujinx/portable` is untouched.
 NOTE: `OutboundHost`/`OutboundJoiner` are mutual friends AND verified on the
 local account server (done 2026-09-02) — Stardew's auth gate passes for them.
 (To verify a local account: `GET http://127.0.0.1:8099/api/verify?token=…`, an
-HMAC token bound to id+email under `NEXTENDO_SECRET` — see the recipe in
+HMAC token bound to id+email under the account server's `NEXTENDO_SECRET` — see the recipe in
 `shared-docs/ryujinx-isolation.md`.)
 
 Verify on the running pid before trusting a result:

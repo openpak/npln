@@ -2,32 +2,41 @@ package npln
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc/metadata"
 )
 
-// One check: an nnex proof minted with the shared secret resolves to its PID, a tampered one does
-// not, and the access token we issue reads back the same PID through the bearer path.
+// One check: an nnex proof is delegated to the account server's /internal/pid-by-nex-token
+// (with our X-Internal-Key), a rejected one fails, and the access/refresh tokens we issue read
+// back the same PID.
 func TestIdentityRoundTrip(t *testing.T) {
-	secret = []byte("test-secret")
 	t.Setenv("NPLN_JWT_KEY", t.TempDir()+"/k.pem")
+	t.Setenv("NEXTENDO_INTERNAL_KEY", "k")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Token string }
+		json.NewDecoder(r.Body).Decode(&in)
+		if r.URL.Path != "/internal/pid-by-nex-token" || r.Header.Get("X-Internal-Key") != "k" || in.Token != "nx2.a.b" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		fmt.Fprint(w, `{"pid":1800000005}`)
+	}))
+	defer srv.Close()
+	oldURL := accountURL
+	accountURL = srv.URL
+	defer func() { accountURL = oldURL }()
 
-	raw := fmt.Sprintf("1800000005.stardewhost.%d", time.Now().Add(time.Hour).Unix())
-	mac := hmac.New(sha256.New, secret)
-	mac.Write([]byte("nex:" + raw))
-	nx2 := "nx2." + b64u([]byte(raw)) + "." + b64u(mac.Sum(nil))
-	idToken := "eyJhbGciOiJSUzI1NiJ9." + b64u([]byte(`{"sub":"deadbeef","nnex":"`+nx2+`"}`)) + ".sig"
-
+	idToken := "eyJhbGciOiJSUzI1NiJ9." + b64u([]byte(`{"sub":"deadbeef","nnex":"nx2.a.b"}`)) + ".sig"
 	if pid, ok := pidFromNnex(idToken); !ok || pid != 1800000005 {
 		t.Fatalf("nnex not proven: pid=%d ok=%v", pid, ok)
 	}
-	if _, ok := pidFromNexToken(nx2[:len(nx2)-2] + "xx"); ok {
-		t.Fatal("tampered nnex accepted")
+	if _, ok := pidFromNexToken("nx2.a.c"); ok {
+		t.Fatal("rejected nnex accepted")
 	}
 
 	tok := newToken(1800000005, Tenant+"/users/u-abc", Tenant)

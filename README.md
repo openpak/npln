@@ -13,7 +13,7 @@ This project is not affiliated with or endorsed by Nintendo, ConcernedApe, Stard
 ## NPLN server
 
 ```sh
-go build ./cmd/npln          # NPLN_LISTEN=:18501 CERT_FILE=… KEY_FILE=… NEXTENDO_SECRET=… NEXTENDO_ACCOUNT_URL=…
+go build ./cmd/npln          # NPLN_LISTEN=:18501 CERT_FILE=… KEY_FILE=… NEXTENDO_ACCOUNT_URL=…
 ```
 
 Deployed as the `stardew` container of the local stack; see [docs/local-stack.md](docs/local-stack.md).
