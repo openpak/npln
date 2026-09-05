@@ -53,7 +53,10 @@ type watcher struct {
 	// last delivery on that target. Nintendo emits a document change ONCE per change; re-pushing
 	// unchanged mailbox documents (docs/__pgn/All/__stu/<uss>) made the consoles re-process old
 	// messages and answer each duplicate — a feedback loop measured at hundreds of writes/s.
-	push    func(tid, kind, name string, m *commonpb.MapValue) error
+	// force (the write path, mailbox documents only) delivers even when the bytes are unchanged:
+	// Pia re-writes an unacked roster verbatim once a second, and a joiner that dropped the first
+	// copy (participant list not yet processed) needs the retransmit, or it times out (2318-1201).
+	push    func(tid, kind, name string, m *commonpb.MapValue, force bool) error
 	tmu     *sync.Mutex
 	targets map[string]*target
 }
@@ -86,8 +89,9 @@ func (g *gamesyncServer) deliver(gsid, name, kind string, m *commonpb.MapValue) 
 			}
 		}
 		w.tmu.Unlock()
+		force := kind == "UPDATED" && strings.Contains(name, "/__stu/")
 		for _, tid := range hits {
-			go w.push(tid, kind, name, m) //nolint:errcheck // stream errors end the stream itself
+			go w.push(tid, kind, name, m, force) //nolint:errcheck // stream errors end the stream itself
 		}
 	}
 }
@@ -465,11 +469,11 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 	}
 	var lastMu sync.Mutex
 	last := map[string][]byte{} // tid|name -> deterministic bytes of the last delivered fields
-	w.push = func(tid, kind, name string, m *commonpb.MapValue) error {
+	w.push = func(tid, kind, name string, m *commonpb.MapValue, force bool) error {
 		b, _ := proto.MarshalOptions{Deterministic: true}.Marshal(m)
 		k := tid + "|" + name
 		lastMu.Lock()
-		same := kind == "UPDATED" && string(last[k]) == string(b)
+		same := !force && kind == "UPDATED" && string(last[k]) == string(b)
 		last[k] = b
 		lastMu.Unlock()
 		if same {
@@ -528,7 +532,7 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 					names = g.collectionDocs(t.coll, streamUss)
 				}
 				for _, n := range names {
-					if w.push(t.tid, "UPDATED", n, g.fields(n, streamUss)) != nil {
+					if w.push(t.tid, "UPDATED", n, g.fields(n, streamUss), false) != nil {
 						return
 					}
 				}
@@ -564,7 +568,7 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 				names = g.collectionDocs(t.coll, streamUss)
 			}
 			for _, n := range names {
-				if err := w.push(tid, "EXIST", n, g.fields(n, streamUss)); err != nil {
+				if err := w.push(tid, "EXIST", n, g.fields(n, streamUss), false); err != nil {
 					return err
 				}
 			}
