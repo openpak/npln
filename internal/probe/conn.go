@@ -113,7 +113,7 @@ func HandleConn(id int, raw net.Conn, tlsConn *tls.Conn, logger *log.Logger) {
 		time.Since(handshakeStart))
 
 	// Server connection preface (RFC 7540 section 3.5): SETTINGS. Mirrors a
-	// default grpc-go server (the real Nextendo NPLN server is grpc.NewServer()
+	// default grpc-go server (a reference NPLN server is grpc.NewServer()
 	// with no transport options): a single MAX_FRAME_SIZE=16384 setting, no
 	// window updates, no MAX_CONCURRENT_STREAMS (server default is unlimited).
 	_ = tlsConn.SetDeadline(time.Now().Add(120 * time.Second))

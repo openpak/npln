@@ -7,7 +7,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/durationpb"
 
-	friendspb "github.com/NextendoNetwork/stardew-nextendo/proto/friends/v1"
+	friendspb "openpak/stardew-valley/proto/friends/v1"
 )
 
 type friendsServer struct {
@@ -25,9 +25,9 @@ func (s *friendsServer) ListBlockingUsers(ctx context.Context, req *friendspb.Li
 
 func friendUser(tenant, myUID string, f Friend) *friendspb.FriendUser {
 	return &friendspb.FriendUser{
-		Name:       tenant + "/users/" + myUID + "/friendUsers/" + f.UserID,
-		FriendUser: tenant + "/users/" + f.UserID,
-		NsaId:      f.AccountHex,
+		Name:       tenant + "/users/" + myUID + "/friendUsers/" + f.UserID(),
+		FriendUser: tenant + "/users/" + f.UserID(),
+		NsaId:      f.BaasUserID,
 		// Both directions of presence are on, as between real friends; left empty the client may
 		// treat the friend as presence-less (measurement, 2026-09-01).
 		Relationship: &friendspb.FriendUser_Relationship{PresenceDeliverable: true, PresenceReceivable: true},
@@ -45,12 +45,12 @@ func (s *friendsServer) ListFriendUsers(ctx context.Context, req *friendspb.List
 		return out, nil
 	}
 	for _, f := range me.Friends {
-		out.FriendUsers = append(out.FriendUsers, friendUser(tenantFromCtx(ctx), me.UserID, f))
+		out.FriendUsers = append(out.FriendUsers, friendUser(tenantFromCtx(ctx), me.UserID(), f))
 	}
 	return out, nil
 }
 
-// SubscribeFriendUsers streams the Nextendo friend graph once, then keep-alives for the session's
+// SubscribeFriendUsers streams the OpenPak friend graph once, then keep-alives for the session's
 // life (the client treats a close as "friends lost"). Shape: FriendAccounts[{nsa_id, users}].
 func (s *friendsServer) SubscribeFriendUsers(req *friendspb.SubscribeFriendUsersRequest, stream friendspb.Friends_SubscribeFriendUsersServer) error {
 	ctx := stream.Context()
@@ -60,8 +60,8 @@ func (s *friendsServer) SubscribeFriendUsers(req *friendspb.SubscribeFriendUsers
 		if me, err := lookupAccount(pid); err == nil {
 			for _, f := range me.Friends {
 				first.FriendAccounts = append(first.FriendAccounts, &friendspb.SubscribeFriendUsersResponse_FriendAccount{
-					NsaId: f.AccountHex,
-					Users: []*friendspb.FriendUser{friendUser(tenantFromCtx(ctx), me.UserID, f)},
+					NsaId: f.BaasUserID,
+					Users: []*friendspb.FriendUser{friendUser(tenantFromCtx(ctx), me.UserID(), f)},
 				})
 			}
 			log.Printf("[Friends] Subscribe pid=%d -> %d friend(s)", pid, len(me.Friends))

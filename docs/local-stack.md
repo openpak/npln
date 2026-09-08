@@ -1,3 +1,7 @@
+> Historical (written for the Nextendo stack). Since 2026-09-07 identity comes from OpenPak's
+> `nx-baas` over `NX_INTERNAL_URL`/`NX_INTERNAL_KEY`; see the README. Everything below about
+> `NEXTENDO_ACCOUNT_URL`, `/internal/*` account routes and port 18501 is out of date.
+
 # Local Nextendo stack (podman)
 
 Everything Stardew needs from "Nintendo" runs locally as podman containers from

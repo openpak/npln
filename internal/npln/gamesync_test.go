@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	commonpb "github.com/NextendoNetwork/stardew-nextendo/proto/common"
-	gspb "github.com/NextendoNetwork/stardew-nextendo/proto/gamesync/v1"
-	mmpb "github.com/NextendoNetwork/stardew-nextendo/proto/matchmaking/v1"
+	commonpb "openpak/stardew-valley/proto/common"
+	gspb "openpak/stardew-valley/proto/gamesync/v1"
+	mmpb "openpak/stardew-valley/proto/matchmaking/v1"
 )
 
 // The host's lobby-data flush is a gamesync write of prp._Pia_SystemData (+ ip); it must land in

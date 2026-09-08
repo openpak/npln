@@ -1,9 +1,10 @@
-# stardew-nextendo on a single public box (tested target: OCI Ampere A1, 4 OCPU / 24 GB,
-# Ubuntu, arm64) plugged into the PRODUCTION Nextendo Network. See docs/production.md.
+# stardew-valley on a single public box (tested target: OCI Ampere A1, 4 OCPU / 24 GB,
+# Ubuntu, arm64) plugged into an OpenPak deployment (account core + nx-baas).
 #
 # Everything the game reaches directly lives here: the NPLN tenant (gRPC/TLS), the gamesync
-# session relay (same listener, a second public port is NOT needed), and STUN/TURN. Account,
-# BAAS, friends and the NAT-check responder are the shared production services.
+# session relay (same listener, a second public port is NOT needed), and STUN/TURN. Identity,
+# BAAS and friends come from nx-baas's internal API (NX_INTERNAL_URL); ports follow
+# Openpak/ports.md (21010 = Stardew NPLN tenant, Traefik SNI passthrough target).
 #
 #   cp example.env .env && edit          # never commit .env
 #   docker compose up -d --build
@@ -15,14 +16,14 @@ services:
     restart: unless-stopped
     network_mode: host                    # gRPC on NPLN_LISTEN, UDP latency probes; simplest on a bare VM
     environment:
-      NPLN_LISTEN: ":18501"               # sni-router forwards the tenant SNI here; gamesync uses the same port
+      NPLN_LISTEN: ":21010"               # Traefik forwards the tenant SNI here; gamesync uses the same port
       CERT_FILE: /certs/npln.pem          # SAN: t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net, gamesync.npln.nintendo.net
       KEY_FILE: /certs/npln.key
       NPLN_JWT_KEY: /data/npln_jwt_es256.key
-      NEXTENDO_ACCOUNT_URL: ${NEXTENDO_ACCOUNT_URL:-https://nextendo.network}
-      NEXTENDO_INTERNAL_KEY: ${NEXTENDO_INTERNAL_KEY}
+      NX_INTERNAL_URL: ${NX_INTERNAL_URL:-http://127.0.0.1:20070}
+      NX_INTERNAL_KEY: ${NX_INTERNAL_KEY}
       NPLN_RELAY_HOST: ${PUBLIC_IP}
-      NPLN_RELAY_PORT: "18501"
+      NPLN_RELAY_PORT: "21010"
       NPLN_STUN_HOST: ${PUBLIC_IP}
       NPLN_TURN_HOST: ${PUBLIC_IP}
       NPLN_TURN_SECRET: ${NPLN_TURN_SECRET}
@@ -47,7 +48,7 @@ services:
       - "--listening-port=3478"
       - "--use-auth-secret"
       - "--static-auth-secret=${NPLN_TURN_SECRET}"
-      - "--realm=nextendo.network"
+      - "--realm=openpak.org"
       - "--fingerprint"
       - "--external-ip=${PUBLIC_IP}"       # behind 1:1 NAT: relays bind locally, advertise the public IP
       - "--min-port=49152"

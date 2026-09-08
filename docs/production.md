@@ -1,3 +1,7 @@
+> Historical (written for the Nextendo stack). Since 2026-09-07 identity comes from OpenPak's
+> `nx-baas` over `NX_INTERNAL_URL`/`NX_INTERNAL_KEY`; see the README. Everything below about
+> `NEXTENDO_ACCOUNT_URL`, `/internal/*` account routes and port 18501 is out of date.
+
 # Production: plugging stardew-nextendo into the live Nextendo Network
 
 Target measured for this guide: one public arm64 VM (OCI Ampere A1, 4 OCPU / 24 GB, Ubuntu).

@@ -18,7 +18,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/NextendoNetwork/stardew-nextendo/internal/probe"
+	"openpak/stardew-valley/internal/probe"
 )
 
 func main() {

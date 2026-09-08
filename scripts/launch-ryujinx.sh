@@ -17,7 +17,7 @@ set -euo pipefail
 HERE="$(dirname "$(readlink -f "$0")")"
 SHARED="$HERE/../shared-docs/scripts"
 NSP_PATH="${STARDEW_NSP:-/mnt/media/Emulation/roms/switch/Stardew Valley [0100e65002bb8000] [v0].nsp}"
-ROUTE="t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net=127.0.0.1:18501"   # Stardew NPLN tenant -> stardew-nextendo (18501)
+ROUTE="t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net=127.0.0.1:${STARDEW_NPLN_PORT:-21010}"   # Stardew NPLN tenant -> this server (Openpak/ports.md)
 
 LAUNCHER="launch-ryujinx-host.sh"; ARGS=()
 for a in "$@"; do case "$a" in

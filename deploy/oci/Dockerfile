@@ -1,4 +1,4 @@
-# stardew-nextendo server image (multi-arch: builds natively on arm64 and amd64).
+# stardew-valley server image (multi-arch: builds natively on arm64 and amd64).
 FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY . .

@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NextendoNetwork/stardew-nextendo/internal/observer"
+	"openpak/stardew-valley/internal/observer"
 )
 
 func main() {

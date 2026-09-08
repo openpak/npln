@@ -2,10 +2,11 @@ package npln
 
 // identity — who is calling, and the tokens that prove it.
 //
-//   - The emulator's BAAS id_token carries, in its "nnex" claim, the nx2 token nextendo-account
-//     signed by nextendo-account ("nx2.<b64(pid.username.expiry)>.<b64(hmac)>"). The account
-//     server verifies that HMAC for us; the id_token's own RS256 signature is not checked here.
-//   - The account server's /internal/npln-friends gate then requires a verified account.
+//   - The client's BAAS id_token (minted by nx-baas, the OpenPak Switch adapter) carries in its
+//     "nnex" claim a token only the adapter can sign. We hand that claim back to the adapter,
+//     which proves it and returns the player's Switch projection (pid, BAAS user id = NSA id)
+//     plus the friends that have one. The signing key never lives here; a projection exists
+//     only for an active, e-mail-verified OpenPak account, so there is no separate verified gate.
 //   - We answer with an ES256 JWT in Nintendo's shape (npln.authorization allow ["**"]); the
 //     client decodes it to learn its rights, and echoes it as `authorization: bearer` on every call.
 
@@ -18,6 +19,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base32"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -35,102 +37,91 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
 
-	authpb "github.com/NextendoNetwork/stardew-nextendo/proto/auth/v1"
+	authpb "openpak/stardew-valley/proto/auth/v1"
 )
 
 const tokenTTL = 8 * time.Hour // Nintendo's exp-iat = 28800s
 
 var (
-	accountURL = envOr("NEXTENDO_ACCOUNT_URL", "http://account:8080")
+	adapterURL = envOr("NX_INTERNAL_URL", "http://127.0.0.1:20070") // nx-baas game/internal API (ports.md)
 	httpc      = &http.Client{Timeout: 5 * time.Second}
 )
 
-func allowUnverified() bool { return os.Getenv("NPLN_ALLOW_UNVERIFIED") == "1" }
-
 func b64u(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 
-// pidFromNnex verifies the nx2 token found in the id_token's nnex claim and returns the proven PID.
-func pidFromNnex(idToken string) (uint64, bool) {
-	seg := strings.Split(idToken, ".")
-	if len(seg) < 2 {
-		return 0, false
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(seg[1], "="))
-	if err != nil {
-		return 0, false
-	}
-	var claims struct {
-		Nnex string `json:"nnex"`
-	}
-	if json.Unmarshal(payload, &claims) != nil || claims.Nnex == "" {
-		return 0, false
-	}
-	return pidFromNexToken(claims.Nnex)
-}
-
-// pidFromNexToken has the account server prove an nx2 token, so NEXTENDO_SECRET never lives here.
-func pidFromNexToken(token string) (uint64, bool) {
-	if !strings.HasPrefix(token, "nx2.") {
-		return 0, false
-	}
-	body, _ := json.Marshal(map[string]string{"token": token})
-	req, err := http.NewRequest(http.MethodPost, accountURL+"/internal/pid-by-nex-token", bytes.NewReader(body))
-	if err != nil {
-		return 0, false
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if k := os.Getenv("NEXTENDO_INTERNAL_KEY"); k != "" {
-		req.Header.Set("X-Internal-Key", k)
-	}
-	resp, err := httpc.Do(req)
-	if err != nil {
-		log.Printf("[Auth] pid-by-nex-token: %v", err)
-		return 0, false
-	}
-	defer resp.Body.Close()
-	var out struct {
-		PID uint64 `json:"pid"`
-	}
-	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&out) != nil || out.PID == 0 {
-		return 0, false
-	}
-	return out.PID, true
-}
-
-// Account is the account server's view of a player (its /internal/npln-friends reply).
+// Account is the Switch adapter's view of a player (its /internal/switch/identity reply).
 type Account struct {
 	PID        uint64   `json:"pid"`
-	UserID     string   `json:"user_id"`
-	AccountHex string   `json:"account_hex"`
-	Verified   bool     `json:"verified"`
+	BaasUserID string   `json:"baas_user_id"`
+	Nickname   string   `json:"nickname"`
 	Friends    []Friend `json:"friends"`
 }
 
 type Friend struct {
 	PID        uint64 `json:"pid"`
-	UserID     string `json:"user_id"`
-	AccountHex string `json:"account_hex"`
-	Name       string `json:"name"`
+	BaasUserID string `json:"baas_user_id"`
+	Nickname   string `json:"nickname"`
 }
 
-func lookupAccount(pid uint64) (*Account, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/internal/npln-friends?pid=%d", accountURL, pid), nil)
+var userB32 = base32.NewEncoding("abcdefghijklmnopqrstuvwxyz234567").WithPadding(base32.NoPadding)
+
+// userID is the stable NPLN user id ("u-" + 20 base32 chars, the shape the client has been
+// measured to accept) derived from the adapter's BAAS user id.
+func userID(baas string) string {
+	sum := sha256.Sum256([]byte("npln-user:" + baas))
+	return "u-" + userB32.EncodeToString(sum[:12])
+}
+
+func (a *Account) UserID() string { return userID(a.BaasUserID) }
+func (f Friend) UserID() string   { return userID(f.BaasUserID) }
+
+// adapterIdentity asks nx-baas for a player: by nnex claim (it proves the signature) or by pid
+// (already proven here from our own bearer).
+func adapterIdentity(q map[string]any) (*Account, error) {
+	body, _ := json.Marshal(q)
+	req, err := http.NewRequest(http.MethodPost, adapterURL+"/internal/switch/identity", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
-	if k := os.Getenv("NEXTENDO_INTERNAL_KEY"); k != "" { // the account server's off-network caller key
-		req.Header.Set("X-Internal-Key", k)
-	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Key", os.Getenv("NX_INTERNAL_KEY"))
 	resp, err := httpc.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("npln-friends pid=%d: %s", pid, resp.Status)
+		return nil, fmt.Errorf("switch identity: %s", resp.Status)
 	}
 	var a Account
-	return &a, json.NewDecoder(resp.Body).Decode(&a)
+	if err := json.NewDecoder(resp.Body).Decode(&a); err != nil {
+		return nil, err
+	}
+	if a.PID == 0 || a.BaasUserID == "" {
+		return nil, fmt.Errorf("switch identity: incomplete reply")
+	}
+	return &a, nil
+}
+
+func lookupAccount(pid uint64) (*Account, error) { return adapterIdentity(map[string]any{"pid": pid}) }
+
+// accountFromNnex pulls the nnex claim out of the id_token and has the adapter prove it.
+func accountFromNnex(idToken string) (*Account, error) {
+	seg := strings.Split(idToken, ".")
+	if len(seg) < 2 {
+		return nil, fmt.Errorf("not a jwt")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(seg[1], "="))
+	if err != nil {
+		return nil, err
+	}
+	var claims struct {
+		Nnex string `json:"nnex"`
+	}
+	if json.Unmarshal(payload, &claims) != nil || claims.Nnex == "" {
+		return nil, fmt.Errorf("no nnex claim")
+	}
+	return adapterIdentity(map[string]any{"nnex": claims.Nnex})
 }
 
 // gatedIdentity resolves the external id token to (pid, "tenants/…/users/u-…"). Fail-closed.
@@ -138,20 +129,12 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 	if tenant == "" {
 		tenant = Tenant
 	}
-	pid, ok := pidFromNnex(ext.GetNsaIdToken())
-	if !ok {
-		log.Printf("[Auth] identity not provable (no valid nnex claim) -> REFUSED")
-		return 0, "", status.Error(codes.PermissionDenied, "Nextendo account not recognised — sign in with your Nextendo account to play online")
-	}
-	acc, err := lookupAccount(pid)
+	acc, err := accountFromNnex(ext.GetNsaIdToken())
 	if err != nil {
-		log.Printf("[Auth] nnex proves pid=%d but account server failed: %v -> REFUSED", pid, err)
-		return 0, "", status.Error(codes.PermissionDenied, "Nextendo account not reachable")
+		log.Printf("[Auth] identity not provable (%v) -> REFUSED", err)
+		return 0, "", status.Error(codes.PermissionDenied, "OpenPak account not recognised — link your OpenPak account to play online")
 	}
-	if !acc.Verified && !allowUnverified() {
-		return 0, "", status.Error(codes.PermissionDenied, "Nextendo account not verified — verify your e-mail to play online")
-	}
-	return pid, tenant + "/users/" + acc.UserID, nil
+	return acc.PID, tenant + "/users/" + acc.UserID(), nil
 }
 
 // ---- ES256 access token ----
@@ -228,7 +211,7 @@ func accountID(uid string) string { // "u-xyz…" -> "a-ayz…", the shape Ninte
 	if body := strings.TrimPrefix(uid, "u-"); len(body) > 1 {
 		return "a-a" + body[1:]
 	}
-	return "a-nextendo"
+	return "a-openpak"
 }
 
 func mintAccessToken(pid uint64, userPath, tenant string) string {
@@ -264,13 +247,13 @@ func mintSessionToken(uid, tenant, gsName, userSess, team, attrJSON, ltcyJSON st
 
 // refreshKey MACs our refresh tokens; derived from the persisted ES256 key so restarts keep them valid.
 func refreshKey() []byte {
-	sum := sha256.Sum256(append([]byte("nextendo-npln-refresh:"), signingKey().D.Bytes()...))
+	sum := sha256.Sum256(append([]byte("openpak-npln-refresh:"), signingKey().D.Bytes()...))
 	return sum[:]
 }
 
 func newToken(pid uint64, userPath, tenant string) *authpb.Token {
 	mac := hmac.New(sha256.New, refreshKey())
-	body := fmt.Sprintf("nextendo-npln-refresh.%d", pid)
+	body := fmt.Sprintf("openpak-npln-refresh.%d", pid)
 	mac.Write([]byte(body))
 	return &authpb.Token{
 		User:         userPath,
@@ -282,7 +265,7 @@ func newToken(pid uint64, userPath, tenant string) *authpb.Token {
 
 func pidFromRefresh(tok string) (uint64, bool) {
 	i := strings.LastIndexByte(tok, '.')
-	if i <= 0 || !strings.HasPrefix(tok, "nextendo-npln-refresh.") {
+	if i <= 0 || !strings.HasPrefix(tok, "openpak-npln-refresh.") {
 		return 0, false
 	}
 	mac := hmac.New(sha256.New, refreshKey())
@@ -290,7 +273,7 @@ func pidFromRefresh(tok string) (uint64, bool) {
 	if !hmac.Equal([]byte(b64u(mac.Sum(nil))), []byte(tok[i+1:])) {
 		return 0, false
 	}
-	pid, err := strconv.ParseUint(strings.TrimPrefix(tok[:i], "nextendo-npln-refresh."), 10, 64)
+	pid, err := strconv.ParseUint(strings.TrimPrefix(tok[:i], "openpak-npln-refresh."), 10, 64)
 	return pid, err == nil && pid != 0
 }
 

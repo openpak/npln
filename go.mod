@@ -1,4 +1,4 @@
-module github.com/NextendoNetwork/stardew-nextendo
+module openpak/stardew-valley
 
 go 1.25.0
 

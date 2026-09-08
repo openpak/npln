@@ -30,8 +30,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	commonpb "github.com/NextendoNetwork/stardew-nextendo/proto/common"
-	mmpb "github.com/NextendoNetwork/stardew-nextendo/proto/matchmaking/v1"
+	commonpb "openpak/stardew-valley/proto/common"
+	mmpb "openpak/stardew-valley/proto/matchmaking/v1"
 )
 
 type sessionServer struct {
@@ -153,7 +153,7 @@ func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req
 		CreateTime:              timestamppb.Now(),
 		// host:port is REQUIRED (empty -> 2321-4608 at once): the session transport the client dials next.
 		Host: envOr("NPLN_RELAY_HOST", "127.0.0.1"),
-		Port: envInt("NPLN_RELAY_PORT", 18501),
+		Port: envInt("NPLN_RELAY_PORT", 21010),
 	}
 	room.IsPublic = true // a farm is listed to friends even when the host sends no flag (measured: the create carries none)
 	if rg := in.GetGameSession(); rg != nil {
@@ -319,7 +319,7 @@ func (g *sessionServer) queryVariants(full *mmpb.GameSession) []*mmpb.GameSessio
 		v.IsPublic = true
 		v.State = mmpb.GameSession_ACTIVE
 		v.Host = envOr("NPLN_RELAY_HOST", "127.0.0.1")
-		v.Port = 18501
+		v.Port = 21010
 	}
 	cases := []struct {
 		cap int32
@@ -531,7 +531,7 @@ func (g *sessionServer) AllocateIceServerSet(ctx context.Context, req *mmpb.Allo
 	}
 	exp := time.Now().Add(time.Hour).Unix()
 	turnUser := fmt.Sprintf("%d:%s", exp, user)
-	mac := hmac.New(sha1.New, []byte(envOr("NPLN_TURN_SECRET", "nextendo-turn")))
+	mac := hmac.New(sha1.New, []byte(envOr("NPLN_TURN_SECRET", "openpak-turn")))
 	mac.Write([]byte(turnUser))
 	set := &mmpb.IceServerSet{
 		Name:       tn + "/iceServerSets/static",

@@ -8,7 +8,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	authpb "github.com/NextendoNetwork/stardew-nextendo/proto/auth/v1"
+	authpb "openpak/stardew-valley/proto/auth/v1"
 )
 
 type authServer struct{ authpb.UnimplementedAuthServer }
@@ -56,11 +56,8 @@ func (s *authServer) RefreshToken(ctx context.Context, req *authpb.RefreshTokenR
 	return &authpb.RefreshTokenResponse{Token: newToken(pid, req.GetUser(), tenantFromCtx(ctx))}, nil
 }
 
+// ValidateToken: the bearer's signature is checked by callerPID on every call; the account gate
+// happened at issue time (the adapter only knows verified, linked accounts).
 func (s *authServer) ValidateToken(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	if pid, ok := callerPID(ctx); ok {
-		if acc, err := lookupAccount(pid); err == nil && !acc.Verified && !allowUnverified() {
-			return nil, status.Error(codes.PermissionDenied, "Nextendo account not verified")
-		}
-	}
 	return &emptypb.Empty{}, nil
 }

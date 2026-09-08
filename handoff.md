@@ -1,4 +1,4 @@
-# stardew-nextendo Handoff
+# stardew-valley Handoff
 
 ## Project Objective
 
@@ -6,6 +6,26 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-07 (session 15 — **moved to `Openpak/servers/stardew-valley`, identity switched from
+  the Nextendo account server to OpenPak's `nx-baas`**). No emulator run this session.
+  - Module is now `openpak/stardew-valley`. The only external dependency is nx-baas's internal
+    API: `POST /internal/switch/identity` with `{"nnex": …}` (adapter proves the HMAC it signed
+    with `NEX_SIGNING_KEY`) or `{"pid": …}` (already proven from our bearer) → `{pid,
+    baas_user_id, nickname, friends[{pid, baas_user_id, nickname}]}`. Added in nx-baas
+    (`internal.go`, mounted on its game API port 20070, guarded by `NX_INTERNAL_KEY`).
+  - `NEXTENDO_ACCOUNT_URL`/`NEXTENDO_INTERNAL_KEY`/`NPLN_ALLOW_UNVERIFIED` are gone:
+    `NX_INTERNAL_URL` (default `http://127.0.0.1:20070`) + `NX_INTERNAL_KEY`. The verified gate
+    is implicit (nx-baas mints a projection only for active, verified accounts).
+  - NPLN user id = `u-` + base32(sha256("npln-user:" + baas_user_id))[:12] — same 22-char shape
+    the client accepted before; NSA id in friend lists = the BAAS user id. Refresh-token prefix
+    is now `openpak-npln-refresh.`; default listener `:21010` per `Openpak/ports.md`.
+  - **Relicensed AGPL-3.0-only** (`LICENSE`, matching the other OpenPak servers). The
+    PolyForm-licensed generated bindings are gone: `proto/**/*.proto` is the schema recovered from
+    the protocol descriptors (vendor options dropped, `go_package` ours), `proto/generate.sh`
+    regenerates `*.pb.go` with stock protoc; tests pass on the regenerated code.
+  - Not done: no live re-test on OpenPak. Next = point one Ryujinx profile's BAAS at nx-baas
+    (21000, `ACCOUNT_BACKEND=openpak`) and route the tenant SNI to 21010, then re-run the
+    session-14 list (host, list, join, 3 players, rejoin, host leave).
 - 2026-09-05 (session 14 — **nnex-via-account-server flow verified with real logins, the whole
   session-12b hardening list passed, 3 players in one farm, and a first-join flakiness root-caused
   and fixed (`7896f63`)**). No RE this session; everything on the local stack with Ryujinx.

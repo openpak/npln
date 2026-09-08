@@ -20,10 +20,10 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 
-	authpb "github.com/NextendoNetwork/stardew-nextendo/proto/auth/v1"
-	friendspb "github.com/NextendoNetwork/stardew-nextendo/proto/friends/v1"
-	gspb "github.com/NextendoNetwork/stardew-nextendo/proto/gamesync/v1"
-	mmpb "github.com/NextendoNetwork/stardew-nextendo/proto/matchmaking/v1"
+	authpb "openpak/stardew-valley/proto/auth/v1"
+	friendspb "openpak/stardew-valley/proto/friends/v1"
+	gspb "openpak/stardew-valley/proto/gamesync/v1"
+	mmpb "openpak/stardew-valley/proto/matchmaking/v1"
 )
 
 // Tenant is Stardew Valley's NPLN tenant (observed in every RPC's npln-tenant-id).

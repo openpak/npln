@@ -35,8 +35,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	commonpb "github.com/NextendoNetwork/stardew-nextendo/proto/common"
-	gspb "github.com/NextendoNetwork/stardew-nextendo/proto/gamesync/v1"
+	commonpb "openpak/stardew-valley/proto/common"
+	gspb "openpak/stardew-valley/proto/gamesync/v1"
 )
 
 type gsSession struct {
@@ -266,7 +266,7 @@ func stateUserFields(s *gsSession, uss string) *commonpb.MapValue {
 }
 
 func (g *gamesyncServer) mutableFields(s *gsSession) *commonpb.MapValue {
-	gsid, addr, port, maxp, pw, pub := "", envOr("NPLN_RELAY_HOST", "127.0.0.1"), envInt("NPLN_RELAY_PORT", 18501), int32(4), "", true
+	gsid, addr, port, maxp, pw, pub := "", envOr("NPLN_RELAY_HOST", "127.0.0.1"), envInt("NPLN_RELAY_PORT", 21010), int32(4), "", true
 	var prp *commonpb.MapValue
 	if s != nil {
 		gsid = s.gsid
@@ -360,7 +360,7 @@ func (g *gamesyncServer) withStationLocked(gsid, uss string, m *commonpb.MapValu
 // measured on Nintendo's own answers: f = the session address block, m = the room settings,
 // r = participant counters, n = lifetime, ck = the password key.
 func (g *gamesyncServer) roomFields(sub string, s *gsSession) *commonpb.MapValue {
-	gsid, addr, port, maxp, pw := "", envOr("NPLN_RELAY_HOST", "127.0.0.1"), envInt("NPLN_RELAY_PORT", 18501), int32(4), ""
+	gsid, addr, port, maxp, pw := "", envOr("NPLN_RELAY_HOST", "127.0.0.1"), envInt("NPLN_RELAY_PORT", 21010), int32(4), ""
 	var prp *commonpb.MapValue
 	count := 1
 	if s != nil {
