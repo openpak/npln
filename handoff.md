@@ -1,3 +1,17 @@
+> **2026-09-08 — the OpenPak conversion is committed and the server is deployed.** The module is
+> `openpak/stardew-valley`, imports and generated stubs follow, the licence is AGPL-3.0, and the
+> deployment talks to nx-baas's internal API rather than a Nextendo account server. That work had
+> been done on the workstation and never pushed, so the repository on GitHub could not build; a
+> tag on 2026-09-08 exposed it. Build the container locally before tagging — CI builds the
+> committed tree, not the working one.
+>
+> The server also serves `/health` on **21011** (plain HTTP, beside the gRPC/TLS tenant port),
+> because the service port answers only TLS with h2 and a bare connection to it proves nothing.
+> The website's status page checks that endpoint.
+>
+> Everything below predates the conversion and still says "nextendo" in places; the blocker list
+> in particular is Nextendo-era and no longer describes this deployment.
+
 # stardew-valley Handoff
 
 ## Project Objective
