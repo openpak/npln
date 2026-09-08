@@ -18,7 +18,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/ExternalReference/earlier-stardew/internal/probe"
+	"openpak/stardew-valley/internal/probe"
 )
 
 func main() {

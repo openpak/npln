@@ -1,3 +1,7 @@
+> Historical (written for the earlier stack). Since 2026-09-07 identity comes from OpenPak's
+> `nx-baas` over `NX_INTERNAL_URL`/`NX_INTERNAL_KEY`; see the README. Everything below about
+> `OPENPAK_ACCOUNT_URL`, `/internal/*` account routes and port 18501 is out of date.
+
 # Local earlier stack (podman)
 
 Everything Stardew needs from "Nintendo" runs locally as podman containers from

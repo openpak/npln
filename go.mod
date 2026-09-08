@@ -1,4 +1,4 @@
-module github.com/ExternalReference/earlier-stardew
+module openpak/stardew-valley
 
 go 1.25.0
 

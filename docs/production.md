@@ -1,3 +1,7 @@
+> Historical (written for the earlier stack). Since 2026-09-07 identity comes from OpenPak's
+> `nx-baas` over `NX_INTERNAL_URL`/`NX_INTERNAL_KEY`; see the README. Everything below about
+> `OPENPAK_ACCOUNT_URL`, `/internal/*` account routes and port 18501 is out of date.
+
 # Production: plugging earlier-stardew into the live earlier network
 
 Target measured for this guide: one public arm64 VM (OCI Ampere A1, 4 OCPU / 24 GB, Ubuntu).

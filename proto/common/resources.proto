@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package nn.npln.common;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "openpak/stardew-valley/proto/common;common";
+
+extend google.protobuf.FileOptions {
+  bool imported = 50000;
+}

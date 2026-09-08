@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ExternalReference/earlier-stardew/internal/observer"
+	"openpak/stardew-valley/internal/observer"
 )
 
 func main() {
