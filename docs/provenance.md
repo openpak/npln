@@ -251,3 +251,41 @@ dedicated endpoint hosts the mailbox, it does not host the match.
 | Establishment order | `Gamesync/IssueToken` (exchange the matchmaking id-token for a session token), then `KeepUserSession`, a bidirectional stream that holds the session connected, plus a watch on the document store | N |
 | The host does not write first | after subscribing it **waits** for its own user session document to appear, then reads the mutable session data. Answering "deleted" or empty leaves the host stuck on a connecting screen forever; the documents must be pushed as existing, with a concrete typed value per key — an empty-fields document crashed the worker | N |
 | Certificate name | the client presents a hostname of its own for this endpoint, and a single-label wildcard does not cover a multi-label name, so the certificate has to be checked against what the client actually asks for. Two candidate names appear in the record (`gs.nintendo.net`, and a gamesync name compiled into the title). **Unverified which applies to our build** — measure the SNI before issuing a certificate | N, E |
+
+## gamesync wire facts
+
+Added when the mailbox was built. All shapes from N (method paths, message field names/numbers/types
+in its generated bindings); the schema is Nintendo's and shared across NPLN tenants.
+
+| Fact | Detail | Source |
+| --- | --- | --- |
+| Service methods | `nn.npln.gamesync.v1.Gamesync`, 13: `IssueToken`, `RefreshToken`, `GetDocument`, `ReadDocuments`, `ListDocuments`, `QueryCollectionIds`, `WriteDocuments`, `LazyWriteDocuments`, `BeginTransaction`, `CommitTransaction`, `RollbackTransaction`, `KeepUserSession` (bidi stream), `CreateRound` | N |
+| `IssueToken` | request `{user_session, matchmaking_id_token}`, response `{Token{user_session, access_token, refresh_token, ttl}}` — exchanges the matchmaking id-token (minted by the matchmaking services) for a session token | N |
+| Document shape | `Document{name, fields: common.MapValue, create_time, update_time}`. A field value is `common.Value` — a oneof over null/bool/int64/float/double/timestamp/string/bytes/array/map/reference. This is why "every field must be a concrete type" is expressible: an untyped field is an unset oneof | N |
+| `KeepUserSession` | bidi. Client sends `{name, echo | update_target{target} | delete_target{name}}`; server sends `{echo | document_change | target_change}`. This is the watch | N |
+| `Target` | `{name, documents: {documents[]} | collection: {collection}}` — a watch on named documents or on a collection prefix. `name` is the target id echoed back in changes | N |
+| `DocumentChange` | `{target_id, document_change_type, document}`; type enum `EXIST=1`, `UPDATED=2`, `DELETED=3` | N |
+| `TargetChange` | `{target_id, target_change_type, cause: google.rpc.Status}`; type enum `UPDATED=1`, `LISTED=2`, `DELETED=3`, `FAILED=4`. `LISTED` is how the client learns the initial enumeration of a target is complete | N |
+
+## matchmaking wire facts
+
+| Fact | Detail | Source |
+| --- | --- | --- |
+| `Matchmaker` methods | `CreateMatchmakingTicket` (→ `MatchmakingTicket`), `TrackMatchmakingTicket` (server-stream of `MatchmakingTicket`), `CancelMatchmakingTicket` (→ Empty), `CreateAcceptance` (→ `Acceptance`) | N |
+| `GameSessionService` methods | 18, including `CreateGameSessionCreationTicket`, `TrackGameSessionCreationTicket` (stream), `CancelGameSessionCreationTicket`, `GetGameSession`, `BatchGetGameSessions`, `QueryGameSessions`, `JoinGameSession`, `SyncGameSession`, `ListUserSessions`, `GetUserSession`, `IssueMatchmakingIdToken`, `IssueUserDelegationToken`, `IssuePublicKey`, `CreateGameSessionShortAlias`, `GetGameSessionShortAlias`, `AllocateIceServerSet`, `ListLatencyMeasurementServers` | N |
+| **`AllocateIceServerSet` and `ListLatencyMeasurementServers` are on `GameSessionService`** | not on `Matchmaker`. So the public-matchmaking flow crosses services — the ticket rides `Matchmaker`, the STUN/TURN and latency servers come from `GameSessionService`. This refines the flow recorded under "Service surface" above | N — method paths |
+| `MatchmakingTicket.state` | `SEARCHING=1`, `PLACING=2`, `SUCCEEDED=3`, `TIMED_OUT=4`, `FAILED=5`, `CANCELLED=6`, `REQUIRING_ACCEPTANCE=7`, `DECLINED=8`. The terminal `SUCCEEDED` carries a `game_session` and `matched_user_sessions[]`, each with a `matchmaking_id_token` | N |
+| `GameSession` | `{name, max_participant_count, current_participant_count, can_participate, is_public, password, state, host, port, create_time, properties: MapValue, user_sessions[]}`; state `CREATING=1`, `ACTIVE=2`, `TERMINATING=3`, `TERMINATED=4`. `host`/`port` is where the console dials the session endpoint (gamesync) | N |
+| `IceServerSet` | `{name, stun_server, turn_servers[], ttl, update_time, client_cache_duration}`. `StunServer{host, port, protocol}`; `TurnServer{host, port, protocol, username, password}`; protocol enum `UDP=1, TCP=2, TLS=3` | N |
+| coturn ephemeral credentials | TURN `username = "<unix-expiry>:<user>"`, `password = base64(HMAC-SHA1(static-auth-secret, username))`, STUN/TURN on `3478`. The reference points `AllocateIceServerSet` at a stock coturn using this scheme | N; P — coturn's published REST-auth (TURN REST API / RFC 7635 §2.2) |
+| A partial ICE object | the client rejects the whole set and emits no STUN probe. So every field must be filled — measured the same day as the relay captures | N |
+
+## Proto provenance
+
+The `proto/gamesync/**` and `proto/matchmaking/**` `.proto` files were copied from
+`servers/stardew-valley/proto` (source O — OpenPak's own AGPL-3.0 repository) with only the
+`go_package` path rewritten from `openpak/stardew-valley` to `openpak/splatoon-3`. The `.pb.go`
+bindings are regenerated locally by stock `protoc`. This is a reuse of OpenPak's own reconstruction
+of Nintendo's shared NPLN schema, not a second read of the Shield-licensed tree — the field
+names/numbers/types were checked against N's descriptors (the tables above) and match. The
+duplication is deliberate debt: see `design.md`, "Lift the shared NPLN layer".

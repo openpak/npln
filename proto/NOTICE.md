@@ -4,8 +4,10 @@ interoperability, with no vendor options, comments or code. The `*.pb.go` files 
 them by stock `protoc` (`proto/generate.sh`) and are AGPL-3.0-only like the rest of this repository.
 
 This is the **subset this repository can actually answer today** — auth, friends and presence, the
-Splatoon-specific schedule service, and the shared value type they need. Fields whose meaning is
-not established keep neutral `field_N` names rather than invented ones. The
-same schema already lives in [`servers/stardew-valley`](../../stardew-valley/proto); it is not
-title-specific and belongs in one shared module. See [`docs/design.md`](../docs/design.md),
-"What should be lifted".
+Splatoon-specific schedule service, the two matchmaking services (`Matchmaker` and
+`GameSessionService`), the `gamesync` mailbox, and the shared value type they need. Fields whose
+meaning is not established keep neutral `field_N` names rather than invented ones. The `gamesync` and
+`matchmaking` `.proto` files were copied from
+[`servers/stardew-valley`](../../stardew-valley/proto) (the identical, non-title-specific NPLN
+schema) with only the `go_package` path rewritten. That schema belongs in one shared module rather
+than a copy per title — see [`docs/design.md`](../docs/design.md), "Lift the shared NPLN layer".

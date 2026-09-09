@@ -42,12 +42,17 @@ answers the rest from recorded traffic:
 | `auth.v1.Auth` | tokens; the identity gate | **implemented** |
 | `friends.v1.Friends` | friend and block lists | **implemented** |
 | `friends.v1.PresenceService` | `KeepAlive` (bidirectional), presence subscriptions | **implemented** |
-| `matchmaking.v1.Matchmaker` | public matchmaking | not started |
-| `matchmaking.v1.GameSessionService` | host-created rooms, room codes, invitations, ICE allocation | not started |
-| `gamesync.v1.Gamesync` | the document/session transport | not started |
+| `matchmaking.v1.Matchmaker` | public matchmaking | **implemented** (protocol; the pool forms a real match only at 8 players — unverified) |
+| `matchmaking.v1.GameSessionService` | host-created rooms, room codes, invitations, ICE allocation, latency servers | **implemented** (protocol; unverified on hardware) |
+| `gamesync.v1.Gamesync` | the document/session mailbox | **implemented** (protocol; document naming/field schema unverified — see below) |
 | `ugcstore.v1.Ugcstore` | player-published documents | not started |
 | `toyohr.v1.Schedule` | stage/mode rotation | **implemented**, served from a generated rotation file |
 | `toyohr.v1.FestService` | Splatfest | not started |
+
+`AllocateIceServerSet` **and** `ListLatencyMeasurementServers` live on `GameSessionService`, not on
+`Matchmaker` (source: N method paths). So the measured public-matchmaking flow crosses services: the
+ticket is created and tracked on `Matchmaker`, but the STUN/TURN set and latency servers it needs are
+fetched from `GameSessionService`. Both services are registered on the one gRPC server.
 
 `Matchmaker` **and** `GameSessionService` are both used, for different things — public matchmaking
 and private rooms respectively. The previous revision of this file flagged that as the standout
@@ -155,8 +160,14 @@ not yet answered a real RPC. It is worth doing before the friends/presence/match
 starts, because that is the point at which the duplicated surface stops being three constants and
 starts being three services.
 
-Until then this repository carries the **auth subset only** of the schema — two `.proto` files,
-deletable in one commit — rather than a second full copy.
+Until that shared module exists this repository now carries the **full** schema it answers —
+`auth`, `friends`, the `toyohr.Schedule`, and (added in this round) `gamesync` and the two
+`matchmaking` services. The `gamesync` and `matchmaking` `.proto` files were copied verbatim from
+[`servers/stardew-valley`](../../stardew-valley/proto) (source O — our own AGPL repository) with only
+the `go_package` path rewritten, because the NPLN schema is Nintendo's and identical across tenants.
+That is a second copy of the shared surface, which is exactly the duplication the shared module is
+meant to remove — so it strengthens, not weakens, the case above: the lift should happen next, before
+a third title copies it again.
 
 ## Still unknown
 
@@ -172,9 +183,27 @@ Short list now, and none of it blocks the next step:
    before a certificate is issued. What the endpoint must *speak* is now established: gamesync.
 4. Everything about the rotation format, if we generate schedules rather than capture them.
 
+New with this round's protocol work, all unverifiable without a console (and a match, eight players):
+
+5. **The gamesync document naming and field schema.** The mailbox is generic — consoles write their
+   own Pia contact blobs and we relay them, no field schema needed for that. The one place we
+   synthesise fields is the session document seeded on `Gamesync/IssueToken` (`<userSession>/SessionInfo`,
+   concrete-typed keys). The exact document *name* the host waits on, and which keys it reads, are
+   guessed from the reference's document paths; a capture corrects them. What we *do* honour from the
+   measurements: never an empty-fields document, always concrete typed Values, pushed as EXISTING.
+6. **The public match forms only at 8 players.** `Matchmaker` pools tickets and resolves them into one
+   game session at `NPLN_MATCH_SIZE` (default 8); below that they stay `SEARCHING`, because the console
+   refuses a battle below the mode's roster. A two-client test can validate the ticket/track/ICE
+   sequence but cannot start a battle — lower `NPLN_MATCH_SIZE` to exercise the resolution path.
+7. **ICE against a real coturn.** `AllocateIceServerSet` returns coturn REST ephemeral credentials
+   (`base64(HMAC-SHA1(NPLN_TURN_SECRET, "<expiry>:<user>"))`); the secret must match the deployed
+   coturn's `static-auth-secret`. Untested against a live coturn.
+
 ## Ports
 
 `21012` gRPC/TLS tenant, `21013` health. The session/gamesync endpoint is a **separate listener**
-the console dials directly, and takes `22210` out of this title's reserved NPLN block. STUN/TURN
+the console dials directly, and takes `22210` out of this title's reserved NPLN block — `cmd/npln`
+now opens it (`NPLN_SESSION_LISTEN`, default `:22210`) and serves the same gRPC server there, and the
+game sessions advertise `NPLN_SESSION_HOST:NPLN_SESSION_PORT` as `GameSession.Host:Port`. STUN/TURN
 needs no port of its own here: coturn lives in the shared `22900–22999` helper block. Claimed in
 [`ports.md`](../../../ports.md).

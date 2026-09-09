@@ -1,6 +1,7 @@
 // npln serves Splatoon 3's NPLN control plane (nn.npln.*) over gRPC/TLS.
 //
 //	NPLN_LISTEN            gRPC/TLS listener (default :21012, the Splatoon 3 tenant port in Openpak/ports.md)
+//	NPLN_SESSION_LISTEN    gRPC/TLS session/gamesync listener the console dials directly (default :22210); empty disables it
 //	HEALTH_LISTEN          plain-HTTP health listener (default :21013); empty disables it
 //	CERT_FILE / KEY_FILE   TLS cert covering t-dce9377b-lp1.lp1.t.npln.srv.nintendo.net
 //	NX_INTERNAL_URL        nx-baas internal API (default http://127.0.0.1:20070): proves nnex
@@ -72,8 +73,25 @@ func main() {
 		log.Fatalf("%v\n\nRefusing to start: serving this rotation risks aborting the console. Regenerate it: go run ./cmd/genrotation -o %s", err, rotPath)
 	}
 
+	srv := npln.NewServer(creds, rot)
+
+	// The session/gamesync endpoint is a SEPARATE listener the console's Pia layer dials directly
+	// (GameSession.Host:Port), not the tenant front door — but it speaks the same schema, so the
+	// same gRPC server answers both. NPLN_SESSION_HOST/PORT is what the game sessions advertise;
+	// keep it reachable from the console, which for the LAN rig is this listener.
+	// ponytail: one cert for both listeners. The console may present a different SNI here (evidence
+	// item 7, unverified); GetConfigForClient logs it, so a capture settles which cert 22210 needs.
+	if sessionAddr := env("NPLN_SESSION_LISTEN", ":22210"); sessionAddr != "" && sessionAddr != addr {
+		if sl, err := net.Listen("tcp", sessionAddr); err != nil {
+			log.Printf("session endpoint: cannot listen on %s: %v", sessionAddr, err)
+		} else {
+			log.Printf("session/gamesync endpoint on %s (gRPC/TLS)", sessionAddr)
+			go func() { log.Printf("session endpoint: %v", srv.Serve(sl)) }()
+		}
+	}
+
 	log.Printf("splatoon-3 NPLN server listening on %s (gRPC/TLS) — tenant %s", addr, npln.Tenant)
-	log.Fatal(npln.NewServer(creds, rot).Serve(lis))
+	log.Fatal(srv.Serve(lis))
 }
 
 // serveHealth runs the health endpoint in the background. A port that will not open is logged
