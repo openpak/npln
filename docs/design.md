@@ -43,8 +43,8 @@ answers the rest from recorded traffic:
 | `matchmaking.v1.GameSessionService` | host-created rooms, room codes, invitations, ICE allocation | not started |
 | `gamesync.v1.Gamesync` | the document/session transport | not started |
 | `ugcstore.v1.Ugcstore` | player-published documents | not started |
-| `toyohr.v1.Schedule` | stage/mode rotation | **blocked — see below** |
-| `toyohr.v1.FestService` | Splatfest | blocked, same reason |
+| `toyohr.v1.Schedule` | stage/mode rotation | **implemented**, served from a generated rotation file |
+| `toyohr.v1.FestService` | Splatfest | not started |
 
 `Matchmaker` **and** `GameSessionService` are both used, for different things — public matchmaking
 and private rooms respectively. The previous revision of this file flagged that as the standout
@@ -99,13 +99,18 @@ rights" and the game declares itself offline while every RPC returns success.
 
 ## Two blockers that are not code
 
-**Schedules cannot be ported.** A working server serves the rotation by replaying recorded response
-bytes with the timestamps shifted forward so the rotation reads as current. Those bytes are
-Nintendo's, they are not redistributable, and OpenPak has no corpus of them. So the rotation has to
-be either generated from a model of the real schedule format or captured by us — and until one of
-those exists, the game will report stage information unavailable no matter how well the rest works.
-This is the single largest piece of unbudgeted work in the title and it should be scoped
-deliberately rather than discovered late.
+**Schedules were not ported — they are generated.** A working server replays recorded response
+bytes with the timestamps shifted forward. Those bytes are Nintendo's and are not redistributable,
+so OpenPak splits code from data instead: `internal/rotation` defines and validates a rotation
+file, `cmd/genrotation` writes a valid one anchored to real time, and the server reads it at
+start-up. Nothing captured enters the repository, and an operator with their own recorded rotation
+points `NPLN_ROTATION` at it.
+
+The validation is strict for a specific reason. A stale set is *rejected* by the game with a
+visible error; an inconsistent set — kinds whose windows disagree about the present — is not
+rejected at all, it aborts the console. So a rotation that would abort the console is a refusal to
+start, with the offending entry named; a missing rotation is only a warning, because the rest of
+the server still works.
 
 **The pre-gRPC REST chain is nx-baas's, and it is currently wrong for this title.** nx-baas routes
 the Vermillion and Penne hosts today and answers them well enough for the console link, but

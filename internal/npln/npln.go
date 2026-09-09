@@ -42,6 +42,9 @@ import (
 
 	authpb "openpak/splatoon-3/proto/auth/v1"
 	friendspb "openpak/splatoon-3/proto/friends/v1"
+	toyohrpb "openpak/splatoon-3/proto/toyohr/v1"
+
+	"openpak/splatoon-3/internal/rotation"
 )
 
 // Tenant is Splatoon 3's NPLN tenant, and the value of the access token's npln.tid claim. The
@@ -446,8 +449,9 @@ func (c *connTracer) HandleConn(_ context.Context, s stats.ConnStats) {
 }
 
 // NewServer wires the services we can answer. creds==nil gives plaintext h2c (behind a
-// TLS-terminating edge).
-func NewServer(creds credentials.TransportCredentials) *grpc.Server {
+// TLS-terminating edge). rot==nil leaves the schedule service unregistered — the rest of the
+// server still works, and the game will report that stage information is unavailable.
+func NewServer(creds credentials.TransportCredentials, rot *rotation.File) *grpc.Server {
 	opts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(typeUnary),
 		grpc.StreamInterceptor(typeStream),
@@ -468,5 +472,10 @@ func NewServer(creds credentials.TransportCredentials) *grpc.Server {
 	// setup, and a static presence list means two players can never see each other.
 	friendspb.RegisterFriendsServer(s, &friendsServer{})
 	friendspb.RegisterPresenceServiceServer(s, &presenceServer{})
+	if rot != nil {
+		toyohrpb.RegisterScheduleServer(s, &scheduleServer{rot: rot})
+	} else {
+		log.Printf("[Schedule] no rotation loaded — the lobby will report stage information unavailable")
+	}
 	return s
 }

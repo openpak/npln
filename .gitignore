@@ -46,3 +46,6 @@ dist/
 deploy/oci/.env
 deploy/oci/certs/
 shared-docs
+
+# Generated rotation data; write your own with cmd/genrotation.
+rotation.json
