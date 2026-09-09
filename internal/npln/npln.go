@@ -41,6 +41,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	authpb "openpak/splatoon-3/proto/auth/v1"
+	friendspb "openpak/splatoon-3/proto/friends/v1"
 )
 
 // Tenant is Splatoon 3's NPLN tenant, and the value of the access token's npln.tid claim. The
@@ -211,6 +212,37 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 	return acc.PID, tenant + "/users/" + acc.UserID(), nil
 }
 
+// pairing remembers which NPLN user id belongs to a PID. Authentication is the only place both
+// are visible at once: the PID travels inside the access token, the user id travels as request
+// metadata, and some long-lived streams — PresenceService/KeepAlive in particular — arrive with
+// one and not the other.
+//
+// ponytail: an unbounded in-memory map, so a restart forgets every pairing and a long-running
+// process never releases one. Both are fine at a lobby's scale; give it a TTL if it ever holds
+// more than a test group.
+var pairing = struct {
+	sync.Mutex
+	uid map[uint64]string
+}{uid: map[uint64]string{}}
+
+func rememberPairing(pid uint64, userPath string) {
+	uid := lastSeg(userPath)
+	if pid == 0 || uid == "" {
+		return
+	}
+	pairing.Lock()
+	pairing.uid[pid] = uid
+	pairing.Unlock()
+}
+
+// uidForPID resolves a PID to the user id recorded for it at authentication, or "" if this
+// process never authenticated that player.
+func uidForPID(pid uint64) string {
+	pairing.Lock()
+	defer pairing.Unlock()
+	return pairing.uid[pid]
+}
+
 // ---- ES256 access tokens ----
 
 var (
@@ -312,6 +344,7 @@ func refreshKey() []byte {
 }
 
 func newToken(pid uint64, userPath, tenant string) *authpb.Token {
+	rememberPairing(pid, userPath)
 	mac := hmac.New(sha256.New, refreshKey())
 	body := fmt.Sprintf("openpak-npln-refresh.%d", pid)
 	mac.Write([]byte(body))
@@ -431,5 +464,9 @@ func NewServer(creds credentials.TransportCredentials) *grpc.Server {
 	}
 	s := grpc.NewServer(opts...)
 	authpb.RegisterAuthServer(s, &authServer{})
+	// Friends and presence must both be dynamic. A static friend list stalls the game's session
+	// setup, and a static presence list means two players can never see each other.
+	friendspb.RegisterFriendsServer(s, &friendsServer{})
+	friendspb.RegisterPresenceServiceServer(s, &presenceServer{})
 	return s
 }

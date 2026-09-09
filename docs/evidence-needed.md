@@ -59,7 +59,22 @@ zero RPCs → go back to item 1. No `[TLS] ClientHello` → the redirect did not
 **Record:** the ordered `UNIMPLEMENTED` method list. That is the real work queue for this
 repository, in the order the game wants it.
 
-## 3. The nx-baas REST bootstrap, on hardware
+## 3. The friendless player
+
+**Answers:** whether OpenPak's friends service is safe for an account with no friends.
+
+An empty `SubscribeFriendUsers` response has been measured aborting the game's plaza resource-path
+parser (`2162-0001`). A working server dodges it by falling back to recorded bytes; we have none,
+and inventing a friend would be worse than the crash. So this is the first thing to run once
+item 2 produces RPCs, and it is cheap: boot with a persona that has no friends, then with two
+personas that are friends with each other, and compare.
+
+**Decision rule.** If the friendless account aborts in the plaza and the friended one does not,
+the empty response is confirmed as the cause and OpenPak needs an answer — most likely a
+minimal self-referential friend entry, which is a design decision, not a guess to make here.
+Record which it was.
+
+## 4. The nx-baas REST bootstrap, on hardware
 
 **Answers:** whether the four defects in `design.md` are the only ones.
 
@@ -72,7 +87,7 @@ Splatoon 3 and see how much further it gets. The failure signatures are distinct
 bootstrap loop that never reaches the tenant points at the device id or the `vphyms` 404; reaching
 the lobby and stopping there with `2321-4992` points at `online_license`.
 
-## 4. Schedules: capture or generate
+## 5. Schedules: capture or generate
 
 **Answers:** the largest unbudgeted piece of the title.
 
@@ -90,9 +105,9 @@ the lobby instead of reporting that stage information is unavailable. Note that 
 timestamps across a schedule set are not rejected but *crash* the game (`2162-0001`), so this needs
 a real test rather than eyeballing.
 
-## 5. Two clients in a match
+## 6. Two clients in a match
 
-Only after 1–4, and after friends, presence, matchmaking and a session host exist. A regular battle
+Only after 1–5, and after matchmaking and a session host exist (friends and presence now do). A regular battle
 needs **eight** players — the game checks the roster itself and refuses below the mode's size — so
 a two-client test can validate the matchmaking call sequence and the ICE allocation, but it cannot
 start a real battle. Plan for that rather than reading the refusal as a bug.

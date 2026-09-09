@@ -4,11 +4,11 @@ NPLN game server for **Splatoon 3** (`0100C2500FC20000`) on Nintendo Switch. NPL
 transport family as [`stardew-valley`](../stardew-valley), a much larger service surface, and far
 less of it observed.
 
-**Status: skeleton.** It starts, terminates TLS on the Splatoon 3 NPLN tenant port, answers
-`nn.npln.auth.v1.Auth` against [`nx-baas`](../../nx-baas), and logs every other method as
-`UNIMPLEMENTED`. **No part of it has been run against the retail game.** Friends, presence,
-matchmaking, game sessions, gamesync and the Splatoon-specific `toyohr` services are not
-implemented.
+**Status: early.** It starts, terminates TLS on the Splatoon 3 NPLN tenant port, and answers
+`nn.npln.auth.v1.Auth`, `nn.npln.friends.v1.Friends` and `nn.npln.friends.v1.PresenceService`
+against [`nx-baas`](../../nx-baas), logging every other method as `UNIMPLEMENTED`. **No part of it
+has been run against the retail game.** Matchmaking, game sessions, gamesync and the
+Splatoon-specific `toyohr` services are not implemented.
 
 What the title actually requires is now documented rather than guessed:
 [`docs/design.md`](docs/design.md) is the plan, [`docs/provenance.md`](docs/provenance.md) is the
@@ -32,6 +32,7 @@ go build ./cmd/npln
 | `NX_INTERNAL_URL` | nx-baas game/internal API, default `http://127.0.0.1:20070` |
 | `NX_INTERNAL_KEY` | nx-baas's `NX_INTERNAL_KEY`, sent as `X-Internal-Key` |
 | `NPLN_JWT_KEY` | persisted ES256 key for the access tokens (a restart otherwise invalidates every live session) |
+| `NPLN_FRIENDS_CHUNK_BYTES` | byte budget for one friend-list stream message, default 4096. The whole graph in one message is a measured crash |
 
 Auth flow: the game sends its BAAS id_token; the `nnex` claim inside it was signed by nx-baas. This
 server POSTs that claim to `/internal/switch/identity`, gets back `{pid, baas_user_id, nickname,
