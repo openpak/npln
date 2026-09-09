@@ -55,6 +55,7 @@ type Account struct {
 	BaasUserID string   `json:"baas_user_id"`
 	Nickname   string   `json:"nickname"`
 	Friends    []Friend `json:"friends"`
+	Country    string   `json:"country"` // where the player lives; picks the region node for their rooms
 }
 
 type Friend struct {
@@ -133,6 +134,9 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 	if err != nil {
 		log.Printf("[Auth] identity not provable (%v) -> REFUSED", err)
 		return 0, "", status.Error(codes.PermissionDenied, "OpenPak account not recognised — link your OpenPak account to play online")
+	}
+	if acc.Country != "" {
+		countryByUID.Store(acc.UserID(), strings.ToUpper(acc.Country))
 	}
 	return acc.PID, tenant + "/users/" + acc.UserID(), nil
 }

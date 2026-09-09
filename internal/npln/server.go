@@ -141,6 +141,7 @@ func (c *connTracer) HandleConn(_ context.Context, s stats.ConnStats) {
 
 // NewServer wires every service. creds==nil gives plaintext h2c (behind a TLS-terminating edge).
 func NewServer(creds credentials.TransportCredentials) *grpc.Server {
+	startRegions()
 	opts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(typeUnary),
 		grpc.StreamInterceptor(typeStream),

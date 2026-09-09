@@ -143,7 +143,6 @@ func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req
 	} else {
 		hostUD = userDef(ctx, nil)
 	}
-
 	room := &mmpb.GameSession{
 		Name:                    gsName,
 		MaxParticipantCount:     4, // Stardew farms hold up to 4 players
@@ -525,19 +524,16 @@ func (g *sessionServer) AllocateIceServerSet(ctx context.Context, req *mmpb.Allo
 	if user == "" {
 		user = tn + "/users/" + uidFromCtx(ctx)
 	}
-	stunHost, turnHost := envOr("NPLN_STUN_HOST", "127.0.0.1"), envOr("NPLN_TURN_HOST", "")
-	if turnHost == "" {
-		turnHost = stunHost
-	}
+	stunHost, stunPort, turnHost, turnPort := iceFor(uidFromCtx(ctx))
 	exp := time.Now().Add(time.Hour).Unix()
 	turnUser := fmt.Sprintf("%d:%s", exp, user)
 	mac := hmac.New(sha1.New, []byte(envOr("NPLN_TURN_SECRET", "openpak-turn")))
 	mac.Write([]byte(turnUser))
 	set := &mmpb.IceServerSet{
 		Name:       tn + "/iceServerSets/static",
-		StunServer: &mmpb.StunServer{Host: stunHost, Port: envInt("NPLN_STUN_PORT", 3478), Protocol: mmpb.StunServer_UDP},
+		StunServer: &mmpb.StunServer{Host: stunHost, Port: stunPort, Protocol: mmpb.StunServer_UDP},
 		TurnServers: []*mmpb.TurnServer{{
-			Host: turnHost, Port: envInt("NPLN_TURN_PORT", 3478), Protocol: mmpb.TurnServer_UDP,
+			Host: turnHost, Port: turnPort, Protocol: mmpb.TurnServer_UDP,
 			Username: turnUser, Password: base64.StdEncoding.EncodeToString(mac.Sum(nil)),
 		}},
 		Ttl:                 &durationpb.Duration{},
