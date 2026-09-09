@@ -37,8 +37,8 @@ answers the rest from recorded traffic:
 | Service | Role | OpenPak status |
 | --- | --- | --- |
 | `auth.v1.Auth` | tokens; the identity gate | **implemented** |
-| `friends.v1.Friends` | friend and block lists | not started |
-| `friends.v1.PresenceService` | `KeepAlive` (bidirectional), presence subscriptions | not started |
+| `friends.v1.Friends` | friend and block lists | **implemented** |
+| `friends.v1.PresenceService` | `KeepAlive` (bidirectional), presence subscriptions | **implemented** |
 | `matchmaking.v1.Matchmaker` | public matchmaking | not started |
 | `matchmaking.v1.GameSessionService` | host-created rooms, room codes, invitations, ICE allocation | not started |
 | `gamesync.v1.Gamesync` | the document/session transport | not started |
@@ -71,7 +71,23 @@ checked against the facts:
   modes (`provenance.md`, "Transport");
 - every other method logged and answered `UNIMPLEMENTED`.
 
-One fix this round came directly out of the facts: the client names its tenant with the alias
+Friends and presence are implemented on top of that, both dynamic:
+
+- `Friends` serves the caller's own OpenPak graph, not a snapshot, and splits
+  `SubscribeFriendUsers` across stream messages under a byte budget — the whole graph in one
+  message is a measured crash of the game's plaza parser;
+- `PresenceService` answers every `KeepAlive` ping one-for-one (heartbeating on an independent
+  timer instead kills the stream at ~60 s), keeps the attributes the client publishes about
+  itself, and pushes presence *changes* on the subscription rather than one opening snapshot;
+- a PID↔user-id pairing is recorded at token issue, the only point where both are visible, because
+  `KeepAlive` arrives with a user id and not always a usable token.
+
+A player with **no** friends is a known risk rather than a solved case: an empty
+`SubscribeFriendUsers` has been measured aborting the plaza parser, a working server avoids it by
+falling back to recorded bytes, and we have none and will not invent a friend. The server logs the
+condition; `evidence-needed.md` makes it the first thing to test.
+
+One fix from an earlier round came directly out of the facts: the client names its tenant with the alias
 `tenants/current`, not with its own id. Passing that through minted a token claiming `tid:
 "current"`, which is no tenant at all. `resolveTenant` now resolves it.
 

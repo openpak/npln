@@ -130,3 +130,43 @@ HTTP/2 HEADERS frame (source: N, O):
   request metadata header. Some long-lived streams arrive with a uid but no usable token, so a
   server that needs both must record the pairing at authentication time — the one point where
   both are visible. Not needed yet here; it will be the moment presence exists.
+
+## Friends and presence
+
+Added when those services were built. Sources as above; N-sourced rows come from comments there
+recording captures and dated measurements, named where they were given.
+
+### `friends.v1.Friends`
+
+| Fact | Detail | Source |
+| --- | --- | --- |
+| It must be dynamic | a fixed snapshot that does not match the logged-in identity stalls the game's session setup: the block list never becomes ready, so a room shows an empty roster with invitations and room codes disabled | N |
+| `ListBlockingUsers` must answer | even empty. The client waits on it as part of that readiness | N |
+| `FriendUser.relationship` | `presence_deliverable` and `presence_receivable` both true, as between real friends. Unset, the client can treat the friend as presence-less | O — measured for Stardew 2026-09-01, same service |
+| Response size is load-bearing | the real service answers ~99 bytes for a new account and ~605 for an established one. Sending a whole large graph in one message — ~27 KB for 146 friends — was measured aborting the game's plaza resource-path parser (`2162-0001`), with the error context naming `SubscribeFriendUsers`. Splitting across stream messages is safe: the client accumulates them | N |
+| An EMPTY friends response is dangerous | measured aborting the same plaza parser right after the second wave. A working server avoids it by falling back to a recorded non-empty structure | N |
+
+On that last row: **OpenPak has no recorded structure to fall back to, and will not invent a
+friend.** A player with no friends therefore gets an empty response and may hit the abort. The
+server logs the condition loudly and `evidence-needed.md` makes it the first thing to test.
+
+### `friends.v1.PresenceService`
+
+| Fact | Detail | Source |
+| --- | --- | --- |
+| `Heartbeat` carries two durations | interval 30 s (field 1) and a deadline of 50 s (field 2). The client paces its ping on the interval and gives up after the deadline | N, from a fresh-account capture |
+| Measured opening bytes | `1a 08 0a 02 08 1e 12 02 08 32` then `12 00` — heartbeat{interval 30 s, deadline 50 s} followed by an empty `enumeration_done` | N |
+| Our schema declares the second field | as `google.protobuf.Duration deadline = 2`, which encodes to exactly those bytes. A unit test asserts the encoding, so the schema cannot drift off the measurement | O — this repository |
+| Stream order | heartbeat → `presences` (only if non-empty) → `enumeration_done` → heartbeats | N |
+| An empty `presences` message is never sent | it does not occur in observed traffic; a fresh account goes straight from the heartbeat to `enumeration_done` | N |
+| `enumeration_done` is required | without it the client waits indefinitely for the rest of the list | N |
+| The stream must push CHANGES | a subscription that sends only its opening snapshot leaves two friends with opposite views of each other, neither correcting. Measured 2026-08-15: a player who restarted stayed "offline" to a friend who had subscribed during the absence, while appearing online in the other direction | N |
+| The resume token describes the ENUMERATED SET, not the delta | deriving it from just the changes made a 240-friend player's friend screen return a communication error and empty the list, while a 1-friend player saw nothing because their delta was always empty. The client cross-references the token against the set it holds | N |
+| Targeted subscriptions | when the request names specific presences, answer with only those, or the client's cursor diverges | N |
+| `KeepAlive` must answer every ping one-for-one | draining pings and heartbeating on an independent timer killed streams at ~60 s — the client gives up after two intervals with no answer to *its* ping, and the game reports a communication error although nothing was disconnected. Measured 2026-08-25 | N |
+| A gRPC stream rejects concurrent `Send`s | so anything that both answers pings and ticks must serialise them. Our implementation answers only on receipt and so has one sender | N (the constraint), O (our design) |
+| The client PUBLISHES its own state on `KeepAlive` | `UpdatePresence` carries the presence attributes. Discarding them is why a friend list can show placeholders and never a "Join" affordance | N |
+| Presence attributes | a friend's presence carries ~13 attributes. `GameStatus` 1 = online, 2 = a room is open; `SessionId` is then the uuid the game passes to `JoinGameSession`; `MaxParticipants`/`CurrentParticipants` fill the roster count; `PlayerName`, `GameMode`, `Udemae`, `UsePassword` fill the line. The 1→2 transition with a non-empty `SessionId` is what makes "Join" appear. Measured 2026-08-15 | N |
+| Updates are partial | so a server must merge them into what it already holds rather than replacing | N |
+| ONLINE is never a guess | a player counts as online only while actually connected to this server. A wrong ONLINE sends a friend into a join that cannot succeed | N |
+| Presence resource name | `<tenant>/users/<uid>/presence` | N |
