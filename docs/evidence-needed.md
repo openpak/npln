@@ -126,10 +126,21 @@ it and reading one line settles it — do that before issuing any certificate fo
 
 ## 8. Two clients in a match
 
-Only after 1–7, and after matchmaking and a session host exist (friends and presence now do). A regular battle
-needs **eight** players — the game checks the roster itself and refuses below the mode's size — so
-a two-client test can validate the matchmaking call sequence and the ICE allocation, but it cannot
-start a real battle. Plan for that rather than reading the refusal as a bug.
+Matchmaking, the game-session service and the gamesync mailbox now exist (as does friends/presence),
+so this is the first end-to-end target once 1–7 pass. A regular battle needs **eight** players — the
+game checks the roster itself and refuses below the mode's size — so a two-client test can validate
+the matchmaking call sequence (`CreateMatchmakingTicket` → `TrackMatchmakingTicket` →
+`AllocateIceServerSet` on `GameSessionService`) and the gamesync mailbox, but it cannot start a real
+battle. Lower `NPLN_MATCH_SIZE` to exercise the ticket-resolution path with fewer clients. Plan for
+that rather than reading the roster refusal as a bug.
+
+**Decision rule.** With the matchmaking pool lowered, `CreateMatchmakingTicket` must reach
+`SUCCEEDED` with a `game_session`; the client then opens a second connection to `GameSession.Host:Port`
+(the `:22210` session listener) and drives `Gamesync/IssueToken` → `KeepUserSession`. If the host
+parks on a connecting screen, the seeded `SessionInfo` document's name or fields are wrong (§5,
+design.md) — the `[gamesync] watch target … -> N existing document(s)` log line says whether the host
+is watching the document we seeded. If it crashes at ~72 s (`2162-0001`), a pushed document has an
+empty or untyped field.
 
 ---
 

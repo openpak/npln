@@ -2,9 +2,10 @@
 // the Switch client talks to before any gameplay traffic exists. Independently written from
 // public protocol documentation and our own observations (see docs/design.md for provenance).
 //
-// Only nn.npln.auth.v1.Auth is served today. Every other method is logged by unknownService and
-// answered UNIMPLEMENTED — that log line is the next work item, and it is how we learn Splatoon 3's
-// call order without guessing it.
+// Served today: auth, friends and presence, the toyohr schedule service, the two matchmaking
+// services (Matchmaker + GameSessionService) and the gamesync mailbox. Every other method is logged
+// by unknownService and answered UNIMPLEMENTED — that log line is the next work item, and it is how
+// we learn Splatoon 3's call order without guessing it.
 package npln
 
 import (
@@ -42,6 +43,8 @@ import (
 
 	authpb "openpak/splatoon-3/proto/auth/v1"
 	friendspb "openpak/splatoon-3/proto/friends/v1"
+	gspb "openpak/splatoon-3/proto/gamesync/v1"
+	mmpb "openpak/splatoon-3/proto/matchmaking/v1"
 	toyohrpb "openpak/splatoon-3/proto/toyohr/v1"
 
 	"openpak/splatoon-3/internal/rotation"
@@ -472,6 +475,13 @@ func NewServer(creds credentials.TransportCredentials, rot *rotation.File) *grpc
 	// setup, and a static presence list means two players can never see each other.
 	friendspb.RegisterFriendsServer(s, &friendsServer{})
 	friendspb.RegisterPresenceServiceServer(s, &presenceServer{})
+	// Matchmaking and the gamesync mailbox: Splatoon 3 relays, so these are protocol bookkeeping
+	// over an in-memory store, not a game server. GameSessionService serves host-created rooms
+	// (room codes, invitations) and AllocateIceServerSet; Matchmaker serves public matchmaking;
+	// Gamesync is the document mailbox the consoles rendezvous through.
+	mmpb.RegisterGameSessionServiceServer(s, &gameSessionService{})
+	mmpb.RegisterMatchmakerServer(s, &matchmaker{})
+	gspb.RegisterGamesyncServer(s, &gamesync{})
 	if rot != nil {
 		toyohrpb.RegisterScheduleServer(s, &scheduleServer{rot: rot})
 	} else {
