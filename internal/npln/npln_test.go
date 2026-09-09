@@ -66,6 +66,20 @@ func TestAuthRoundTrip(t *testing.T) {
 		t.Fatal("tampered refresh token accepted")
 	}
 
+	// The client names its tenant with the alias "tenants/current". Passing that through would
+	// put tid "current" in the token, which is no tenant at all.
+	if got := resolveTenant("tenants/current"); got != Tenant {
+		t.Fatalf("tenants/current resolved to %q, want %q", got, Tenant)
+	}
+	if got := resolveTenant("tenants/t-other-lp1"); got != "tenants/t-other-lp1" {
+		t.Fatalf("a real tenant name must be honoured, got %q", got)
+	}
+	claims := mustClaims(t, tok.GetAccessToken())
+	npln := claims["npln"].(map[string]any)
+	if npln["tid"] != "t-dce9377b-lp1" || npln["app_id"] != AppID {
+		t.Fatalf("token claims wrong: tid=%v app_id=%v", npln["tid"], npln["app_id"])
+	}
+
 	// Fail-closed: a claim the adapter does not recognise must not mint a token.
 	bad := &authpb.ExternalIdToken{Token: &authpb.ExternalIdToken_NsaIdToken{
 		NsaIdToken: "eyJhbGciOiJSUzI1NiJ9." + b64u([]byte(`{"nnex":"nx2.a.c"}`)) + ".sig"}}
@@ -76,4 +90,18 @@ func TestAuthRoundTrip(t *testing.T) {
 	if me, err := lookupAccount(1800000005); err != nil || me.BaasUserID != "9198f6a6930b5fd1" {
 		t.Fatalf("pid lookup: %+v %v", me, err)
 	}
+}
+
+// mustClaims decodes the payload of a JWT we just minted.
+func mustClaims(t *testing.T, tok string) map[string]any {
+	t.Helper()
+	payload, ok := verifyJWT(tok)
+	if !ok {
+		t.Fatal("our own access token did not verify")
+	}
+	var c map[string]any
+	if err := json.Unmarshal(payload, &c); err != nil {
+		t.Fatalf("claims: %v", err)
+	}
+	return c
 }

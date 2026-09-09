@@ -43,16 +43,13 @@ import (
 	authpb "openpak/splatoon-3/proto/auth/v1"
 )
 
-// Tenant is Splatoon 3's NPLN tenant. The hostname
-// t-dce9377b-lp1.lp1.t.npln.srv.nintendo.net was measured on 2026-08-25 as the name the retail
-// title resolves at boot (recorded in emulators/citron sfdnsres.cpp). The tenant id is the
-// leading label; that the RPC metadata's npln-tenant-id carries the same value is an inference
-// from Stardew and is NOT yet confirmed for this title — see docs/evidence-needed.md item 2.
+// Tenant is Splatoon 3's NPLN tenant, and the value of the access token's npln.tid claim. The
+// host t-dce9377b-lp1.lp1.t.npln.srv.nintendo.net is the name the retail title resolves at boot.
+// Confirmed — see docs/provenance.md.
 const Tenant = "tenants/t-dce9377b-lp1"
 
-// AppID goes in the access token's npln.app_id claim. 0100c2500fc20000 is Splatoon 3's title id
-// (upstream Ryujinx TitleIDs.cs / compatibility.csv). For Stardew the app_id claim equals the
-// title id; whether that holds here is unconfirmed — docs/evidence-needed.md item 3.
+// AppID goes in the access token's npln.app_id claim, and is Splatoon 3's title id. Confirmed:
+// the claim carries the title id for this tenant, not an unrelated NPLN application id.
 const AppID = "0100c2500fc20000"
 
 const tokenTTL = 8 * time.Hour
@@ -97,6 +94,18 @@ func tenantFromCtx(ctx context.Context) string {
 		return "tenants/" + t
 	}
 	return Tenant
+}
+
+// resolveTenant turns whatever the client put in a request's tenant field into a real tenant
+// name. Splatoon 3 sends the alias "tenants/current" rather than naming itself, so passing the
+// field through verbatim would mint a token claiming tid "current" — which is not this tenant and
+// not any tenant. Anything empty or aliased resolves to ours; a real name is honoured so the
+// resource names we hand back stay under the caller's own tenant.
+func resolveTenant(t string) string {
+	if t == "" || t == "tenants/current" || t == "current" {
+		return Tenant
+	}
+	return t
 }
 
 func short(s string) string {

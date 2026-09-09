@@ -1,117 +1,155 @@
 # Design — what Splatoon 3 needs from NPLN
 
-Splatoon 3 (`0100C2500FC20000`) is an NPLN-era title: its online play runs over gRPC/HTTP2/TLS to
-a per-title NPLN tenant, the same transport family as [`stardew-valley`](../../stardew-valley).
-It is also the biggest title on OpenPak's list, and this document is deliberately more a map of
-what we do not know than a specification.
+Splatoon 3 (`0100C2500FC20000`) is an NPLN-era title: online play runs over gRPC/HTTP2/TLS to a
+per-title tenant, the same transport family as [`stardew-valley`](../../stardew-valley). It is by
+a wide margin the largest title on OpenPak's list.
 
-## Confidence policy
+Every fact below has a source in [`provenance.md`](provenance.md), which is the ledger the
+clean-room policy requires. This document is the plan built on those facts. Where something is
+still unknown it says so; the previous revision of this file was mostly unknowns, and most of them
+are now settled.
 
-Same labels the family uses. Nothing enters this document as a fact without a source.
+## The shape of the problem
 
-- **CONFIRMED** — reproduced by a dated observation or test we can point at.
-- **HIGH** — one good observation, or a first-party artifact, without a second run.
-- **MEDIUM** — plausible reading with incomplete evidence.
-- **LOW / SPECULATIVE** — inference; the reason an experiment exists.
-- **UNKNOWN** — written as "unknown, needs a capture of X". Never filled in by guessing.
+Splatoon 3's online mode needs four layers, in this order. A failure in any one of them looks the
+same from the outside — a communication error, usually `2321-4992` — so they have to be brought up
+in order and confirmed one at a time.
 
-Allowed inputs are the ones in [`docs/clean-room-policy.md`](../../../docs/clean-room-policy.md):
-our own observations, public protocol documentation, compatibly licensed code, and OpenPak's own
-repositories. The NextendoNetwork per-title trees — including `~/REPOS/splatoon-3`, which is a
-different repository from this one — are PolyForm Shield and were not opened for this work.
+1. **A REST bootstrap** on the Vermillion and Penne host families, before any gRPC exists: device
+   initialisation, a per-device id, an account config carrying the online licence, a login ticket,
+   and a persistent "frontline" connection that must stay open. In OpenPak this is
+   [`nx-baas`](../../nx-baas)'s job — it already routes these hosts for the console link.
+2. **The tenant's gRPC control plane** — this repository. Auth, friends, presence, matchmaking,
+   game sessions, gamesync, and the Splatoon-specific `toyohr` services (schedules, Splatfest,
+   cloud save, lockers, replays, lobby messaging).
+3. **A session host** the matched players actually connect to. Splatoon 3 is *not* pure
+   peer-to-peer: a matched ticket points at a dedicated session server that all players reach over
+   ICE, with STUN/TURN allocated through `GameSessionService/AllocateIceServerSet`.
+4. **Game content** — the stage and mode rotation, seasons, Splatfests. Without a *current*
+   rotation the game reports that stage information is unavailable and stays offline, even when
+   every RPC is succeeding.
 
-## What is established
+## Service surface
 
-| Fact | Value | Source | Confidence |
-| --- | --- | --- | --- |
-| Title id | `0100C2500FC20000` | upstream Ryujinx `TitleIDs.cs`, `docs/compatibility.csv` (`Openpak/emulators/ryujinx`) | CONFIRMED |
-| NPLN tenant hostname | `t-dce9377b-lp1.lp1.t.npln.srv.nintendo.net` | measured 2026-08-25: the retail title resolved this name to Nintendo's production address during a citron-cmd run; recorded in `Openpak/emulators/citron/src/core/hle/service/sockets/sfdnsres.cpp` | HIGH (one dated resolution) |
-| Tenant id | `t-dce9377b-lp1` | leading label of the hostname above | HIGH |
-| Transport | gRPC over HTTP/2 over TLS, in-game OpenSSL on raw BSD sockets — emulator SSL trust settings do not apply | [`npln-online-gate-playbook.md`](../shared-docs/npln-online-gate-playbook.md) | CONFIRMED (family-wide) |
-| ALPN | client offers `grpc-exp` then `h2` | measured for Stardew, same SDK family, and the playbook records S3 offering the same | HIGH |
-| Client-side gate | the NPLN SDK's certificate-acceptance flag: a never-set byte selects between an always-OK verify callback and a real check. Forcing the read to 1 is "the Splatoon 3 fix" (`LDRB W10,[X21,#0x38]` at S3-main `0x157B20` → `MOV W10,#1`) | family reverse-engineering notes carried in `stardew-valley/handoff.md` | HIGH |
-| Failure code | `2321-4992` = client-side gRPC `UNAVAILABLE` (module 321, `(64 + grpc_status) * 64`) | playbook §Phase 0; the conversion table lives in each title's binary | CONFIRMED |
-| Pre-gRPC platform hosts already served by OpenPak | `gw.hac.lp1.vermillion.srv.nintendo.net`, the `*.penne.srv.nintendo.net` family, `beach.*` | `Openpak/nx-baas` `main.go` host routing and `penne.go` — first-party, already deployed for the console link | CONFIRMED (that we serve them; not that S3 dials them) |
+The schema spans 20 services. A working server does not implement 20 — it registers nine and
+answers the rest from recorded traffic:
 
-## What is unknown, and why the skeleton is small
-
-Everything below is a question this repository cannot answer from a desk.
-
-1. **Which `nn.npln.*` services Splatoon 3 calls, and in what order.** Unknown, needs a capture of
-   one boot-to-lobby run against a tapped tenant port (evidence item 1). Stardew's flow was
-   Auth → Friends → GameSessionService → Gamesync; Splatoon 3 is a matchmade title with an
-   always-online lobby, so its flow is very likely wider, not the same.
-2. **Whether the RPC metadata carries `npln-tenant-id: t-dce9377b-lp1`.** Unknown, needs the same
-   capture. The code echoes whatever the caller sends and falls back to the constant.
-3. **Whether the access token's `npln.app_id` claim is the title id.** It is for Stardew. Unknown
-   for Splatoon 3, needs a capture (or a differential run: mint with the title id, then with
-   something else, and see which one the client accepts).
-4. **Whether Splatoon 3 dials Vermillion/Penne before its tenant.** The playbook records the S3
-   chain as device init + `accounts/config` with `online_license` on Vermillion and login tickets
-   on Penne. Stardew resolves its platform host and never dials it. Unknown for S3, needs a
-   capture of the DNS + connect order (evidence item 1 answers this in the same run).
-5. **What the online-play gate actually checks.** Splatoon 3 requires an NSO membership for online
-   play. Whether that is enforced by the tenant, by Vermillion's `online_license`, or by the
-   client reading `nso_restricted` in our token is unknown, needs a capture. The console rig's
-   NSO membership work already bit us once on the Photon side.
-6. **The session/P2P topology.** Splatoon 3's matches are peer-to-peer with a host, coordinated
-   through NPLN and Pia; whether it uses `GameSessionService` (Stardew's path), the
-   `Matchmaker` service, or both, is unknown and needs a capture. The `Matchmaker` service exists
-   in the NPLN schema — `CreateMatchmakingTicket` / `TrackMatchmakingTicket` (server-streaming) /
-   `CancelMatchmakingTicket` / `CreateAcceptance` — and Stardew never registered it. That is the
-   single most likely title-specific surface here.
-7. **Anything about game content services** — gear, catalogue, Splatfest, SplatNet 3
-   (`api.lp1.av5ja.srv.nintendo.net`, the smartphone-app GraphQL surface documented publicly by
-   the `s3s`/`imink` projects). Out of scope for this repository: they are not on the NPLN tenant
-   and are not needed to get two consoles into a match. Revisit only if a capture shows the game
-   refusing to enter online play without them.
-
-Deliberately **not** written down: any claim about Splatoon 3 RPC handlers, field meanings, or
-response shapes. We have none, and the family rule is that a healthy title's behaviour is never
-inferred from another title's.
-
-## What is shared with Stardew, and should be lifted
-
-Building this skeleton made the duplication concrete. Three things are not title-specific:
-
-| Piece | Where it is now | Title-specific part |
+| Service | Role | OpenPak status |
 | --- | --- | --- |
-| The NPLN schema (`proto/`, `nn.npln.*`) | duplicated: full set in `stardew-valley/proto`, auth subset here | none — it is Nintendo's schema, identical for every tenant |
-| Identity against nx-baas (`/internal/switch/identity`, the nnex claim, the `u-…` user id derivation) | duplicated | none |
-| ES256 access/refresh tokens, the gRPC plumbing (`npln-grpc-type` header, keepalive policy, `unknownService` logging, `connTracer`) | duplicated | the `Tenant`, `AppID` and `kid` constants, three lines |
+| `auth.v1.Auth` | tokens; the identity gate | **implemented** |
+| `friends.v1.Friends` | friend and block lists | not started |
+| `friends.v1.PresenceService` | `KeepAlive` (bidirectional), presence subscriptions | not started |
+| `matchmaking.v1.Matchmaker` | public matchmaking | not started |
+| `matchmaking.v1.GameSessionService` | host-created rooms, room codes, invitations, ICE allocation | not started |
+| `gamesync.v1.Gamesync` | the document/session transport | not started |
+| `ugcstore.v1.Ugcstore` | player-published documents | not started |
+| `toyohr.v1.Schedule` | stage/mode rotation | **blocked — see below** |
+| `toyohr.v1.FestService` | Splatfest | blocked, same reason |
 
-**Proposal: `servers/npln-common`, a Go module holding `proto/` + identity + token minting + the
-server plumbing, with the per-title constants passed in.** Each title's repository then holds only
-its own service handlers. This is worth doing *before* a third NPLN title starts, and it should be
-done as a change to Stardew (the working, deployed implementation) that this repository then
-follows — not as a rewrite here. Doing it now would mean editing a live server to serve a
-repository that cannot yet answer a single real RPC, which is the wrong order.
+`Matchmaker` **and** `GameSessionService` are both used, for different things — public matchmaking
+and private rooms respectively. The previous revision of this file flagged that as the standout
+open hypothesis; it is now settled as a fact, with the measured public-matchmaking call order
+recorded in `provenance.md`.
 
-Until then this repository carries the **auth subset only** (`proto/auth/v1`, two `.proto` files)
-rather than a second full copy of the schema. That keeps the duplication small enough to delete in
-one commit, and it is marked in [`proto/NOTICE.md`](../proto/NOTICE.md).
+The friends and presence services are not optional decoration. A server that serves a *static*
+friend/block snapshot stalls the game's session setup: the block list never becomes ready, and a
+multiplayer room shows an empty roster with invitations and room codes disabled. They have to
+reflect the logged-in identity.
 
 ## What is built
 
-`cmd/npln` — the same first step Stardew took, nothing past it:
+`cmd/npln`, unchanged in scope from the previous round and now confirmed correct where it could be
+checked against the facts:
 
-- plain-HTTP `/health` on `:21013` (`{"status":"ok","service":"splatoon-3"}`), so the status page
-  has something to ask; the service port answers only TLS+h2 and a bare connect proves nothing;
-- TLS termination on `:21012`, the Splatoon 3 NPLN tenant port ([`ports.md`](../../../ports.md)),
-  logging the ClientHello's SNI and ALPN — the first two facts any capture needs;
-- `nn.npln.auth.v1.Auth` answered against nx-baas's internal API: the client's BAAS id_token
-  carries an `nnex` claim only nx-baas can verify, we hand it back to
-  `POST /internal/switch/identity` behind `X-Internal-Key`, and only a recognised account gets an
-  ES256 token. Fail-closed: an unprovable identity gets `PERMISSION_DENIED`, never a token;
-- every other method logged and answered `UNIMPLEMENTED`. **That log line is the deliverable.**
-  A single boot-to-lobby run against this server prints Splatoon 3's real call order, which is
-  precisely the thing this document has to leave blank today.
+- plain-HTTP `/health` on `:21013`; TLS termination on `:21012` logging ClientHello SNI and ALPN;
+- `nn.npln.auth.v1.Auth` against nx-baas's internal API — the client's BAAS id_token carries an
+  `nnex` claim only nx-baas can verify, and only a recognised account gets an ES256 token.
+  Fail-closed;
+- `npln-grpc-type` stamped on every response with `SetHeader`, and a keepalive enforcement policy
+  that tolerates this client's ping rate. Both were carried over from Stardew on the assumption
+  they were family-wide; both are now confirmed as Splatoon 3 requirements with measured failure
+  modes (`provenance.md`, "Transport");
+- every other method logged and answered `UNIMPLEMENTED`.
 
-Not built, on purpose: friends, presence, matchmaking, game sessions, gamesync, NAT/TURN, the
-Matchmaker service. Each of those would be a guess at a protocol we have not observed, and the
-family has already paid for that lesson once.
+One fix this round came directly out of the facts: the client names its tenant with the alias
+`tenants/current`, not with its own id. Passing that through minted a token claiming `tid:
+"current"`, which is no tenant at all. `resolveTenant` now resolves it.
+
+The access-token claim shape — `aid`, `app_id`, `authorization`, `ext_id`, `ext_id_type`, `tid`,
+with `jku: jwkSets/nplnAccessToken` — was already right, because it came from Stardew and the SDK
+is the same. Worth stating plainly: this is the one part of the stack where the client's failure
+is *silent*. It reads its online rights out of these claims; a token it cannot decode reads as "no
+rights" and the game declares itself offline while every RPC returns success.
+
+## Two blockers that are not code
+
+**Schedules cannot be ported.** A working server serves the rotation by replaying recorded response
+bytes with the timestamps shifted forward so the rotation reads as current. Those bytes are
+Nintendo's, they are not redistributable, and OpenPak has no corpus of them. So the rotation has to
+be either generated from a model of the real schedule format or captured by us — and until one of
+those exists, the game will report stage information unavailable no matter how well the rest works.
+This is the single largest piece of unbudgeted work in the title and it should be scoped
+deliberately rather than discovered late.
+
+**The pre-gRPC REST chain is nx-baas's, and it is currently wrong for this title.** nx-baas routes
+the Vermillion and Penne hosts today and answers them well enough for the console link, but
+measured against what Splatoon 3 requires it has four defects, each of which independently prevents
+the game from ever reaching the tenant:
+
+| nx-baas today | What Splatoon 3 needs |
+| --- | --- |
+| any `gw.` GET → `{}` | `GET /v1/devices/vermillion-device-id` → `{"vermillionDeviceId": "<base64, 16 bytes, no '/'>"}`. Wrong key → no device id → endless bootstrap loop |
+| any `gw.` GET → `{}` | `GET /v1/accounts/config` → `{"payload": base64(json)}` with `online_license.is_available: true`. This is the online gate |
+| `/accounts/vphyms` → **404** | 200 with the same `{"payload": …}` envelope. The 404 makes the game restart its whole bootstrap with a new penne id, forever |
+| no `fro-` route (falls to 404) | the frontline `POST` must be held open as a stream for room-code registration |
+
+Details and sources are in `provenance.md`. Deliberately **not** fixed from here: nx-baas is
+deployed and serves the console link, these are console-facing responses, and changing them blind
+without hardware in front of us risks the working link to fix a title nobody has run yet. It is a
+scoped nx-baas change with its own hardware test, not a drive-by.
+
+## Lift the shared NPLN layer
+
+There are now two real NPLN servers to compare, and the comparison makes the case that the previous
+revision could only argue from one side. Identical in both, and title-independent:
+
+| Piece | Evidence it is not title-specific |
+| --- | --- |
+| The NPLN schema (`nn.npln.*`) | it is Nintendo's, one schema across tenants; Stardew and Splatoon 3 use the same messages for auth, friends, matchmaking and gamesync |
+| Identity against nx-baas — the `nnex` claim, `/internal/switch/identity`, the `u-…` user id derivation | byte-identical logic in both, differing in nothing |
+| ES256 access and refresh tokens | the claim shape is the SDK's, not the game's. The only per-title values are `tid` and `app_id` |
+| gRPC plumbing — `npln-grpc-type`, the keepalive policy, `UNIMPLEMENTED` logging, connection tracing | carried from Stardew to here unchanged, then independently confirmed as Splatoon 3 requirements with their own measured failure modes. That is the strongest evidence available that it is SDK behaviour rather than either title's |
+
+**Proposal: `servers/npln-common`, a Go module holding `proto/` plus identity, token minting and
+the server plumbing, with the per-title constants passed in.** Each title's repository then holds
+only its own handlers — which for Splatoon 3 is the entire interesting part, and for Stardew is
+already written.
+
+Sequencing: do it as a change to Stardew, the working and deployed implementation, and have this
+repository follow. Doing it the other way round means editing a live server to suit one that has
+not yet answered a real RPC. It is worth doing before the friends/presence/matchmaking work here
+starts, because that is the point at which the duplicated surface stops being three constants and
+starts being three services.
+
+Until then this repository carries the **auth subset only** of the schema — two `.proto` files,
+deletable in one commit — rather than a second full copy.
+
+## Still unknown
+
+Short list now, and none of it blocks the next step:
+
+1. The certificate-acceptance patch offset for the **current** game build. An offset exists for an
+   older build; all patch work is build-id scoped, so it has to be re-derived. Evidence item 1.
+2. Whether OpenPak's identity model satisfies the client end to end — our auth is nx-baas's
+   `nnex` projection, not the account service a working server talks to. The shapes match; the run
+   has not happened.
+3. The session host. We know the game connects to a dedicated session server over ICE rather than
+   to a peer, and that STUN/TURN comes from `AllocateIceServerSet`. What that host has to *speak*
+   is not established here and is a milestone of its own.
+4. Everything about the rotation format, if we generate schedules rather than capture them.
 
 ## Ports
 
-`21012` gRPC/TLS tenant, `21013` health, `22210–22219` reserved for game transport when there is
-any. Claimed in [`ports.md`](../../../ports.md).
+`21012` gRPC/TLS tenant, `21013` health, `22210–22219` reserved for game transport. Claimed in
+[`ports.md`](../../../ports.md). Note for later: the session host is a **separate listener** from
+the tenant, so it will need its own port out of the reserved block.

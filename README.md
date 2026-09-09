@@ -7,9 +7,16 @@ less of it observed.
 **Status: skeleton.** It starts, terminates TLS on the Splatoon 3 NPLN tenant port, answers
 `nn.npln.auth.v1.Auth` against [`nx-baas`](../../nx-baas), and logs every other method as
 `UNIMPLEMENTED`. **No part of it has been run against the retail game.** Friends, presence,
-matchmaking, game sessions, gamesync and NAT/TURN are not implemented, because nothing has been
-observed to implement them from — see [`docs/design.md`](docs/design.md) for what is known and
-[`docs/evidence-needed.md`](docs/evidence-needed.md) for how to find out the rest.
+matchmaking, game sessions, gamesync and the Splatoon-specific `toyohr` services are not
+implemented.
+
+What the title actually requires is now documented rather than guessed:
+[`docs/design.md`](docs/design.md) is the plan, [`docs/provenance.md`](docs/provenance.md) is the
+fact ledger with a source for every claim, and [`docs/evidence-needed.md`](docs/evidence-needed.md)
+is what still has to be found out by running something. Two things outside this repository block
+the title: the pre-gRPC REST bootstrap is `nx-baas`'s and is currently wrong for Splatoon 3 in four
+identified ways, and the stage rotation has to be generated or captured because it cannot be
+ported. Both are in design.md.
 
 ## Run
 
@@ -45,11 +52,12 @@ go build ./... && go vet ./... && go test ./...
 ## Clean room
 
 Read [`docs/clean-room-policy.md`](../../docs/clean-room-policy.md) before writing a line. The
-NextendoNetwork per-title trees — including the unrelated `~/REPOS/splatoon-3` — are PolyForm
-Shield and were not opened for this work. Inputs are our own observations, public protocol
-documentation, compatibly licensed code, and OpenPak's own repositories. Everything asserted in
-`docs/design.md` carries a source and a confidence label; anything unmeasured is written as
-"unknown, needs a capture of X".
+NextendoNetwork `splatoon-3` server is PolyForm Shield 1.0.0 and was read **for facts only** —
+ports, hostnames, endpoint paths, wire field names, error codes, flows, and what actually runs. No
+code, comments, docs, structure, type or function names were copied or translated. Every fact taken
+is recorded with its source in [`docs/provenance.md`](docs/provenance.md), which is what makes
+"rewritten from the facts" checkable rather than a claim. Anything still unmeasured is written as
+unknown, not filled in by guessing.
 
 AGPL-3.0-only, English only, Go 1.25, no secrets in the repository.
 
