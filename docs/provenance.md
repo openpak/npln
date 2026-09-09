@@ -204,3 +204,50 @@ start** the server on a rotation that would do that, naming the offending entry.
 is only a warning: the rest of the server is still worth running, and the lobby simply reports that
 stage information is unavailable. The validator is the one piece of non-trivial logic here and it
 carries the tests.
+
+## Relay or simulation? — settled: RELAY
+
+The question that decides whether this title is reachable at all: does the session server the
+matched players connect to **simulate the game**, or does it only **relay between consoles**?
+
+**It relays. There is no server-side simulation.** The evidence, strongest first:
+
+| Evidence | Detail | Source |
+| --- | --- | --- |
+| The consoles report peer-by-peer links | during a match each console writes a status document summarising its connection **to each other player individually**: the reporting plugin (`nn::pia::nplnd::NplnPlugin`), the local user, the *remote* user, a connection counter for that peer and an error flag for that peer. One console reported six such peers. A console talking to a simulator has **one** link, not six with independent state | N — capture of an official Splatfest **against Nintendo's own servers**, 2026-08-23 |
+| The watched document is a mailbox | each console writes its own Pia contact blob into its own document; the server deposits **each peer's** blob into the document that console watches, one push per peer. In the reference's own words, that is how Pia learns who to join | N — session captures, 2026-08-25 |
+| The server does not know how a match went | eight consoles left a match together fourteen seconds after joining, with healthy matchmaking, TURN allocations at 100% and no server-side closure. The reference had to start reading the consoles' own telemetry to find out what happened. A simulator would already know | N, 2026-08-22 |
+| Consoles track membership themselves | the Pia status blob carries a byte that follows the session headcount, written by the console | N (inferred from five observations there, and labelled as such) |
+| Nothing server-side holds game state | the reference implements schedules, Splatfests, lockers, records, replays and saves — metadata around matches. No match state, no tick loop, no physics | N — its own file inventory |
+| NAT traversal is ordinary ICE | `AllocateIceServerSet` returns a STUN server and TURN servers with username/password; the reference points it at a stock **coturn** using coturn's REST ephemeral-credential scheme | N |
+
+So the three infrastructure roles are:
+
+1. **Signalling / rendezvous** — `gamesync` is a document store the consoles watch. Its job is to
+   copy each console's Pia contact blob into its peers' mailboxes. This is the piece with real
+   protocol work in it.
+2. **NAT traversal** — STUN and TURN, from `AllocateIceServerSet`. A stock coturn satisfies it.
+3. **Session bookkeeping** — the mutable session document: address, port, capacity, current
+   players, whether a password is set.
+
+The match itself runs on the consoles, over Nintendo's Pia peer-to-peer layer, directly where the
+NAT allows it and through TURN where it does not.
+
+**What this rules out.** This is not the Fall Guys situation. Nothing here requires reimplementing
+game logic, so `gamesync` and `GameSessionService` are ordinary protocol work and the remaining
+infrastructure is a TURN server we already know how to run.
+
+**One correction to an earlier note in this repository.** A previous revision of `design.md` said
+Splatoon 3 "is not pure peer-to-peer" and that players "connect to a dedicated session server over
+ICE". That over-read the source. The accurate statement: consoles open a **second gRPC connection
+to a session endpoint for gamesync signalling**, and connect **to each other** for gameplay. The
+dedicated endpoint hosts the mailbox, it does not host the match.
+
+### The session endpoint
+
+| Fact | Detail | Source |
+| --- | --- | --- |
+| It is a separate listener | the client's Pia/NPLN layer dials `GameSession.Host:Port` directly, not through the tenant's front door, and speaks `nn.npln.gamesync.v1.Gamesync` there | N |
+| Establishment order | `Gamesync/IssueToken` (exchange the matchmaking id-token for a session token), then `KeepUserSession`, a bidirectional stream that holds the session connected, plus a watch on the document store | N |
+| The host does not write first | after subscribing it **waits** for its own user session document to appear, then reads the mutable session data. Answering "deleted" or empty leaves the host stuck on a connecting screen forever; the documents must be pushed as existing, with a concrete typed value per key — an empty-fields document crashed the worker | N |
+| Certificate name | the client presents a hostname of its own for this endpoint, and a single-label wildcard does not cover a multi-label name, so the certificate has to be checked against what the client actually asks for. Two candidate names appear in the record (`gs.nintendo.net`, and a gamesync name compiled into the title). **Unverified which applies to our build** — measure the SNI before issuing a certificate | N, E |

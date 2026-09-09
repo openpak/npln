@@ -22,9 +22,12 @@ in order and confirmed one at a time.
 2. **The tenant's gRPC control plane** — this repository. Auth, friends, presence, matchmaking,
    game sessions, gamesync, and the Splatoon-specific `toyohr` services (schedules, Splatfest,
    cloud save, lockers, replays, lobby messaging).
-3. **A session host** the matched players actually connect to. Splatoon 3 is *not* pure
-   peer-to-peer: a matched ticket points at a dedicated session server that all players reach over
-   ICE, with STUN/TURN allocated through `GameSessionService/AllocateIceServerSet`.
+3. **A signalling endpoint and NAT traversal.** Settled from the facts (`provenance.md`): the
+   session server **relays, it does not simulate**. Consoles open a second gRPC connection to a
+   session endpoint and use its document store as a *mailbox* — each console writes its Pia contact
+   blob, the server copies each peer's blob into the document that console watches — and then
+   connect **to each other** over Pia, directly or through TURN. So this layer is a signalling
+   service plus a stock coturn, not a game server.
 4. **Game content** — the stage and mode rotation, seasons, Splatfests. Without a *current*
    rotation the game reports that stage information is unavailable and stays offline, even when
    every RPC is succeeding.
@@ -164,13 +167,14 @@ Short list now, and none of it blocks the next step:
 2. Whether OpenPak's identity model satisfies the client end to end — our auth is nx-baas's
    `nnex` projection, not the account service a working server talks to. The shapes match; the run
    has not happened.
-3. The session host. We know the game connects to a dedicated session server over ICE rather than
-   to a peer, and that STUN/TURN comes from `AllocateIceServerSet`. What that host has to *speak*
-   is not established here and is a milestone of its own.
+3. Which hostname the client presents to the session endpoint. Two candidates appear in the
+   record and a single-label wildcard covers neither automatically, so the SNI has to be measured
+   before a certificate is issued. What the endpoint must *speak* is now established: gamesync.
 4. Everything about the rotation format, if we generate schedules rather than capture them.
 
 ## Ports
 
-`21012` gRPC/TLS tenant, `21013` health, `22210–22219` reserved for game transport. Claimed in
-[`ports.md`](../../../ports.md). Note for later: the session host is a **separate listener** from
-the tenant, so it will need its own port out of the reserved block.
+`21012` gRPC/TLS tenant, `21013` health. The session/gamesync endpoint is a **separate listener**
+the console dials directly, and takes `22210` out of this title's reserved NPLN block. STUN/TURN
+needs no port of its own here: coturn lives in the shared `22900–22999` helper block. Claimed in
+[`ports.md`](../../../ports.md).

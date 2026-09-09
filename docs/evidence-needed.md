@@ -115,9 +115,18 @@ the lobby instead of reporting that stage information is unavailable. Note that 
 timestamps across a schedule set are not rejected but *crash* the game (`2162-0001`), so this needs
 a real test rather than eyeballing.
 
-## 7. Two clients in a match
+## 7. The session endpoint's certificate name
 
-Only after 1–6, and after matchmaking and a session host exist (friends and presence now do). A regular battle
+**Answers:** the last unknown in the session path.
+
+The console dials the session endpoint directly and presents a hostname of its own for it. Two
+candidates appear in the record, and a single-label wildcard covers neither multi-label name
+automatically. `cmd/npln` already logs every ClientHello's SNI, so pointing the session listener at
+it and reading one line settles it — do that before issuing any certificate for `22210`.
+
+## 8. Two clients in a match
+
+Only after 1–7, and after matchmaking and a session host exist (friends and presence now do). A regular battle
 needs **eight** players — the game checks the roster itself and refuses below the mode's size — so
 a two-client test can validate the matchmaking call sequence and the ICE allocation, but it cannot
 start a real battle. Plan for that rather than reading the refusal as a bug.
