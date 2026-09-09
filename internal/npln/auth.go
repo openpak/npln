@@ -17,14 +17,14 @@ import (
 type authServer struct{ authpb.UnimplementedAuthServer }
 
 func (s *authServer) IssuePrearrangedUserToken(_ context.Context, req *authpb.IssuePrearrangedUserTokenRequest) (*authpb.IssuePrearrangedUserTokenResponse, error) {
-	pid, userPath, err := gatedIdentity(req.GetExternalIdToken(), req.GetTenant())
+	pid, userPath, err := gatedIdentity(req.GetExternalIdToken(), resolveTenant(req.GetTenant()))
 	if err != nil {
 		return nil, err
 	}
 	log.Printf("[Auth] IssuePrearrangedUserToken pid=%d user=%s", pid, userPath)
 	return &authpb.IssuePrearrangedUserTokenResponse{
 		User:  &authpb.User{Name: userPath, ShortId: int64(req.GetUserIndex())},
-		Token: newToken(pid, userPath, req.GetTenant()),
+		Token: newToken(pid, userPath, resolveTenant(req.GetTenant())),
 	}, nil
 }
 
@@ -38,11 +38,11 @@ func (s *authServer) IssueToken(ctx context.Context, req *authpb.IssueTokenReque
 }
 
 func (s *authServer) IssueAnonymousUserToken(_ context.Context, req *authpb.IssueAnonymousUserTokenRequest) (*authpb.IssueAnonymousUserTokenResponse, error) {
-	pid, userPath, err := gatedIdentity(req.GetExternalIdToken(), req.GetTenant())
+	pid, userPath, err := gatedIdentity(req.GetExternalIdToken(), resolveTenant(req.GetTenant()))
 	if err != nil {
 		return nil, err
 	}
-	return &authpb.IssueAnonymousUserTokenResponse{Token: newToken(pid, userPath, req.GetTenant())}, nil
+	return &authpb.IssueAnonymousUserTokenResponse{Token: newToken(pid, userPath, resolveTenant(req.GetTenant()))}, nil
 }
 
 // RefreshToken re-issues for an identity ALREADY proven (bearer or our own signed refresh
