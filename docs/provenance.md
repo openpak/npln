@@ -170,3 +170,37 @@ server logs the condition loudly and `evidence-needed.md` makes it the first thi
 | Updates are partial | so a server must merge them into what it already holds rather than replacing | N |
 | ONLINE is never a guess | a player counts as online only while actually connected to this server. A wrong ONLINE sends a friend into a join that cannot succeed | N |
 | Presence resource name | `<tenant>/users/<uid>/presence` | N |
+
+## Schedules
+
+| Fact | Detail | Source |
+| --- | --- | --- |
+| The service | `nn.npln.toyohr.v1.Schedule`, five calls: `SelectVsSchedules`, `SelectVsParams`, `SelectCoopSchedules`, `SelectSeasonSchedules`, `SelectLeagueSchedules` | N — method paths |
+| Message shapes | request fields `target`/`tenant`, `etag`, `current_time`, and per-call `select_duration` / `vs_params_count` / `season_schedule_count`; responses carry `schedules`, an `etag`, and a leading bool we have no meaning for. Schedule entries carry `name`, `start_time`, `end_time`, `schedule_set_id` and per-kind settings (`regular_settings`, repeated `bankara_settings`, `x_settings`, `league_settings`; co-op `normal` with stage, boss, main weapons, kuma weapon, reward fields; league `slots` with their own windows) | N — field names, numbers and types |
+| A STALE schedule set | is rejected by the game with `2321-4992` ("no current rotation") and the lobby reports that stage information is not available offline. This is the real stages blocker | N |
+| An INCONSISTENT set | is **not** rejected — it aborts the game (`2162-0001`). All schedule kinds are read as one set and must share a single time base | N |
+| `SelectVsParams` counts as a schedule kind | it carries timestamps of its own and must sit on the same base. Left out of the shift, its timestamps pointed months away from the rotation they describe and the lobby showed an error applet and stopped advancing | N |
+| Fields we could not name | the leading bool on four responses, and several ints inside the settings and co-op messages. Kept as `field_N` in our schema per the family convention for unmeasured fields, rather than given invented names | O — this repository |
+
+### The one thing here that is assumed, not established
+
+Stage and rule **id numbering**. The generator emits rule ids 0–4 and stage ids 1..N. The rule
+ordering (turf war, then the four ranked rules) follows the public SplatNet 3 naming, and stage
+ids are assumed to run from 1. Whether the ids the NPLN tenant uses match that numbering is
+**unverified**, which is why both are generator flags rather than constants: a capture can correct
+them without a code change. A wrong id is expected to show the wrong or a blank stage rather than
+to crash, but that expectation is itself untested. See `evidence-needed.md`.
+
+### How OpenPak serves this
+
+Code and data are separate. `internal/rotation` defines a rotation file, loads it and validates it;
+`cmd/genrotation` writes a valid one anchored to real time; the server reads it at start-up.
+Nothing recorded from the real service is in this repository, so the shipped path stays AGPL-safe
+and needs no timestamp-shifting machinery. An operator holding their own recorded rotation points
+`NPLN_ROTATION` at it instead.
+
+Because an inconsistent set aborts the console rather than erroring, the loader **refuses to
+start** the server on a rotation that would do that, naming the offending entry. A *missing* file
+is only a warning: the rest of the server is still worth running, and the lobby simply reports that
+stage information is unavailable. The validator is the one piece of non-trivial logic here and it
+carries the tests.

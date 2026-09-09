@@ -6,18 +6,23 @@
 //	NX_INTERNAL_URL        nx-baas internal API (default http://127.0.0.1:20070): proves nnex
 //	NX_INTERNAL_KEY        nx-baas's NX_INTERNAL_KEY, sent as X-Internal-Key
 //	NPLN_JWT_KEY           path of the persisted ES256 signing key
+//	NPLN_ROTATION          rotation file (default rotation.json); write one with cmd/genrotation
 package main
 
 import (
 	"crypto/tls"
+	"errors"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"google.golang.org/grpc/credentials"
 
 	"openpak/splatoon-3/internal/npln"
+	"openpak/splatoon-3/internal/rotation"
 )
 
 func env(k, d string) string {
@@ -51,8 +56,24 @@ func main() {
 	// A plain HTTP health port beside the gRPC one: the service port answers only TLS+h2, so a
 	// bare connection to it proves nothing to a status page.
 	serveHealth(env("HEALTH_LISTEN", ":21013"))
+
+	// A rotation that would abort the console is a refusal to start, not a warning: the game does
+	// not reject an inconsistent schedule set, it crashes on it. A MISSING file is only a warning,
+	// because the rest of the server is still worth running.
+	rotPath := env("NPLN_ROTATION", "rotation.json")
+	rot, err := rotation.Load(rotPath, time.Now().UTC())
+	switch {
+	case err == nil:
+		log.Printf("rotation %s loaded: %d vs, %d coop, %d season, %d league",
+			rotPath, len(rot.Vs), len(rot.Coop), len(rot.Season), len(rot.League))
+	case errors.Is(err, fs.ErrNotExist):
+		log.Printf("no rotation at %s — schedules will not be served. Write one: go run ./cmd/genrotation -o %s", rotPath, rotPath)
+	default:
+		log.Fatalf("%v\n\nRefusing to start: serving this rotation risks aborting the console. Regenerate it: go run ./cmd/genrotation -o %s", err, rotPath)
+	}
+
 	log.Printf("splatoon-3 NPLN server listening on %s (gRPC/TLS) — tenant %s", addr, npln.Tenant)
-	log.Fatal(npln.NewServer(creds).Serve(lis))
+	log.Fatal(npln.NewServer(creds, rot).Serve(lis))
 }
 
 // serveHealth runs the health endpoint in the background. A port that will not open is logged

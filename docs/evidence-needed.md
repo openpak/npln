@@ -87,27 +87,37 @@ Splatoon 3 and see how much further it gets. The failure signatures are distinct
 bootstrap loop that never reaches the tenant points at the device id or the `vphyms` 404; reaching
 the lobby and stopping there with `2321-4992` points at `online_license`.
 
-## 5. Schedules: capture or generate
+## 5. Stage and rule ids
+
+**Answers:** the one assumption in the generated rotation.
+
+`cmd/genrotation` emits rule ids 0–4 and stage ids 1..N. The rule ordering follows public SplatNet 3
+naming; that the tenant's ids match that numbering is unverified. Both are flags, so a capture
+corrects them without a code change.
+
+**Decision rule.** Boot to the lobby with a generated rotation. If the rotation appears but names
+the wrong stages, the ids are off and the numbering needs establishing — cheap. If the game aborts
+(`2162-0001`) rather than showing a wrong stage, the ids are load-bearing in a way this repository
+assumed they were not, and that assumption goes in `provenance.md` as measured.
+
+## 6. Schedules: the real rotation
 
 **Answers:** the largest unbudgeted piece of the title.
 
-The rotation cannot be ported — the only working implementation replays recorded bytes we do not
-have and could not redistribute. Two options, and this needs a decision before it is discovered
-late:
+**Answers:** whether a *generated* rotation is enough, or whether the game wants a real one.
 
-- **Capture.** One console, one boot, record `toyohr.Schedule` responses. Legally ours to hold, not
-  ours to ship, and it still needs the timestamp-shifting machinery to stay current.
-- **Generate.** Model the rotation format and synthesise a schedule. More work up front, no
-  capture dependency, and the only option that survives being open source.
+Decided and built: the server generates. What is untested is whether the game accepts a synthetic
+rotation at all — the shapes are right and the set is internally consistent, but no console has
+seen one.
 
-**Decision rule.** Either way the acceptance test is the same: the game shows a current rotation in
+**Decision rule.** The acceptance test is: the game shows a current rotation in
 the lobby instead of reporting that stage information is unavailable. Note that inconsistent
 timestamps across a schedule set are not rejected but *crash* the game (`2162-0001`), so this needs
 a real test rather than eyeballing.
 
-## 6. Two clients in a match
+## 7. Two clients in a match
 
-Only after 1–5, and after matchmaking and a session host exist (friends and presence now do). A regular battle
+Only after 1–6, and after matchmaking and a session host exist (friends and presence now do). A regular battle
 needs **eight** players — the game checks the roster itself and refuses below the mode's size — so
 a two-client test can validate the matchmaking call sequence and the ICE allocation, but it cannot
 start a real battle. Plan for that rather than reading the refusal as a bug.
