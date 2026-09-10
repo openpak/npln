@@ -12,14 +12,14 @@ services:
   stardew:
     build:
       context: ../..
-      dockerfile: deploy/oci/Dockerfile
+      dockerfile: Dockerfile             # the same image the release workflow publishes
     restart: unless-stopped
     network_mode: host                    # gRPC on NPLN_LISTEN, UDP latency probes; simplest on a bare VM
     environment:
       NPLN_LISTEN: ":21010"               # Traefik forwards the tenant SNI here; gamesync uses the same port
       CERT_FILE: /certs/npln.pem          # SAN: t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net, gamesync.npln.nintendo.net
       KEY_FILE: /certs/npln.key
-      NPLN_JWT_KEY: /data/npln_jwt_es256.key
+      NPLN_JWT_KEY: /app/data/npln_jwt_es256.key   # /app/data is owned by the image's unprivileged user
       NX_INTERNAL_URL: ${NX_INTERNAL_URL:-http://127.0.0.1:20070}
       NX_INTERNAL_KEY: ${NX_INTERNAL_KEY}
       NPLN_RELAY_HOST: ${PUBLIC_IP}
@@ -32,7 +32,7 @@ services:
       # NPLN_GS_DIAG: "1"                 # NEVER in production: logs station blobs and payloads
     volumes:
       - ./certs:/certs:ro
-      - stardew-data:/data
+      - stardew-data:/app/data
 
   turn:
     # coturn with the Pia interoperability patch (ALLOCATE without REQUESTED-TRANSPORT).
