@@ -16,6 +16,6 @@ var Title = host.Title{
 	Listen:       ":21010",
 	HealthListen: ":21011",
 	Run: func(creds credentials.TransportCredentials, lis net.Listener) error {
-		return npln.NewServer(creds).Serve(lis)
+		return npln.NewServer(creds, npln.StardewTenant).Serve(lis)
 	},
 }
