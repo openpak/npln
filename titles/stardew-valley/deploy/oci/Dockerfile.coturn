@@ -1,0 +1,16 @@
+# coturn with one interoperability patch: Nintendo's Pia sends TURN ALLOCATE without a
+# REQUESTED-TRANSPORT attribute (Nintendo's relay accepts it); stock coturn answers 400
+# "Transport field missed or wrong" and the peer connection never forms. Default it to UDP (17).
+# Builds from source, so it is arch-neutral (arm64 on OCI Ampere works as-is).
+FROM debian:bookworm-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates build-essential pkg-config libssl-dev libevent-dev && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 https://github.com/coturn/coturn.git /src
+RUN sed -i 's|^    if (!transport) {$|    if (!transport) { transport = 17; } if (0) {|' /src/src/server/ns_turn_server.c \
+ && grep -n 'transport = 17' /src/src/server/ns_turn_server.c \
+ && cd /src && ./configure --prefix=/usr/local >/dev/null && make -j"$(nproc)" >/dev/null && make install >/dev/null
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends libssl3 libevent-2.1-7 libevent-core-2.1-7 libevent-extra-2.1-7 libevent-openssl-2.1-7 libevent-pthreads-2.1-7 && rm -rf /var/lib/apt/lists/*
+COPY --from=build /usr/local/bin/turnserver /usr/local/bin/turnserver
+COPY --from=build /usr/local/lib/ /usr/local/lib/
+ENV LD_LIBRARY_PATH=/usr/local/lib
+ENTRYPOINT ["/usr/local/bin/turnserver"]
