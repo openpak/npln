@@ -1,7 +1,7 @@
 # Multi-stage, cross-compiled: the build stage runs on the runner's native arch and Go emits the
 # target arch, so linux/arm64 builds need no QEMU. Standalone — splatoon-3 is NPLN and imports no
 # private module, so there is no netrc/GOPRIVATE block here.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 ARG TARGETOS TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./

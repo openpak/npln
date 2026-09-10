@@ -1,6 +1,6 @@
 module openpak/splatoon-3
 
-go 1.25.0
+go 1.26
 
 require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa
