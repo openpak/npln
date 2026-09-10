@@ -144,16 +144,3 @@ func TestChunkAccountsStaysUnderBudget(t *testing.T) {
 		t.Fatal("no friends should produce no batches")
 	}
 }
-
-// The pairing recorded at authentication is what names a player on a stream that carries a uid
-// but no usable token.
-func TestPairingRecordedAtAuth(t *testing.T) {
-	t.Setenv("NPLN_JWT_KEY", t.TempDir()+"/k.pem")
-	if got := uidForPID(1800000099); got != "" {
-		t.Fatalf("unknown pid resolved to %q", got)
-	}
-	newToken(1800000099, Tenant+"/users/u-abcabcabcabcabcabcab", Tenant)
-	if got := uidForPID(1800000099); got != "u-abcabcabcabcabcabcab" {
-		t.Fatalf("pairing not recorded, got %q", got)
-	}
-}

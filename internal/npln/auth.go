@@ -55,8 +55,13 @@ func (s *authServer) RefreshToken(ctx context.Context, req *authpb.RefreshTokenR
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "refresh token without a proven identity")
 	}
+	// The user the request names is not consulted: the new token is for whoever proved the PID.
+	userPath, err := userPathForPID(ctx, pid)
+	if err != nil {
+		return nil, err
+	}
 	log.Printf("[Auth] RefreshToken pid=%d", pid)
-	return &authpb.RefreshTokenResponse{Token: newToken(pid, req.GetUser(), tenantFromCtx(ctx))}, nil
+	return &authpb.RefreshTokenResponse{Token: newToken(pid, userPath, tenantFromCtx(ctx))}, nil
 }
 
 // ValidateToken: the bearer's signature is checked by callerPID wherever identity matters, and
