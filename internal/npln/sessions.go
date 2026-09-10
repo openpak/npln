@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -53,21 +52,39 @@ func newSessionServer() *sessionServer {
 	}
 }
 
-func diag(what string, m proto.Message) { log.Printf("[MM][DIAG] %s =\n%s", what, prototext.Format(m)) }
-
-// concreteUser resolves "tenants/current/users/current" to the caller's real resource name; the
-// client identifies its own session by the concrete id and bounces when it only sees "current".
-func concreteUser(ctx context.Context, fallback string) string {
-	if uid := uidFromCtx(ctx); uid != "" {
-		return tenantFromCtx(ctx) + "/users/" + uid
+// diag logs a request in full while the Stardew flow is still being measured. A farm password
+// is the one field that must not land in a log file, so it is blanked on a copy first.
+func diag(what string, m proto.Message) {
+	m = proto.Clone(m)
+	switch r := m.(type) {
+	case *mmpb.JoinGameSessionRequest:
+		r.Password = ""
+	case *mmpb.CreateGameSessionCreationTicketRequest:
+		if gs := r.GetGameSessionCreationTicket().GetGameSession(); gs != nil {
+			gs.Password = ""
+		}
+	case *mmpb.SyncGameSessionRequest:
+		if gs := r.GetGameSession(); gs != nil {
+			gs.Password = ""
+		}
 	}
-	return fallback
+	log.Printf("[MM][DIAG] %s =\n%s", what, prototext.Format(m))
 }
 
-func userDef(ctx context.Context, in *mmpb.UserDefinition) *mmpb.UserDefinition {
-	ud := &mmpb.UserDefinition{User: concreteUser(ctx, in.GetUser())}
+// userDef is the caller's definition with its concrete resource name: the client identifies its
+// own session by the concrete id and bounces when it only sees "users/current".
+func userDef(user string, in *mmpb.UserDefinition) *mmpb.UserDefinition {
+	ud := &mmpb.UserDefinition{User: user}
 	ud.Attributes, ud.LatencyData, ud.Team = in.GetAttributes(), in.GetLatencyData(), in.GetTeam()
 	return ud
+}
+
+// firstUserDef is the definition the request carries for the caller, or nil.
+func firstUserDef(uds []*mmpb.UserDefinition) *mmpb.UserDefinition {
+	if len(uds) > 0 {
+		return uds[0]
+	}
+	return nil
 }
 
 // attrJSON / ltcyJSON render a UserDefinition into the gss token's typed-value strings.
@@ -132,17 +149,16 @@ func (g *sessionServer) withMembers(gsid string) *mmpb.GameSession {
 
 func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req *mmpb.CreateGameSessionCreationTicketRequest) (*mmpb.GameSessionCreationTicket, error) {
 	diag("CreateGameSessionCreationTicket", req)
+	hostUser, err := callerUser(ctx)
+	if err != nil {
+		return nil, err
+	}
 	tn := tenantFromCtx(ctx)
 	in := req.GetGameSessionCreationTicket()
 	ticketName := tn + "/gameSessionCreationTickets/" + uuid4()
 	gsName := tn + "/gameSessions/" + uuid4()
 
-	var hostUD *mmpb.UserDefinition
-	if uds := in.GetUserDefinitions(); len(uds) > 0 {
-		hostUD = userDef(ctx, uds[0])
-	} else {
-		hostUD = userDef(ctx, nil)
-	}
+	hostUD := userDef(hostUser, firstUserDef(in.GetUserDefinitions()))
 	room := &mmpb.GameSession{
 		Name:                    gsName,
 		MaxParticipantCount:     4, // Stardew farms hold up to 4 players
@@ -188,7 +204,6 @@ func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req
 	// A host re-loading its farm creates a fresh session each time; drop its PRIOR sessions so the
 	// store holds one farm per host instead of accumulating stale duplicates (which the joiner's
 	// QueryGameSessions then returns as N copies). The host is member rank 1 (first added).
-	hostUser := hostUD.GetUser()
 	for gsid, mem := range g.members {
 		if len(mem) > 0 && mem[0].GetUser() == hostUser {
 			delete(g.sessions, gsid)
@@ -243,10 +258,10 @@ func (g *sessionServer) CancelGameSessionCreationTicket(ctx context.Context, req
 func (g *sessionServer) GetGameSession(ctx context.Context, req *mmpb.GetGameSessionRequest) (*mmpb.GameSession, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if g.sessions[g.realID(req.GetName())] == nil {
+	if g.sessions[lastSeg(req.GetName())] == nil {
 		return nil, status.Errorf(codes.NotFound, "game session %q not found", req.GetName())
 	}
-	return g.withMembers(g.realID(req.GetName())), nil
+	return g.withMembers(lastSeg(req.GetName())), nil
 }
 
 func (g *sessionServer) BatchGetGameSessions(ctx context.Context, req *mmpb.BatchGetGameSessionsRequest) (*mmpb.BatchGetGameSessionsResponse, error) {
@@ -254,8 +269,8 @@ func (g *sessionServer) BatchGetGameSessions(ctx context.Context, req *mmpb.Batc
 	defer g.mu.Unlock()
 	out := &mmpb.BatchGetGameSessionsResponse{}
 	for _, n := range req.GetNames() {
-		if g.sessions[g.realID(n)] != nil {
-			out.GameSessions = append(out.GameSessions, g.withMembers(g.realID(n)))
+		if g.sessions[lastSeg(n)] != nil {
+			out.GameSessions = append(out.GameSessions, g.withMembers(lastSeg(n)))
 		}
 	}
 	return out, nil
@@ -280,10 +295,6 @@ func (g *sessionServer) QueryGameSessions(ctx context.Context, req *mmpb.QueryGa
 		if !propsMatch(full.GetProperties(), req.GetProperties()) || !hasAnyUser(full, req.GetUsers()) {
 			continue
 		}
-		if os.Getenv("NPLN_QUERY_VARIANTS") == "1" { // measurement: which shape does the client list?
-			out.GameSessions = append(out.GameSessions, g.queryVariants(full)...)
-			continue
-		}
 		out.GameSessions = append(out.GameSessions, full)
 	}
 	log.Printf("[MM] QueryGameSessions users=%d props=%d -> %d session(s)", len(req.GetUsers()), len(req.GetProperties().GetFields()), len(out.GameSessions))
@@ -291,69 +302,6 @@ func (g *sessionServer) QueryGameSessions(ctx context.Context, req *mmpb.QueryGa
 		diag("QueryGameSessions response", out)
 	}
 	return out, nil
-}
-
-// queryVariants (round 3): v1 host = LAN address (cap 4); v2 name under tenants/current (cap 5);
-// v3 is_public=false (cap 6); v4 unchanged but capacity 8 (cap 8). Round 2 (user path form,
-// no user_sessions, no properties) changed nothing: none listed.
-func (g *sessionServer) queryVariants(full *mmpb.GameSession) []*mmpb.GameSession {
-	// Round 8: find the proto field feeding the matcher's session+0x30 (bit4 "current") and +0x40
-	// (bit3 odd byte). Every variant zeroes blob[0x16] (bit4 needs current>blob[0x16]); each sets a
-	// different field high/odd; cap 9 = kitchen sink (all set) which should list AND be joinable.
-	zero16 := func(v *mmpb.GameSession) {
-		f := v.GetProperties().GetFields()["_Pia_SystemData"]
-		if f == nil {
-			return
-		}
-		b := append([]byte(nil), f.GetBytesValue()...)
-		if len(b) > 0x16 {
-			b[0x15], b[0x16] = 0, 0
-		}
-		v.Properties = proto.Clone(v.Properties).(*commonpb.MapValue)
-		v.Properties.Fields["_Pia_SystemData"] = &commonpb.Value{ValueType: &commonpb.Value_BytesValue{BytesValue: b}}
-	}
-	kitchen := func(v *mmpb.GameSession) {
-		v.CurrentParticipantCount = 3
-		v.CanParticipate = true
-		v.IsPublic = true
-		v.State = mmpb.GameSession_ACTIVE
-		v.Host = envOr("NPLN_RELAY_HOST", "127.0.0.1")
-		v.Port = 21010
-	}
-	cases := []struct {
-		cap int32
-		fn  func(v *mmpb.GameSession)
-	}{
-		{2, func(v *mmpb.GameSession) { v.CurrentParticipantCount = 3 }},
-		{3, func(v *mmpb.GameSession) { v.Port = 99 }},
-		{4, func(v *mmpb.GameSession) { v.State = mmpb.GameSession_ACTIVE }},
-		{5, func(v *mmpb.GameSession) { v.CanParticipate = true }},
-		{6, func(v *mmpb.GameSession) { v.IsPublic = true }},
-		{7, func(v *mmpb.GameSession) { v.Password = ""; v.Host = "127.0.0.1" }},
-		{8, func(v *mmpb.GameSession) { v.CurrentParticipantCount = 3; v.CanParticipate = true; v.IsPublic = true }},
-		{9, kitchen},
-	}
-	base := full.GetName()[:strings.LastIndex(full.GetName(), "/")+1]
-	var out []*mmpb.GameSession
-	for _, c := range cases {
-		v := proto.Clone(full).(*mmpb.GameSession)
-		id := uuid4()
-		g.aliases["v:"+id] = lastSeg(full.GetName())
-		v.Name = base + id
-		v.MaxParticipantCount = c.cap
-		c.fn(v)
-		zero16(v)
-		out = append(out, v)
-	}
-	return out
-}
-
-// realID maps a variant name back to the stored farm id. Caller holds g.mu.
-func (g *sessionServer) realID(name string) string {
-	if real := g.aliases["v:"+lastSeg(name)]; real != "" {
-		return real
-	}
-	return lastSeg(name)
 }
 
 func propsMatch(have, want *commonpb.MapValue) bool {
@@ -381,9 +329,13 @@ func hasAnyUser(s *mmpb.GameSession, users []string) bool {
 
 func (g *sessionServer) JoinGameSession(ctx context.Context, req *mmpb.JoinGameSessionRequest) (*mmpb.JoinGameSessionResponse, error) {
 	diag("JoinGameSession", req)
+	user, err := callerUser(ctx)
+	if err != nil {
+		return nil, err
+	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	gsid := g.realID(req.GetName())
+	gsid := lastSeg(req.GetName())
 	s := g.sessions[gsid]
 	if s == nil {
 		return nil, status.Errorf(codes.NotFound, "game session %q not found", req.GetName())
@@ -391,12 +343,7 @@ func (g *sessionServer) JoinGameSession(ctx context.Context, req *mmpb.JoinGameS
 	if s.GetPassword() != "" && req.GetPassword() != s.GetPassword() {
 		return nil, status.Error(codes.PermissionDenied, "wrong password")
 	}
-	var ud *mmpb.UserDefinition
-	if uds := req.GetUserDefinitions(); len(uds) > 0 {
-		ud = userDef(ctx, uds[0])
-	} else {
-		ud = userDef(ctx, nil)
-	}
+	ud := userDef(user, firstUserDef(req.GetUserDefinitions()))
 	if int32(len(g.members[gsid])) >= s.GetMaxParticipantCount() && !memberOf(g.members[gsid], ud.GetUser()) {
 		return nil, status.Error(codes.ResourceExhausted, "game session is full")
 	}
@@ -445,9 +392,14 @@ func memberOf(list []*mmpb.UserSession, user string) bool {
 }
 
 // SyncGameSession lets the host push its current session (properties, capacity, public flag).
+// Only the host: the first member is the one that created the farm.
 func (g *sessionServer) SyncGameSession(ctx context.Context, req *mmpb.SyncGameSessionRequest) (*mmpb.SyncGameSessionResponse, error) {
 	if !req.GetKeepAliveOnly() {
 		diag("SyncGameSession", req)
+	}
+	caller, err := callerUser(ctx)
+	if err != nil {
+		return nil, err
 	}
 	gsid := lastSeg(req.GetGameSession().GetName())
 	g.mu.Lock()
@@ -455,6 +407,9 @@ func (g *sessionServer) SyncGameSession(ctx context.Context, req *mmpb.SyncGameS
 	s := g.sessions[gsid]
 	if s == nil {
 		return nil, status.Errorf(codes.NotFound, "game session %q not found", req.GetGameSession().GetName())
+	}
+	if mem := g.members[gsid]; len(mem) == 0 || lastSeg(mem[0].GetUser()) != lastSeg(caller) {
+		return nil, status.Error(codes.PermissionDenied, "only the host syncs a game session")
 	}
 	if in := req.GetGameSession(); !req.GetKeepAliveOnly() && in != nil {
 		if in.Properties != nil {
@@ -520,14 +475,15 @@ func (g *sessionServer) AllocateIceServerSet(ctx context.Context, req *mmpb.Allo
 	// rejects it silently and never sends a single STUN probe — which is exactly what left our
 	// host's session mesh unstarted (glue stuck in CreateSessionAsync, no station, no lobby data).
 	tn := tenantFromCtx(ctx)
-	user := req.GetUser()
-	if user == "" {
-		user = tn + "/users/" + uidFromCtx(ctx)
+	// The credentials are minted for the caller, whoever the request names.
+	user, err := callerUser(ctx)
+	if err != nil {
+		return nil, err
 	}
-	stunHost, stunPort, turnHost, turnPort := iceFor(uidFromCtx(ctx))
+	stunHost, stunPort, turnHost, turnPort := iceFor(lastSeg(user))
 	exp := time.Now().Add(time.Hour).Unix()
 	turnUser := fmt.Sprintf("%d:%s", exp, user)
-	mac := hmac.New(sha1.New, []byte(envOr("NPLN_TURN_SECRET", "openpak-turn")))
+	mac := hmac.New(sha1.New, []byte(os.Getenv("NPLN_TURN_SECRET"))) // required at startup, see cmd/npln
 	mac.Write([]byte(turnUser))
 	set := &mmpb.IceServerSet{
 		Name:       tn + "/iceServerSets/static",

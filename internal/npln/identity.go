@@ -208,7 +208,17 @@ func verifyJWT(tok string) (payload []byte, ok bool) {
 		return nil, false
 	}
 	payload, err = base64.RawURLEncoding.DecodeString(p[1])
-	return payload, err == nil
+	if err != nil {
+		return nil, false
+	}
+	// A token we signed is still only good until its exp: every token minted here carries one.
+	var c struct {
+		Exp int64 `json:"exp"`
+	}
+	if json.Unmarshal(payload, &c) != nil || c.Exp == 0 || time.Now().Unix() >= c.Exp {
+		return nil, false
+	}
+	return payload, true
 }
 
 func accountID(uid string) string { // "u-xyz…" -> "a-ayz…", the shape Nintendo's aid has
@@ -241,7 +251,8 @@ func mintSessionToken(uid, tenant, gsName, userSess, team, attrJSON, ltcyJSON st
 	return signJWT(
 		map[string]any{"alg": "ES256", "kid": kid},
 		map[string]any{
-			"exp": now.Add(time.Hour).Unix(), "iat": now.Unix(), "iss": "gss", "sub": uid,
+			// Same life as the Ttl gamesync advertises with it: exp is enforced on every use.
+			"exp": now.Add(tokenTTL).Unix(), "iat": now.Unix(), "iss": "gss", "sub": uid,
 			"gamesync": map[string]any{
 				"attr": attrJSON, "gsid": lastSeg(gsName), "ltcy": ltcyJSON, "team": team,
 				"tid": strings.TrimPrefix(tenant, "tenants/"), "typ": 1, "uid": uid, "usid": lastSeg(userSess),
@@ -281,22 +292,62 @@ func pidFromRefresh(tok string) (uint64, bool) {
 	return pid, err == nil && pid != 0
 }
 
-// callerPID reads the PID back from the bearer access token (signature verified with our key).
-func callerPID(ctx context.Context) (uint64, bool) {
+// bearer reads the PID and NPLN user id back from the bearer access token (signature and
+// expiry verified with our key). A gamesync session token has no npln claim and does not pass.
+func bearer(ctx context.Context) (pid uint64, uid string, ok bool) {
 	a := strings.TrimSpace(mdGet(ctx, "authorization"))
 	a = strings.TrimPrefix(strings.TrimPrefix(a, "Bearer "), "bearer ")
 	payload, ok := verifyJWT(a)
 	if !ok {
-		return 0, false
+		return 0, "", false
 	}
 	var c struct {
+		Sub  string `json:"sub"`
 		Npln struct {
 			ExtID string `json:"ext_id"`
 		} `json:"npln"`
 	}
 	if json.Unmarshal(payload, &c) != nil {
-		return 0, false
+		return 0, "", false
 	}
 	pid, err := strconv.ParseUint(c.Npln.ExtID, 16, 64)
-	return pid, err == nil && pid != 0
+	if err != nil || pid == 0 {
+		return 0, "", false
+	}
+	return pid, c.Sub, true
+}
+
+func callerPID(ctx context.Context) (uint64, bool) {
+	pid, _, ok := bearer(ctx)
+	return pid, ok
+}
+
+// trustUIDMetadata restores the pre-2026-09 behaviour of naming the caller by the client-sent
+// uid header. ponytail: a knob, not a default -- it exists only for a console run that shows
+// session RPCs arriving without a bearer, which nothing measured so far suggests.
+var trustUIDMetadata = os.Getenv("NPLN_TRUST_UID_METADATA") == "1"
+
+// callerUser is the caller's user resource name, from the bearer token. The uid request
+// metadata is client-controlled and is not an identity.
+func callerUser(ctx context.Context) (string, error) {
+	if _, uid, ok := bearer(ctx); ok && uid != "" {
+		return tenantFromCtx(ctx) + "/users/" + uid, nil
+	}
+	if uid := uidFromCtx(ctx); trustUIDMetadata && uid != "" {
+		return tenantFromCtx(ctx) + "/users/" + uid, nil
+	}
+	return "", status.Error(codes.Unauthenticated, "no bearer token for this call")
+}
+
+// userPathForPID names an already-proven PID: from the bearer when it is the same player, else
+// through the adapter. It is what RefreshToken uses instead of the user the request claims.
+func userPathForPID(ctx context.Context, pid uint64) (string, error) {
+	if p, uid, ok := bearer(ctx); ok && p == pid && uid != "" {
+		return tenantFromCtx(ctx) + "/users/" + uid, nil
+	}
+	acc, err := lookupAccount(pid)
+	if err != nil {
+		return "", status.Error(codes.Unauthenticated, "identity could not be resolved")
+	}
+	return tenantFromCtx(ctx) + "/users/" + acc.UserID(), nil
 }
