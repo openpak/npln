@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package nn.npln.friends.v1;
+
+import "google/protobuf/timestamp.proto";
+
+import "proto/common/value.proto";
+
+option go_package = "openpak/splatoon-3/proto/friends/v1;friends";
+
+message FriendUser {
+  string name = 1;
+
+  string friend_user = 2;
+
+  string nsa_id = 3;
+
+  Relationship relationship = 4;
+
+  message Relationship {
+    bool favorite = 1;
+
+    bool presence_deliverable = 2;
+
+    bool presence_receivable = 3;
+  }
+}
+
+message BlockingUser {
+  string name = 1;
+
+  string blocking_user = 2;
+
+  string nsa_id = 3;
+}
+
+message Presence {
+  string name = 1;
+
+  State state = 2;
+
+  map<string, nn.npln.common.Value> attributes = 3;
+
+  google.protobuf.Timestamp last_online_time = 4;
+
+  bool unsubscribed = 5;
+
+  DebugInfo debug_info = 6;
+
+  message DebugInfo {
+    bool debug = 1;
+  }
+}
+
+message FriendNsa {
+  string name = 1;
+
+  string friend_nsa = 2;
+
+  bool favorite = 3;
+}
+
+message BlockingNsa {
+  string name = 1;
+
+  string blocking_nsa = 2;
+}
+
+message NsaSettings {
+  string name = 1;
+
+  Range presence_open_range = 2;
+}
+
+enum State {
+  STATE_UNSPECIFIED = 0;
+
+  ONLINE = 1;
+
+  OFFLINE = 2;
+
+  INACTIVE = 3;
+}
+
+enum Range {
+  RANGE_UNSPECIFIED = 0;
+
+  PRIVATE = 1;
+
+  FAVORITE_FRIENDS = 2;
+
+  FRIENDS = 3;
+}
