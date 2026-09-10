@@ -6,6 +6,8 @@
 //	NX_INTERNAL_KEY        nx-baas's NX_INTERNAL_KEY, sent as X-Internal-Key
 //	NPLN_JWT_KEY           path of the persisted ES256 signing key
 //	NPLN_RELAY_HOST/PORT, NPLN_STUN_HOST/PORT, NPLN_TURN_HOST/PORT, NPLN_LATENCY_HOST  session endpoints
+//	NPLN_TURN_SECRET       coturn --static-auth-secret; the TURN credentials handed to the game are an HMAC over it (required)
+//	NPLN_TRUST_UID_METADATA=1  name the caller by the client-sent uid header instead of the bearer (only for a console run that shows session RPCs without a bearer)
 package main
 
 import (
@@ -45,6 +47,11 @@ func main() {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("listen %s: %v", addr, err)
+	}
+	// The TURN credentials handed to the game are an HMAC over this; coturn holds the same value.
+	// A guessable default would let anyone relay through the box, so there is none.
+	if os.Getenv("NPLN_TURN_SECRET") == "" {
+		log.Fatal("NPLN_TURN_SECRET is required: it must match coturn's --static-auth-secret")
 	}
 	// A plain HTTP health port beside the gRPC one. The service port answers
 	// only TLS+h2, so anything checking on it either has to speak gRPC or
