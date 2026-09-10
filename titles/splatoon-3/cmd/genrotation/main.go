@@ -19,7 +19,7 @@ import (
 	"os"
 	"time"
 
-	"openpak/splatoon-3/internal/rotation"
+	"github.com/openpak/npln/titles/splatoon-3/rotation"
 )
 
 // The versus rotation turns on a two-hour boundary. Co-op shifts and seasons are longer; the
