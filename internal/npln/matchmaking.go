@@ -25,12 +25,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -107,9 +109,18 @@ func newSession(tenant string, maxParticipants int32, public bool, password stri
 	return gs
 }
 
+// snapshot is what leaves the store: gRPC marshals a response after the handler returns, so a
+// stored session must never be handed out by pointer while another RPC may be appending to it.
+// Callers hold store.Lock.
+func snapshot(gs *mmpb.GameSession) *mmpb.GameSession {
+	return proto.Clone(gs).(*mmpb.GameSession)
+}
+
 // addUser records a user in a session and returns its user-session, minting an id-token gamesync
-// can later exchange for a session token.
-func addUser(gs *mmpb.GameSession, user string) *mmpb.MatchedUserSession {
+// can later exchange for a session token, plus a snapshot of the session as it then stands. The
+// capacity check happens under the same lock as the append, so a full room cannot be overfilled
+// by two joins racing each other.
+func addUser(gs *mmpb.GameSession, user string) (*mmpb.MatchedUserSession, *mmpb.GameSession, error) {
 	us := &mmpb.UserSession{
 		Name:       gs.Name + "/userSessions/" + newID(),
 		User:       user,
@@ -118,19 +129,26 @@ func addUser(gs *mmpb.GameSession, user string) *mmpb.MatchedUserSession {
 	}
 	idTok := newID()
 	store.Lock()
+	defer store.Unlock()
+	if int32(len(gs.UserSessions)) >= gs.MaxParticipantCount {
+		return nil, nil, status.Error(codes.FailedPrecondition, "session full")
+	}
 	gs.UserSessions = append(gs.UserSessions, us)
 	gs.CurrentParticipantCount = int32(len(gs.UserSessions))
 	store.idToken[idTok] = gs.Name
-	store.Unlock()
 	return &mmpb.MatchedUserSession{
 		UserDefinition:     &mmpb.UserDefinition{User: user},
 		UserSession:        us.Name,
 		MatchmakingIdToken: idTok,
-	}
+	}, snapshot(gs), nil
 }
 
 func (s *gameSessionService) CreateGameSessionCreationTicket(ctx context.Context, req *mmpb.CreateGameSessionCreationTicketRequest) (*mmpb.GameSessionCreationTicket, error) {
 	tenant := resolveTenant(req.GetParent())
+	host, err := callerUser(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
 	max := matchSize()
 	pwd := ""
 	if t := req.GetGameSessionCreationTicket(); t != nil && t.GetGameSession() != nil {
@@ -142,12 +160,15 @@ func (s *gameSessionService) CreateGameSessionCreationTicket(ctx context.Context
 	gs := newSession(tenant, max, false, pwd)
 	// The host is the first participant. A relay resolves the room the moment it is created — there
 	// is no server-side match to wait for.
-	matched := addUser(gs, callerUser(ctx, tenant))
+	matched, snap, err := addUser(gs, host)
+	if err != nil {
+		return nil, err
+	}
 	log.Printf("[MM] CreateGameSessionCreationTicket -> session %s (host room)", lastSeg(gs.Name))
 	return &mmpb.GameSessionCreationTicket{
 		Name:                tenant + "/gameSessionCreationTickets/" + newID(),
 		State:               mmpb.GameSessionCreationTicket_SUCCEEDED,
-		GameSession:         gs,
+		GameSession:         snap,
 		MatchedUserSessions: []*mmpb.MatchedUserSession{matched},
 	}, nil
 }
@@ -166,12 +187,12 @@ func (s *gameSessionService) CancelGameSessionCreationTicket(_ context.Context, 
 
 func (s *gameSessionService) GetGameSession(_ context.Context, req *mmpb.GetGameSessionRequest) (*mmpb.GameSession, error) {
 	store.Lock()
+	defer store.Unlock()
 	gs := store.sessions[req.GetName()]
-	store.Unlock()
 	if gs == nil {
 		return nil, status.Errorf(codes.NotFound, "game session %q", req.GetName())
 	}
-	return gs, nil
+	return snapshot(gs), nil
 }
 
 func (s *gameSessionService) BatchGetGameSessions(_ context.Context, req *mmpb.BatchGetGameSessionsRequest) (*mmpb.BatchGetGameSessionsResponse, error) {
@@ -179,7 +200,7 @@ func (s *gameSessionService) BatchGetGameSessions(_ context.Context, req *mmpb.B
 	store.Lock()
 	for _, n := range req.GetNames() {
 		if gs := store.sessions[n]; gs != nil {
-			out.GameSessions = append(out.GameSessions, gs)
+			out.GameSessions = append(out.GameSessions, snapshot(gs))
 		}
 	}
 	store.Unlock()
@@ -193,7 +214,7 @@ func (s *gameSessionService) QueryGameSessions(_ context.Context, req *mmpb.Quer
 	store.Lock()
 	for _, gs := range store.sessions {
 		if gs.IsPublic && gs.CurrentParticipantCount < gs.MaxParticipantCount {
-			out.GameSessions = append(out.GameSessions, gs)
+			out.GameSessions = append(out.GameSessions, snapshot(gs))
 		}
 	}
 	store.Unlock()
@@ -207,27 +228,40 @@ func (s *gameSessionService) JoinGameSession(ctx context.Context, req *mmpb.Join
 	if gs == nil {
 		return nil, status.Errorf(codes.NotFound, "game session %q", req.GetName())
 	}
+	user, err := callerUser(ctx, resolveTenant(gs.GetName()))
+	if err != nil {
+		return nil, err
+	}
 	if gs.GetPassword() != "" && gs.GetPassword() != req.GetPassword() {
 		return nil, status.Error(codes.PermissionDenied, "wrong session password")
 	}
-	if gs.GetCurrentParticipantCount() >= gs.GetMaxParticipantCount() {
-		return nil, status.Error(codes.FailedPrecondition, "session full")
+	matched, snap, err := addUser(gs, user)
+	if err != nil {
+		return nil, err
 	}
-	matched := addUser(gs, callerUser(ctx, resolveTenant(gs.GetName())))
-	log.Printf("[MM] JoinGameSession %s -> %d/%d", lastSeg(gs.Name), gs.CurrentParticipantCount, gs.MaxParticipantCount)
-	return &mmpb.JoinGameSessionResponse{GameSession: gs, MatchedUserSessions: []*mmpb.MatchedUserSession{matched}}, nil
+	log.Printf("[MM] JoinGameSession %s -> %d/%d", lastSeg(snap.Name), snap.CurrentParticipantCount, snap.MaxParticipantCount)
+	return &mmpb.JoinGameSessionResponse{GameSession: snap, MatchedUserSessions: []*mmpb.MatchedUserSession{matched}}, nil
 }
 
 // SyncGameSession is the host's periodic heartbeat and capacity update: it pushes the session it
-// holds and reads back the current roster. A keep-alive-only sync just refreshes liveness.
-func (s *gameSessionService) SyncGameSession(_ context.Context, req *mmpb.SyncGameSessionRequest) (*mmpb.SyncGameSessionResponse, error) {
+// holds and reads back the current roster. A keep-alive-only sync just refreshes liveness. Only
+// the host: the first user-session is the one that created the room.
+func (s *gameSessionService) SyncGameSession(ctx context.Context, req *mmpb.SyncGameSessionRequest) (*mmpb.SyncGameSessionResponse, error) {
 	in := req.GetGameSession()
 	if in == nil {
 		return &mmpb.SyncGameSessionResponse{}, nil
 	}
+	caller := callerUID(ctx)
 	store.Lock()
+	defer store.Unlock()
 	gs := store.sessions[in.GetName()]
-	if gs != nil && !req.GetKeepAliveOnly() {
+	if gs == nil {
+		return &mmpb.SyncGameSessionResponse{}, nil
+	}
+	if len(gs.UserSessions) == 0 || caller == "" || lastSeg(gs.UserSessions[0].GetUser()) != caller {
+		return nil, status.Error(codes.PermissionDenied, "only the host syncs a game session")
+	}
+	if !req.GetKeepAliveOnly() {
 		// The host owns capacity and properties; mirror what it reports without dropping the roster
 		// we track.
 		gs.MaxParticipantCount = in.GetMaxParticipantCount()
@@ -236,19 +270,14 @@ func (s *gameSessionService) SyncGameSession(_ context.Context, req *mmpb.SyncGa
 			gs.State = in.GetState()
 		}
 	}
-	var users []*mmpb.UserSession
-	if gs != nil {
-		users = gs.UserSessions
-	}
-	store.Unlock()
-	return &mmpb.SyncGameSessionResponse{UserSessions: users}, nil
+	return &mmpb.SyncGameSessionResponse{UserSessions: snapshot(gs).UserSessions}, nil
 }
 
 func (s *gameSessionService) ListUserSessions(_ context.Context, req *mmpb.ListUserSessionsRequest) (*mmpb.ListUserSessionsResponse, error) {
 	out := &mmpb.ListUserSessionsResponse{}
 	store.Lock()
 	if gs := store.sessions[req.GetParent()]; gs != nil {
-		out.UserSessions = gs.UserSessions
+		out.UserSessions = snapshot(gs).UserSessions
 	}
 	store.Unlock()
 	return out, nil
@@ -260,7 +289,7 @@ func (s *gameSessionService) GetUserSession(_ context.Context, req *mmpb.GetUser
 	for _, gs := range store.sessions {
 		for _, us := range gs.UserSessions {
 			if us.Name == req.GetName() {
-				return us, nil
+				return proto.Clone(us).(*mmpb.UserSession), nil
 			}
 		}
 	}
@@ -271,17 +300,15 @@ func (s *gameSessionService) GetUserSession(_ context.Context, req *mmpb.GetUser
 // session (invitations, re-joins).
 func (s *gameSessionService) IssueMatchmakingIdToken(_ context.Context, req *mmpb.IssueMatchmakingIdTokenRequest) (*mmpb.IssueMatchmakingIdTokenResponse, error) {
 	store.Lock()
+	defer store.Unlock()
 	gs := store.sessions[req.GetGameSession()]
-	store.Unlock()
 	if gs == nil {
 		return nil, status.Errorf(codes.NotFound, "game session %q", req.GetGameSession())
 	}
-	out := &mmpb.IssueMatchmakingIdTokenResponse{GameSession: gs}
+	out := &mmpb.IssueMatchmakingIdTokenResponse{GameSession: snapshot(gs)}
 	for _, u := range req.GetUsers() {
 		idTok := newID()
-		store.Lock()
 		store.idToken[idTok] = gs.Name
-		store.Unlock()
 		out.MatchedUserSessions = append(out.MatchedUserSessions, &mmpb.MatchedUserSession{
 			UserDefinition: &mmpb.UserDefinition{User: u}, MatchmakingIdToken: idTok,
 		})
@@ -345,7 +372,7 @@ func (s *gameSessionService) AllocateIceServerSet(_ context.Context, req *mmpb.A
 	stunPort := int32(envInt("NPLN_STUN_PORT", 3478))
 	turnHost := envOr("NPLN_TURN_HOST", stunHost)
 	turnPort := int32(envInt("NPLN_TURN_PORT", 3478))
-	secret := envOr("NPLN_TURN_SECRET", "")
+	secret := os.Getenv("NPLN_TURN_SECRET") // required at startup, see cmd/npln
 
 	ttl := time.Hour // comfortably longer than a battle; the client re-allocates as needed
 	user := lastSeg(req.GetUser())
@@ -388,22 +415,12 @@ type matchmaker struct {
 	mmpb.UnimplementedMatchmakerServer
 }
 
-// callerUser resolves the caller's user resource name from the bearer token, falling back to a
-// tenant-anonymous name when the token is absent (some session RPCs carry the uid in metadata).
-func callerUser(ctx context.Context, tenant string) string {
-	if pid, ok := callerPID(ctx); ok {
-		if uid := uidForPID(pid); uid != "" {
-			return tenant + "/users/" + uid
-		}
-	}
-	if uid := mdGet(ctx, "uid"); uid != "" {
-		return tenant + "/users/" + uid
-	}
-	return tenant + "/users/anonymous"
-}
-
 func (m *matchmaker) CreateMatchmakingTicket(ctx context.Context, req *mmpb.CreateMatchmakingTicketRequest) (*mmpb.MatchmakingTicket, error) {
 	tenant := resolveTenant(req.GetParent())
+	user, err := callerUser(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
 	cfg := ""
 	if t := req.GetMatchmakingTicket(); t != nil {
 		cfg = t.GetMatchmakingConfig()
@@ -412,15 +429,16 @@ func (m *matchmaker) CreateMatchmakingTicket(ctx context.Context, req *mmpb.Crea
 		Name:              tenant + "/matchmakingTickets/" + newID(),
 		MatchmakingConfig: cfg,
 		State:             mmpb.MatchmakingTicket_SEARCHING,
-		UserDefinitions:   []*mmpb.UserDefinition{{User: callerUser(ctx, tenant)}},
+		UserDefinitions:   []*mmpb.UserDefinition{{User: user}},
 	}
 	store.Lock()
 	store.tickets[t.Name] = t
 	store.pending[cfg] = append(store.pending[cfg], t)
 	tryFormMatch(tenant, cfg)
+	out := proto.Clone(t).(*mmpb.MatchmakingTicket)
 	store.Unlock()
-	log.Printf("[MM] CreateMatchmakingTicket %s cfg=%q state=%s", lastSeg(t.Name), short(cfg), t.State)
-	return t, nil
+	log.Printf("[MM] CreateMatchmakingTicket %s cfg=%q state=%s", lastSeg(out.Name), short(cfg), out.State)
+	return out, nil
 }
 
 // tryFormMatch pools tickets by config and, once NPLN_MATCH_SIZE of them are waiting, resolves
@@ -458,12 +476,14 @@ func tryFormMatch(tenant, cfg string) {
 		gs.UserSessions = append(gs.UserSessions, us)
 		store.idToken[idTok] = gs.Name
 		t.State = mmpb.MatchmakingTicket_SUCCEEDED
-		t.GameSession = gs
 		t.MatchedUserSessions = []*mmpb.MatchedUserSession{{
 			UserDefinition: &mmpb.UserDefinition{User: user}, UserSession: us.Name, MatchmakingIdToken: idTok,
 		}}
 	}
 	gs.CurrentParticipantCount = int32(len(gs.UserSessions))
+	for _, t := range waiting {
+		t.GameSession = snapshot(gs) // the ticket's copy, complete; the live one keeps changing
+	}
 	store.pending[cfg] = nil
 	log.Printf("[MM] match formed: %d players -> session %s", len(waiting), lastSeg(gs.Name))
 }
@@ -481,6 +501,9 @@ func (m *matchmaker) TrackMatchmakingTicket(req *mmpb.TrackMatchmakingTicketRequ
 	for {
 		store.Lock()
 		tk := store.tickets[name]
+		if tk != nil {
+			tk = proto.Clone(tk).(*mmpb.MatchmakingTicket) // Send marshals after the lock is gone
+		}
 		store.Unlock()
 		if tk == nil {
 			return status.Errorf(codes.NotFound, "matchmaking ticket %q", name)
@@ -546,10 +569,10 @@ func sessionForIDToken(tok string) (*mmpb.GameSession, bool) {
 	store.Lock()
 	defer store.Unlock()
 	name, ok := store.idToken[tok]
-	if !ok {
+	if !ok || store.sessions[name] == nil {
 		return nil, false
 	}
-	return store.sessions[name], store.sessions[name] != nil
+	return snapshot(store.sessions[name]), true
 }
 
 // roomCode is a short human-typable code: five upper-case letters/digits, avoiding the ambiguous

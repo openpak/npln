@@ -271,16 +271,11 @@ func (p *presenceServer) SubscribePresences(req *friendspb.SubscribePresencesReq
 // ping, and the game reports a communication error although nothing was disconnected.
 func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveServer) error {
 	ctx := stream.Context()
-	// This stream arrives with the uid in metadata and not always with a usable token, so the
-	// pairing recorded at authentication is what names the player here.
-	uid := mdGet(ctx, "uid")
+	// The bearer names the player. Whether this stream always carries one is unmeasured; if a
+	// console run shows it does not, NPLN_TRUST_UID_METADATA=1 is the knob, not a code change.
+	uid := callerUID(ctx)
 	if uid == "" {
-		if pid, ok := callerPID(ctx); ok {
-			uid = uidForPID(pid)
-		}
-	}
-	if uid == "" {
-		log.Printf("[Presence] KeepAlive with no identity: neither a usable token nor a known pairing")
+		log.Printf("[Presence] KeepAlive with no identity: no usable bearer token")
 	}
 	goOnline(uid)
 	defer goOffline(uid)

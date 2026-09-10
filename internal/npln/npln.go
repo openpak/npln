@@ -218,37 +218,6 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 	return acc.PID, tenant + "/users/" + acc.UserID(), nil
 }
 
-// pairing remembers which NPLN user id belongs to a PID. Authentication is the only place both
-// are visible at once: the PID travels inside the access token, the user id travels as request
-// metadata, and some long-lived streams — PresenceService/KeepAlive in particular — arrive with
-// one and not the other.
-//
-// ponytail: an unbounded in-memory map, so a restart forgets every pairing and a long-running
-// process never releases one. Both are fine at a lobby's scale; give it a TTL if it ever holds
-// more than a test group.
-var pairing = struct {
-	sync.Mutex
-	uid map[uint64]string
-}{uid: map[uint64]string{}}
-
-func rememberPairing(pid uint64, userPath string) {
-	uid := lastSeg(userPath)
-	if pid == 0 || uid == "" {
-		return
-	}
-	pairing.Lock()
-	pairing.uid[pid] = uid
-	pairing.Unlock()
-}
-
-// uidForPID resolves a PID to the user id recorded for it at authentication, or "" if this
-// process never authenticated that player.
-func uidForPID(pid uint64) string {
-	pairing.Lock()
-	defer pairing.Unlock()
-	return pairing.uid[pid]
-}
-
 // ---- ES256 access tokens ----
 
 var (
@@ -313,7 +282,17 @@ func verifyJWT(tok string) (payload []byte, ok bool) {
 		return nil, false
 	}
 	payload, err = base64.RawURLEncoding.DecodeString(p[1])
-	return payload, err == nil
+	if err != nil {
+		return nil, false
+	}
+	// A token we signed is still only good until its exp: every token minted here carries one.
+	var c struct {
+		Exp int64 `json:"exp"`
+	}
+	if json.Unmarshal(payload, &c) != nil || c.Exp == 0 || time.Now().Unix() >= c.Exp {
+		return nil, false
+	}
+	return payload, true
 }
 
 func accountID(uid string) string { // "u-xyz…" -> "a-ayz…", the shape Nintendo's aid has
@@ -350,7 +329,6 @@ func refreshKey() []byte {
 }
 
 func newToken(pid uint64, userPath, tenant string) *authpb.Token {
-	rememberPairing(pid, userPath)
 	mac := hmac.New(sha256.New, refreshKey())
 	body := fmt.Sprintf("openpak-npln-refresh.%d", pid)
 	mac.Write([]byte(body))
@@ -376,24 +354,73 @@ func pidFromRefresh(tok string) (uint64, bool) {
 	return pid, err == nil && pid != 0
 }
 
-// callerPID reads the PID back from the bearer access token (signature verified with our key).
-func callerPID(ctx context.Context) (uint64, bool) {
+// bearer reads the PID and NPLN user id back from the bearer access token (signature and
+// expiry verified with our key). Both travel inside the token, so no pairing table is needed.
+func bearer(ctx context.Context) (pid uint64, uid string, ok bool) {
 	a := strings.TrimSpace(mdGet(ctx, "authorization"))
 	a = strings.TrimPrefix(strings.TrimPrefix(a, "Bearer "), "bearer ")
 	payload, ok := verifyJWT(a)
 	if !ok {
-		return 0, false
+		return 0, "", false
 	}
 	var c struct {
+		Sub  string `json:"sub"`
 		Npln struct {
 			ExtID string `json:"ext_id"`
 		} `json:"npln"`
 	}
 	if json.Unmarshal(payload, &c) != nil {
-		return 0, false
+		return 0, "", false
 	}
 	pid, err := strconv.ParseUint(c.Npln.ExtID, 16, 64)
-	return pid, err == nil && pid != 0
+	if err != nil || pid == 0 {
+		return 0, "", false
+	}
+	return pid, c.Sub, true
+}
+
+func callerPID(ctx context.Context) (uint64, bool) {
+	pid, _, ok := bearer(ctx)
+	return pid, ok
+}
+
+// trustUIDMetadata restores the pre-2026-09 behaviour of naming the caller by the client-sent
+// uid header. ponytail: a knob, not a default -- it exists only for a console run that shows a
+// session or presence RPC arriving without a bearer, which is unmeasured for this title.
+var trustUIDMetadata = os.Getenv("NPLN_TRUST_UID_METADATA") == "1"
+
+// callerUID is the caller's NPLN user id, from the bearer token. The uid request metadata is
+// client-controlled and is not an identity.
+func callerUID(ctx context.Context) string {
+	if _, uid, ok := bearer(ctx); ok && uid != "" {
+		return uid
+	}
+	if uid := mdGet(ctx, "uid"); trustUIDMetadata && uid != "" {
+		return uid
+	}
+	return ""
+}
+
+// callerUser is the caller's user resource name under the given tenant.
+func callerUser(ctx context.Context, tenant string) (string, error) {
+	uid := callerUID(ctx)
+	if uid == "" {
+		return "", status.Error(codes.Unauthenticated, "no bearer token for this call")
+	}
+	return tenant + "/users/" + uid, nil
+}
+
+// userPathForPID names an already-proven PID: from the bearer when it is the same player, else
+// through the adapter. It is what RefreshToken uses instead of the user the request claims.
+func userPathForPID(ctx context.Context, pid uint64) (string, error) {
+	if p, uid, ok := bearer(ctx); ok && p == pid && uid != "" {
+		return tenantFromCtx(ctx) + "/users/" + uid, nil
+	}
+	acc, err := lookupAccount(pid)
+	if err != nil {
+		return "", status.Error(codes.Unauthenticated, "identity could not be resolved")
+	}
+	return tenantFromCtx(ctx) + "/users/" + acc.UserID(), nil
 }
 
 // ---- gRPC plumbing ----
