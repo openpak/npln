@@ -26,8 +26,15 @@ import (
 	mmpb "github.com/openpak/npln/proto/matchmaking/v1"
 )
 
-// Tenant is Stardew Valley's NPLN tenant (observed in every RPC's npln-tenant-id).
-const Tenant = "tenants/t-9f607adf-lp1"
+// Tenant is the hosted title's NPLN tenant (observed in every RPC's npln-tenant-id).
+// Stardew Valley's by default; NewServer sets it for a title that reuses this service set.
+//
+// ponytail: a package variable, because the binary hosts one title per process (see
+// cmd/nplnd). Make it a Server field the day two tenants share a process.
+var Tenant = StardewTenant
+
+// StardewTenant is Stardew Valley's tenant.
+const StardewTenant = "tenants/t-9f607adf-lp1"
 
 // AppID is Stardew Valley's title id, carried in the access token's npln.app_id claim.
 const AppID = "0100e65002bb8000"
@@ -140,7 +147,11 @@ func (c *connTracer) HandleConn(_ context.Context, s stats.ConnStats) {
 }
 
 // NewServer wires every service. creds==nil gives plaintext h2c (behind a TLS-terminating edge).
-func NewServer(creds credentials.TransportCredentials) *grpc.Server {
+// tenant is the title's NPLN tenant ("tenants/t-…-lp1"); "" keeps Stardew Valley's.
+func NewServer(creds credentials.TransportCredentials, tenant string) *grpc.Server {
+	if tenant != "" {
+		Tenant = tenant
+	}
 	startRegions()
 	opts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(typeUnary),
