@@ -1,0 +1,59 @@
+# stardew-valley on a single public box (tested target: OCI Ampere A1, 4 OCPU / 24 GB,
+# Ubuntu, arm64) plugged into an OpenPak deployment (account core + nx-baas).
+#
+# Everything the game reaches directly lives here: the NPLN tenant (gRPC/TLS), the gamesync
+# session relay (same listener, a second public port is NOT needed), and STUN/TURN. Identity,
+# BAAS and friends come from nx-baas's internal API (NX_INTERNAL_URL); ports follow
+# Openpak/ports.md (21010 = Stardew NPLN tenant, Traefik SNI passthrough target).
+#
+#   cp example.env .env && edit          # never commit .env
+#   docker compose up -d --build
+services:
+  stardew:
+    build:
+      context: ../..
+      dockerfile: Dockerfile             # the same image the release workflow publishes
+    restart: unless-stopped
+    network_mode: host                    # gRPC on NPLN_LISTEN, UDP latency probes; simplest on a bare VM
+    environment:
+      NPLN_LISTEN: ":21010"               # Traefik forwards the tenant SNI here; gamesync uses the same port
+      CERT_FILE: /certs/npln.pem          # SAN: t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net, gamesync.npln.nintendo.net
+      KEY_FILE: /certs/npln.key
+      NPLN_JWT_KEY: /app/data/npln_jwt_es256.key   # /app/data is owned by the image's unprivileged user
+      NX_INTERNAL_URL: ${NX_INTERNAL_URL:-http://127.0.0.1:20070}
+      NX_INTERNAL_KEY: ${NX_INTERNAL_KEY}
+      NPLN_RELAY_HOST: ${PUBLIC_IP}
+      NPLN_RELAY_PORT: "21010"
+      NPLN_STUN_HOST: ${PUBLIC_IP}
+      NPLN_TURN_HOST: ${PUBLIC_IP}
+      NPLN_TURN_SECRET: ${NPLN_TURN_SECRET}
+      NPLN_LATENCY_HOST: ${PUBLIC_IP}
+      GRPC_GO_LOG_SEVERITY_LEVEL: warning
+      # NPLN_GS_DIAG: "1"                 # NEVER in production: logs station blobs and payloads
+    volumes:
+      - ./certs:/certs:ro
+      - stardew-data:/app/data
+
+  turn:
+    # coturn with the Pia interoperability patch (ALLOCATE without REQUESTED-TRANSPORT).
+    build:
+      context: .
+      dockerfile: Dockerfile.coturn
+    restart: unless-stopped
+    network_mode: host                    # relay ports 49152-65535/udp must reach the box directly
+    command:
+      - "-n"
+      - "--no-tls"
+      - "--no-dtls"
+      - "--listening-port=3478"
+      - "--use-auth-secret"
+      - "--static-auth-secret=${NPLN_TURN_SECRET}"
+      - "--realm=openpak.org"
+      - "--fingerprint"
+      - "--external-ip=${PUBLIC_IP}"       # behind 1:1 NAT: relays bind locally, advertise the public IP
+      - "--min-port=49152"
+      - "--max-port=65535"
+      - "--log-file=stdout"
+
+volumes:
+  stardew-data:
