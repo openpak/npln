@@ -9,7 +9,7 @@ Stardew Valley and Splatoon 3 use instead of NEX.
 | --- | --- | --- | --- |
 | [`titles/stardew-valley`](titles/stardew-valley) | `stardew-valley` | 21010 (health 21011) | live, console-verified |
 | [`titles/splatoon-3`](titles/splatoon-3) | `splatoon-3` | 21012 (health 21013), session 22210 | early, not run against retail |
-| [`titles/super-mario-bros-wonder`](titles/super-mario-bros-wonder) | `super-mario-bros-wonder` | 21014 (health 21015) | scaffold: Stardew's service set under Wonder's tenant; `NPLN_TENANT` unknown, console needs a client patch (v1.2.1 pins its certificate) |
+| [`titles/super-mario-bros-wonder`](titles/super-mario-bros-wonder) | `super-mario-bros-wonder` | 21014 (health 21015) | early: Stardew's service set under Wonder's tenant `t-ba973ec6-lp1`; deployed, not console-verified; the console needs a client patch (v1.2.1 pins its certificate) |
 
 ## Shape
 
