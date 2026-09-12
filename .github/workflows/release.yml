@@ -16,12 +16,18 @@ permissions:
 jobs:
   image:
     runs-on: [self-hosted, linux, podman]
-    env:
-      REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json # job-scoped login; never the runner user's own
     steps:
       - uses: actions/checkout@v4
+      # REGISTRY_AUTH_FILE is set per STEP, not on the job: the `runner` context
+      # is not available in a job-level `env:`, and a job that references it
+      # fails as a "workflow file issue" -- no jobs, no logs, 0s, which is
+      # exactly how this repository's releases have been failing.
       - run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-      - run: |
+        env:
+          REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json # job-scoped login; never the runner user's own
+      - env:
+          REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
+        run: |
           set -e
           IMG="ghcr.io/${{ github.repository }}"
           case "${GITHUB_REF_NAME}" in v*) VER="${GITHUB_REF_NAME#v}";; *) VER="";; esac
