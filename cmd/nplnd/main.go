@@ -44,7 +44,7 @@ func main() {
 		// fixed]. grpc-exp is gRPC's own ALPN identifier and what a Nintendo
 		// NPLN server answers with; offering it first is what the client asked
 		// for. h2 stays for everything else, including our own probes.
-		NextProtos: []string{"grpc-exp", "h2"},
+		NextProtos: []string{"h2"},
 		MinVersion: tls.VersionTLS12,
 		GetConfigForClient: func(hi *tls.ClientHelloInfo) (*tls.Config, error) {
 			log.Printf("[TLS] ClientHello sni=%q alpn=%v", hi.ServerName, hi.SupportedProtos)
