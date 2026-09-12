@@ -9,6 +9,7 @@ package wonder
 
 import (
 	"errors"
+	"log"
 	"net"
 	"os"
 	"regexp"
@@ -34,7 +35,20 @@ var Title = host.Title{
 		if err != nil {
 			return err
 		}
-		return npln.NewServer(creds, tenant).Serve(lis)
+		srv := npln.NewServer(creds, tenant)
+		// The address a host's session is advertised at, dialled directly by
+		// every joiner rather than through Traefik, which only knows SNI.
+		// Without it a session is advertised at the relay default, 127.0.0.1,
+		// and nobody can join. 22220 is Wonder's block in ports.md.
+		if addr := env("NPLN_SESSION_LISTEN", ":22220"); addr != "" && addr != lis.Addr().String() {
+			if sl, err := net.Listen("tcp", addr); err != nil {
+				log.Printf("session endpoint: cannot listen on %s: %v", addr, err)
+			} else {
+				log.Printf("session/gamesync endpoint on %s (gRPC/TLS)", addr)
+				go func() { log.Printf("session endpoint: %v", srv.Serve(sl)) }()
+			}
+		}
+		return srv.Serve(lis)
 	},
 }
 
@@ -56,4 +70,11 @@ func Tenant() (string, error) {
 		return "", errors.New("NPLN_TENANT must look like tenants/t-XXXXXXXX-lp1, got " + t)
 	}
 	return t, nil
+}
+
+func env(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
 }
