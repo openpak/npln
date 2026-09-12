@@ -37,8 +37,15 @@ func main() {
 	}
 	creds := credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{cert},
-		NextProtos:   []string{"h2"},
-		MinVersion:   tls.VersionTLS12,
+		// The console lists "grpc-exp" FIRST and "h2" second. Advertising only
+		// h2 meant every console connection negotiated plain HTTP/2, created a
+		// server transport, and was hung up on immediately without a single
+		// RPC [runtime capture, 2026-09-12, after the certificate chain was
+		// fixed]. grpc-exp is gRPC's own ALPN identifier and what a Nintendo
+		// NPLN server answers with; offering it first is what the client asked
+		// for. h2 stays for everything else, including our own probes.
+		NextProtos: []string{"grpc-exp", "h2"},
+		MinVersion: tls.VersionTLS12,
 		GetConfigForClient: func(hi *tls.ClientHelloInfo) (*tls.Config, error) {
 			log.Printf("[TLS] ClientHello sni=%q alpn=%v", hi.ServerName, hi.SupportedProtos)
 			return nil, nil
