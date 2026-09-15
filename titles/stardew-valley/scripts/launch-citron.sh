@@ -43,7 +43,7 @@ for spec in t:18501:stardew t:18448:baas-jwks u:10025:nncs; do
         echo "warning: $name is not listening on $port — start the stack: cd $STACK_DIR && podman-compose --profile nncs up -d" >&2
 done
 
-# --- Emulator Launch Protocol (shared-docs/emulator-launch-protocol.md):
+# --- Emulator Launch Protocol (docs/shared/emulator-launch-protocol.md):
 # --- never launch alongside another title's instance without an explicit override.
 others=()
 for p in $(pgrep -x citron 2>/dev/null); do

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Stardew's Ryujinx launcher — a thin wrapper over the family shared launchers
-# (shared-docs/ryujinx-{host,joiner}-launcher.sh) with Stardew's NSP + NPLN route baked in.
+# (workspace tools/launch-ryujinx-{host,joiner}.sh) with Stardew's NSP + NPLN route baked in.
 #
 # Two SHARED profiles, not one per game (2026-09-02): host = ~/ryujinx-instances/host,
 # joiner = ~/ryujinx-instances/joiner, reused across every title. Sign host into the local
 # `host` account and joiner into `joiner` (until those exist, `stardewhost`/`stardewjoin` — see
-# shared-docs/ryujinx-isolation.md). Runbook: docs/local-stack.md.
+# docs/shared/ryujinx-isolation.md). Runbook: docs/local-stack.md.
 #
 # Usage: scripts/launch-ryujinx.sh [--joiner] [--menu]
 #   --joiner   use the shared joiner profile (default: host)
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 HERE="$(dirname "$(readlink -f "$0")")"
-SHARED="$HERE/../shared-docs/scripts"
+SHARED="$HERE/../../../../../tools"
 NSP_PATH="${STARDEW_NSP:-/mnt/media/Emulation/roms/switch/Stardew Valley [0100e65002bb8000] [v0].nsp}"
 ROUTE="t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net=127.0.0.1:${STARDEW_NPLN_PORT:-21010}"   # Stardew NPLN tenant -> this server (Openpak/ports.md)
 
