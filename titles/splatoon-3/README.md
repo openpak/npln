@@ -32,7 +32,7 @@ your own file if you hold a real one.
 
 | Env | Meaning |
 | --- | --- |
-| `NPLN_LISTEN` | gRPC/TLS listener, default `:21012` ([ports.md](../../ports.md)) |
+| `NPLN_LISTEN` | gRPC/TLS listener, default `:21012` ([ports.md](../../../../ports.md)) |
 | `HEALTH_LISTEN` | plain-HTTP `/health`, default `:21013`; empty disables it |
 | `CERT_FILE` / `KEY_FILE` | TLS cert covering `t-dce9377b-lp1.lp1.t.npln.srv.nintendo.net` |
 | `NX_INTERNAL_URL` | nx-baas game/internal API, default `http://127.0.0.1:20070` |
@@ -47,7 +47,7 @@ friends[]}`, and only then issues its own NPLN tokens. An identity nx-baas canno
 `PERMISSION_DENIED`, never a token.
 
 `proto/` holds the auth subset of the NPLN schema and the bindings generated from it
-(`proto/generate.sh`, see [`proto/NOTICE.md`](proto/NOTICE.md)). The schema and the identity/token
+(`proto/generate.sh`, see [`proto/NOTICE.md`](../../proto/NOTICE.md)). The schema and the identity/token
 code are not title-specific and are duplicated from `stardew-valley`; design.md proposes lifting
 them into one `servers/npln-common` module before a third NPLN title starts.
 

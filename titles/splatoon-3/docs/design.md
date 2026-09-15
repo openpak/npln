@@ -18,7 +18,7 @@ in order and confirmed one at a time.
 1. **A REST bootstrap** on the Vermillion and Penne host families, before any gRPC exists: device
    initialisation, a per-device id, an account config carrying the online licence, a login ticket,
    and a persistent "frontline" connection that must stay open. In OpenPak this is
-   [`nx-baas`](../../nx-baas)'s job — it already routes these hosts for the console link.
+   [`nx-baas`](../../../../../nx-baas)'s job — it already routes these hosts for the console link.
 2. **The tenant's gRPC control plane** — this repository. Auth, friends, presence, matchmaking,
    game sessions, gamesync, and the Splatoon-specific `toyohr` services (schedules, Splatfest,
    cloud save, lockers, replays, lobby messaging).
@@ -163,7 +163,7 @@ starts being three services.
 Until that shared module exists this repository now carries the **full** schema it answers —
 `auth`, `friends`, the `toyohr.Schedule`, and (added in this round) `gamesync` and the two
 `matchmaking` services. The `gamesync` and `matchmaking` `.proto` files were copied verbatim from
-[`servers/stardew-valley`](../../stardew-valley/proto) (source O — our own AGPL repository) with only
+[`servers/stardew-valley`](../../../../stardew-valley/proto) (source O — our own AGPL repository) with only
 the `go_package` path rewritten, because the NPLN schema is Nintendo's and identical across tenants.
 That is a second copy of the shared surface, which is exactly the duplication the shared module is
 meant to remove — so it strengthens, not weakens, the case above: the lift should happen next, before
@@ -206,4 +206,4 @@ the console dials directly, and takes `22210` out of this title's reserved NPLN 
 now opens it (`NPLN_SESSION_LISTEN`, default `:22210`) and serves the same gRPC server there, and the
 game sessions advertise `NPLN_SESSION_HOST:NPLN_SESSION_PORT` as `GameSession.Host:Port`. STUN/TURN
 needs no port of its own here: coturn lives in the shared `22900–22999` helper block. Claimed in
-[`ports.md`](../../../ports.md).
+[`ports.md`](../../../../../ports.md).

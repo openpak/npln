@@ -1,1 +1,0 @@
-../../../shared-docs/npln-online-gate-playbook.md
