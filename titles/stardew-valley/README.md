@@ -2,7 +2,7 @@
 
 An early-stage, independent clean-room interoperability project investigating the network services needed by Stardew Valley multiplayer on Nintendo Switch.
 
-Status (2026-09-07): the NPLN server (`cmd/npln` — `nn.npln.auth`, `nn.npln.friends`, `nn.npln.matchmaking.GameSessionService`, `nn.npln.gamesync`) hosts, lists, joins and runs three-player farms with rejoin, host-leave and stale-seat cleanup (verified on Ryujinx, `handoff.md` session 14). Identity now comes from the OpenPak stack: the client's BAAS id_token is minted by [`nx-baas`](../../nx-baas) (the Switch adapter over the `account` core), and this server proves its `nnex` claim and reads the friend graph through nx-baas's internal API. Not yet re-run end to end on OpenPak: an emulator profile pointed at nx-baas is the next step. The repository also keeps the research tools that got here: a metadata-only TCP/UDP observer and a sanitized TLS/HTTP2 probe.
+Status (2026-09-07): the NPLN server (`cmd/npln` — `nn.npln.auth`, `nn.npln.friends`, `nn.npln.matchmaking.GameSessionService`, `nn.npln.gamesync`) hosts, lists, joins and runs three-player farms with rejoin, host-leave and stale-seat cleanup (verified on Ryujinx, `handoff.md` session 14). Identity now comes from the OpenPak stack: the client's BAAS id_token is minted by [`nx-baas`](../../../../nx-baas) (the Switch adapter over the `account` core), and this server proves its `nnex` claim and reads the friend graph through nx-baas's internal API. Not yet re-run end to end on OpenPak: an emulator profile pointed at nx-baas is the next step. The repository also keeps the research tools that got here: a metadata-only TCP/UDP observer and a sanitized TLS/HTTP2 probe.
 
 This project is not affiliated with or endorsed by Nintendo, ConcernedApe, Stardew Valley, Chucklefish, or any original service provider. It contains no proprietary game code, assets, SDK material, binaries, certificates, keys, firmware, extracted files, credentials, or raw packet captures.
 
@@ -18,7 +18,7 @@ go build ./cmd/npln          # NPLN_LISTEN=:21010 CERT_FILE=… KEY_FILE=… NX_
 
 | Env | Meaning |
 | --- | --- |
-| `NPLN_LISTEN` | gRPC/TLS listener, default `:21010` (Stardew tenant, [ports.md](../../ports.md)); gamesync shares it |
+| `NPLN_LISTEN` | gRPC/TLS listener, default `:21010` (Stardew tenant, [ports.md](../../../../ports.md)); gamesync shares it |
 | `NX_INTERNAL_URL` | nx-baas game/internal API, default `http://127.0.0.1:20070` |
 | `NX_INTERNAL_KEY` | nx-baas's `NX_INTERNAL_KEY`, sent as `X-Internal-Key` |
 | `NPLN_JWT_KEY` | persisted ES256 key for the access tokens |
@@ -71,7 +71,7 @@ go vet ./...
 
 State a hypothesis and the smallest experiment in [handoff.md](handoff.md) before changing protocol behavior. Record observations immediately, label confidence, and use synthetic fixtures. Raw captures and sensitive or proprietary research inputs must remain outside the repository and be referenced through local configuration only.
 
-The living [handoff.md](handoff.md) is part of the implementation and records current knowledge, experiments, failures, decisions, and next steps. For applying the same method to other titles and backends, see the [Online Compatibility Playbook](docs/online-compatibility-playbook.md) and its [NPLN worked example](docs/npln-online-gate-playbook.md). Protocol-specific modules will be added only when controlled observations justify them.
+The living [handoff.md](handoff.md) is part of the implementation and records current knowledge, experiments, failures, decisions, and next steps. For applying the same method to other titles and backends, see the [Online Compatibility Playbook](../../docs/shared/online-compatibility-playbook.md) and its [NPLN worked example](../../docs/shared/npln-online-gate-playbook.md). Protocol-specific modules will be added only when controlled observations justify them.
 
 ## Contribution and clean-room policy
 

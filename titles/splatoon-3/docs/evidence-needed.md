@@ -6,7 +6,7 @@ facts. Most of what this file used to ask for is now answered in
 document can supply: whether OpenPak's own stack satisfies this client.
 
 Before touching an emulator, read
-[`emulator-launch-protocol.md`](../shared-docs/emulator-launch-protocol.md) — shared host/joiner
+[`emulator-launch-protocol.md`](../../../docs/shared/emulator-launch-protocol.md) — shared host/joiner
 personas, the game NSP path is the only title identifier, and **ask first** if another title is
 running. Raw logs, dumps and captures stay outside this repository.
 

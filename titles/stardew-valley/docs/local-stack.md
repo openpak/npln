@@ -5,7 +5,7 @@
 # Local Nextendo stack (podman)
 
 Everything Stardew needs from "Nintendo" runs locally as podman containers from
-the [`nextendo-local`](../../nextendo-local/) bundle. Both emulators are pointed
+the [`nextendo-local` — the pre-port Nextendo local bundle, frozen outside this tree bundle. Both emulators are pointed
 at it by the launch wrappers in `scripts/`; nothing reaches production.
 
 ## What runs
@@ -73,7 +73,7 @@ Ryujinx now uses **two shared profiles for every game** (host + joiner), not a
 dir per title — `scripts/launch-ryujinx.sh` is a thin wrapper over the family
 launchers `shared-docs/ryujinx-{host,joiner}-launcher.sh`, baking in Stardew's
 NSP and its route (`t-9f607adf-lp1…=127.0.0.1:18501`). See
-[shared-docs/ryujinx-isolation.md](../shared-docs/ryujinx-isolation.md).
+[shared-docs/ryujinx-isolation.md](../../../docs/shared/ryujinx-isolation.md).
 
 Both wrappers warn if a stack port is down, refuse to launch next to another
 title's instance (`NEXTENDO_ALLOW_SHARED=1` to override after asking; the old

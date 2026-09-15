@@ -20,6 +20,55 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Current Status
 
+- 2026-09-13 (session 16 — **eden bring-up: the whole citron/Ryujinx client recipe ported, the
+  NPLN worker's wait located, the remaining gate named**). One long client-side session; no
+  server changes.
+  - **Ported into eden** (all verified live by logs or on the wire):
+    1. Per-title BAAS binding — `openpak-client`'s login chain now walks `aauth
+       /v5/application_auth_token` (nx-baas's existing handler) and posts `appAuthNToken` with
+       the baas login, so the id_token a title receives carries `nintendo.ai` = the running
+       title id and its version, not the captured VPS default. The cached token is keyed by
+       the binding, so switching titles re-mints. Verified by decoding a replayed login:
+       `ai=0100e65002bb8000`, `av=1.6.15.13`, `nnex` present.
+    2. AF_INET6 (guest domain 28) sockets, dual-mode (`IPV6_V6ONLY=0`), v4-mapped
+       connect/bind, sockaddr_in6 parsing in `ConnectImpl`, `sockaddr_storage` peername
+       unwrap. Stardew's gRPC dials its first-choice IPv6 socket; the transport (TLS 1.2,
+       ALPN `grpc-exp,h2`, SETTINGS, 15 s keepalives) now comes up on it end to end.
+    3. The Stardew game patches (build-scoped, byte-fingerprinted, ported from citron's
+       `nso.cpp`): X509_verify_cert bypass at 0x79B4C10 and the certificate-acceptance flag
+       at 0x782F5D0. Loader logs both applied; verified live in guest RAM by scanning for
+       the patched bytes.
+    4. Sockopt set/get agreement: unimplemented options (Nintendo's 0x80000001
+       linger-shaped 8-byte option above all) are feigned on set and echoed on get instead
+       of answering SUCCESS then NOPROTOOPT — the NPLN stack verifies its socket options
+       and abandons the connection on the mismatch.
+    5. Zero-mask eventfd polls report readability (gRPC polls its wakeup eventfd with
+       events=0), a one-time hold on the first npln resolution (the JIT-burst retention),
+       and `[OpenPak] Module '<name>' loaded at guest <base>` logging so guest traces
+       self-decode.
+  - **Eliminated as eden's gate** (each fixed or proven equal to the working clients):
+    identity/nnex, per-game claims, NAT check (both nncs instances answer), SNI routing
+    (aauth + tenant certs verified from the workstation), the transport itself.
+  - **The remaining gate, located exactly**: the title still never sends its first NPLN RPC
+    (`nn.npln.auth.v1.Auth/IssuePrearrangedUserToken`; server sees `[CONN] begin (h2
+    established)` then nothing). Eden's guest trace pins the NPLN background worker
+    (thread 98) in a one-second timed loop at `svc 0x1C` (`WaitProcessWideKeyAtomic` — a
+    condition-variable wait), pc `0x8eff56e8` (svc wrapper in the sdk module, guest base
+    `0x8ef0a000`), called from `lr 0x8efc93b8` = **sdk+0xBF3B8**, waiting on a
+    condvar+mutex pair at **main+0x85755d0** whose surrounding .bss is entirely zero at the
+    freeze — state no init step ever produced. Corroborated once by the same thread
+    faulting at PC=0 (a null call through that uninitialised state) when run under eden's
+    gdb stub. The auth request is never even prepared: no `tenants/t-9f607adf-lp1/users/
+    current` and no id_token anywhere in guest RAM at the freeze (both were present in the
+    citron-era captures).
+  - **Next**: name what should initialise main+0x85755d0 (Ghidra project `sdfull`, main VA
+    0x85755d0, .bss; xrefs from the SDK init path — the null-callback slot is the same
+    object family), diff that init's inputs against Ryujinx (acc/nifm/glue answers), or
+    port citron's deferred-poll machinery (the one client-side repair not yet in eden,
+    though eden's sliced polls already avoid the starvation it fixes).
+  - Tooling note: eden's gdb stub suspends the title at boot and is not usable as-is; the
+    working method is host-side `/proc/<pid>/mem` scans of the `/memfd:HostMemory` mappings
+    (guest RAM), with the loader's new module-base log line providing guest-VA context.
 - 2026-09-07 (session 15 — **moved to `Openpak/servers/stardew-valley`, identity switched from
   the Nextendo account server to OpenPak's `nx-baas`**). No emulator run this session.
   - Module is now `openpak/stardew-valley`. The only external dependency is nx-baas's internal
@@ -2299,3 +2348,128 @@ GDB stub: read-only works, breakpoints crash the emulator — do not use breakpo
 Lessons added to shared docs and project memory: shell-killing tmpfs rule, Ghidra function-vs-string
 address convention, guest-RAM shm identification, HostMappedUnsafe mirror bases, the join-filter
 model + the contradiction to resolve first.
+
+### Session 16 addendum (same night, the state-machine hunt)
+
+- The NPLN worker (guest thread 98) parks in a 1-second condvar loop: `svc 0x1C`
+  (`WaitProcessWideKeyAtomic`), pc in the sdk module's svc wrapper, called from
+  sdk+0x149330's containing function (decompiled: it compares the pollfd array's
+  first u32 against a mask cached in its TLS at +0x1B0 — `(mask & 0xBFFFFFFF)` —
+  mismatch = error path without waiting; match = infinite svc wait). The waited
+  condvar/mutex at main+0x85F5D0 (per-run heap offsets differ; this run
+  main@0x80c7c000, x0=0x8f27b5d0) is POPULATED (counters 1,1,1,1; id 0x10dce;
+  tick; key material) — the SDK initialized and waits for an event that never
+  fires. The earlier zeroed read was a stale-offset artifact; the object is
+  heap-dynamic per run.
+- The "(Auth RPC result)" strings sit at main VA 0x9867A43 and 0x9885BA7 (flat
+  NSO offsets +0x100) with NO static references found (no ADRP, no pointers) —
+  table-driven at runtime. Ghidra's sdfull project has 0 recorded xrefs too.
+- Ryujinx root cause found and fixed separately: its Bsd answered Pia UDP
+  receives with ETIMEDOUT; ported the Nextendo IClient (commit 3bab55478 in
+  emulators/ryujinx) — verified to full auth + QueryGameSessions + farm list.
+- eden artifacts: `~/opencode-scan/` — sdk_frozen.bin (SDK module image),
+  lr_context.bin, wait_object.bin, find_base.py, capture_frozen.py,
+  sdk_analysis.py, ryu_state.py, gold_obj.py, main_state_machine.py
+  (+ main_sm.txt: 2848 lines of captured decompile).
+- Next: the state machine's mask check needs the SDK's TLS+0x1B0 cached value
+  read at the freeze (eden's Trace line can be extended to dump the waiting
+  thread's TLS), OR the vtable walk from sdk+0x778220 in Ghidra with the
+  sdfull-style analysis run over sdk_frozen.bin.
+
+
+### 2026-09-14 investigation: correct the wait interpretation before continuing
+
+- The latest Eden checkout already includes deferred polling (`cf4ea9d638`) and
+  TLS/poll diagnostics (`91e92fc93f`); session 16's port/read-TLS next steps are stale.
+- Offline disassembly of `~/opencode-scan/sdk_frozen.bin` confirms sdk+0x1492e8
+  and sdk+0x149354 are infinite/timed condition-variable wait wrappers. They mask
+  the mutex owner word with `0xbfffffff` and compare it with the current SDK thread
+  object's handle at +0x1b0. These are NOT pollfd-array/mask checks. Reaching their
+  svc 0x1c call means the ownership comparison passed.
+- The getter at sdk+0x140c20 reads TPIDRRO_EL0, then loads the SDK Thread pointer
+  from TLS+0x1f8. Its captured GOT pointer at sdk+0xb70020 is 0x8f3e5c20,
+  implying the saved SDK image's base was 0x8f2a5000. Do not use another run's base.
+- `physical_core.cpp` currently reads `context.tpidr + 0x1b0` and labels x1's
+  condvar word `array_word`. Dynarmic's GetContext sets `context.tpidr` from
+  TPIDR_EL0, whereas this SDK getter uses TPIDRRO_EL0. The diagnostic therefore
+  has both the wrong TLS source and a missing pointer dereference. Its logged
+  `cached_mask=0 / array_word=1` does NOT establish a guest mismatch.
+  Correct measurement: use `thread->GetTlsAddress()`, read Thread* at +0x1f8,
+  then handle at Thread+0x1b0; compare against x2 and the masked mutex at x0.
+- The pre-launch log (ended 2026-09-14 11:52 local) shows thread 98 repeatedly
+  returning to nonblocking BSD Poll(fd=5, events=In, timeout=0), about every five
+  seconds, interspersed with timed condition-variable waits. It is not permanently
+  stuck in one syscall. Its role as the auth-blocking worker needs stronger proof.
+- Separate source-level candidate: BSD deferred Poll only gets rescheduled by
+  eventfd writes; sockets.cpp has explicitly removed its timer heartbeat. Host
+  socket readiness and finite deadlines have no independent wakeup source. Also,
+  the deadline branch returns errno TIMEDOUT with ret=0. Neither observation is
+  yet proven to explain this title's auth stall; do not call either the root cause.
+- No emulator behavior or server changes made in this investigation. User requested
+  launch: Eden started to its game list with systemd user unit `eden-stardew-debug`
+  (pid 593177). A fresh in-game online reproduction is the next step.
+
+
+### 2026-09-14 fresh reproduction: DNS length bug found and repaired, retest pending
+
+- Fresh Eden run pid 593177 faulted at 48.771 s: guest thread **97** attempted
+  execution at zero immediately after Connect(fd=4) succeeded. LR and saved
+  registers were zero. The host remained alive and suspended that guest thread.
+  Thread 98 continued its timer loop; it was not the faulting thread in this run.
+- Live stack recovered main+0x7888278 / +0x78888ac / +0x7888ac0 (callback
+  executor), using a validated guest mapping, not guessed heap offsets. External
+  helper: `~/opencode-scan/live_wait_check.py`. Before-fix log saved privately as
+  `~/opencode-scan/eden-before-dns-length-fix.log.gz`.
+- Existing earlier instruction traces in `/tmp/eden-return-overwrite-decoded.txt`
+  and `/tmp/eden-guest-fault-trace.txt` identify the corrupting operation: resolver
+  callback main+0x77aa1f0 passes a resolved address length of 0x100 through
+  main+0x77aa560 to main+0x7868060, which copies 256 bytes into a 128-byte address
+  buffer on its caller's stack, overwriting the saved return address. Its return
+  subsequently restores LR=0. Trace main base inferred from unique callback
+  prologue: 0x80fbd000. Decompiled functions are in ~/ghidra-projects/out3/overflow_*.
+- **Source defect:** Eden `SockAddrIn` is padded to **0x100**, explicitly asserted
+  in sockets.h. `SerializeAddrInfo` advertised `sizeof(SockAddrIn)` as ai_addrlen
+  but emitted only 16 address bytes. Its sin_len cast also truncated 256 to zero.
+  Corrected BOTH fields to an explicit 16-byte IPv4 wire size in sfdnsres.cpp.
+  This agrees with the actual emitted record and the working Ryujinx serializer.
+- Incremental `cmake --build emulators/eden/build-openpak --target eden -j 4`
+  passed; git diff --check passed. No server or game-binary modifications.
+  Restarted Eden to the game list in user unit `eden-stardew-dns-fix` for a fresh
+  online test. **Do not yet claim full online success: post-fix retest pending.**
+
+
+### 2026-09-14 online reached; poll wakeup repair and Android rebuild
+
+- User confirmed the DNS-fixed build reaches the game online. No null-address
+  guest faults appeared in that run. Initial connection still progressed in
+  bursts and looked frozen between them.
+- Live evidence for the delay: a TCP socket had 46 bytes queued unread while its
+  guest Poll(eventfd + socket, timeout=-1) was deferred. Poll retries were driven
+  only by eventfd writes, often five seconds apart. The socket had no independent
+  readiness notification into ServerManager.
+- Added opt-in `ServerManager::StartDeferralPolling(10ms)`, enabled by the BSD
+  service only. It signals the deferral event only while requests are pending.
+  Uses KernelCore::RunOnHostCoreThread so event signaling has a registered kernel
+  thread; shares the manager's stop token and joins before event/session cleanup.
+  Eventfd writes still signal immediately. Finite deferred poll expiry now returns
+  ret=0 / errno=SUCCESS instead of TIMEDOUT.
+- DNS serializer regression test exercises two canonical-name records, checking
+  address lengths, sin_len/family, canonical-name positioning and next-record
+  boundary. Desktop build passed and `[openpak]` tests passed (27 assertions,
+  3 cases). Existing unrelated worktree changes preserved.
+- Rebuilt desktop launched to game list as `eden-stardew-poll-fix` after the
+  previous process had exited. User's in-game latency confirmation is pending.
+- Android mainlineRelease build succeeded once; final rebuild incorporates the
+  testability refactor to SerializeAddrInfo. Build logs live privately under
+  ~/opencode-scan/poll-wakeup-*.log. APK verification/artifact path recorded below
+  when final packaging completes.
+
+- Final Android build passed (`assembleMainlineRelease`). APK copied to
+  `emulators/eden-apk/stardew-network-fix-2026-09-14/eden-openpak.apk` with SHA256SUMS.
+  Signature and 16-KiB zip alignment checks passed. Same signing certificate as
+  eden-apk/v0.2.0; package dev.eden.eden_emulator, versionCode 33779828,
+  versionName v0.0.4-rc2-954, arm64-v8a, minimum Android API 33.
+- Live desktop retest pid 1660234: 1006 observed poll samples, median retry
+  **10.08 ms**, zero guest execution faults. Server TCP connection receive queue
+  was empty when sampled. This verifies the missing periodic wakeup is repaired;
+  extended gameplay latency and Android-device testing remain user-side checks.
