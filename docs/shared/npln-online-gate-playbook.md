@@ -1,7 +1,8 @@
 # NPLN Online-Gate Playbook (worked example)
 
 > Trimmed copy for this repository; the canonical document lives at
-> `Openpak/servers/shared-docs/npln-online-gate-playbook.md` and governs. Last synchronised 2026-09-15.
+> `Openpak/docs/playbooks/npln-online-gate-playbook.md` and governs. Last synchronised 2026-09-15.
+
 
 This is the NPLN/gRPC-specific worked example of the general method — see
 [online-compatibility-playbook.md](online-compatibility-playbook.md) for the

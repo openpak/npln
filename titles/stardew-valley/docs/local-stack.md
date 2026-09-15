@@ -71,9 +71,9 @@ scripts/launch-ryujinx.sh --menu    # main window only: sign in first, then load
 
 Ryujinx now uses **two shared profiles for every game** (host + joiner), not a
 dir per title — `scripts/launch-ryujinx.sh` is a thin wrapper over the family
-launchers `shared-docs/ryujinx-{host,joiner}-launcher.sh`, baking in Stardew's
+launchers (workspace `tools/launch-ryujinx-{host,joiner}.sh`), baking in Stardew's
 NSP and its route (`t-9f607adf-lp1…=127.0.0.1:18501`). See
-[shared-docs/ryujinx-isolation.md](../../../docs/shared/ryujinx-isolation.md).
+[the ryujinx isolation playbook](../../../docs/shared/ryujinx-isolation.md).
 
 Both wrappers warn if a stack port is down, refuse to launch next to another
 title's instance (`NEXTENDO_ALLOW_SHARED=1` to override after asking; the old
@@ -83,13 +83,13 @@ never launch the emulator bare for this project.
 First run of each profile: sign in from the emulator's Nextendo menu with the
 shared account — host profile → `OutboundHost` (pid 1800000003), joiner →
 `OutboundJoiner` (pid 1800000004), the family-wide host/joiner identities (see
-`shared-docs/conventions.md`). The link is stored per profile, so the
+`docs/shared/conventions.md`). The link is stored per profile, so the
 production link in `~/.config/citron` / `~/ryujinx/portable` is untouched.
 NOTE: `OutboundHost`/`OutboundJoiner` are mutual friends AND verified on the
 local account server (done 2026-09-02) — Stardew's auth gate passes for them.
 (To verify a local account: `GET http://127.0.0.1:8099/api/verify?token=…`, an
 HMAC token bound to id+email under the account server's `NEXTENDO_SECRET` — see the recipe in
-`shared-docs/ryujinx-isolation.md`.)
+`docs/shared/ryujinx-isolation.md`.)
 
 Verify on the running pid before trusting a result:
 
