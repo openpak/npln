@@ -27,6 +27,11 @@ func (s *authServer) IssuePrearrangedUserToken(ctx context.Context, req *authpb.
 }
 
 func (s *authServer) IssueToken(ctx context.Context, req *authpb.IssueTokenRequest) (*authpb.IssueTokenResponse, error) {
+	// Dinkum calls this when hosting online and was refused "not a jwt" (2026-09-18); record what
+	// it carries (shape only, never the token) until we know which identity it means.
+	ext := req.GetExternalIdToken()
+	log.Printf("[Auth] IssueToken user=%q nsa_id_token=%d bytes dummy_ext_id_token=%d bytes",
+		req.GetUser(), len(ext.GetNsaIdToken()), len(ext.GetDummyExtIdToken()))
 	pid, userPath, err := gatedIdentity(req.GetExternalIdToken(), tenantFromCtx(ctx))
 	if err != nil {
 		return nil, err
