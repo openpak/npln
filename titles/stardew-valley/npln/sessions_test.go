@@ -65,3 +65,21 @@ func TestSessionIdentityIsTheBearer(t *testing.T) {
 		t.Fatal("expired token verified")
 	}
 }
+
+// The room-code answer spells the session with the real tenant, never the client's
+// "tenants/current" alias, and the code resolves back to it.
+func TestShortAliasNamesTheRealTenant(t *testing.T) {
+	g := newSessionServer()
+	a, err := g.CreateGameSessionShortAlias(context.Background(), &mmpb.CreateGameSessionShortAliasRequest{
+		GameSessionShortAlias: &mmpb.GameSessionShortAlias{GameSession: "tenants/current/gameSessions/g1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := Tenant + "/gameSessions/g1"; a.GetGameSession() != want {
+		t.Fatalf("game_session = %q, want %q", a.GetGameSession(), want)
+	}
+	b, err := g.GetGameSessionShortAlias(context.Background(), &mmpb.GetGameSessionShortAliasRequest{Name: a.GetName()})
+	if err != nil || b.GetGameSession() != a.GetGameSession() {
+		t.Fatalf("lookup: %v %v", b, err)
+	}
+}

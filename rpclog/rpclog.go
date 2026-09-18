@@ -5,7 +5,7 @@
 // their value: those are bearer credentials. Fields the proto does not know are logged as hex,
 // which is where a message-shape mismatch shows up.
 //
-// ponytail: every message of every stream is logged, gamesync included; a busy session is a
+// ponytail: every message of every stream is logged, both ways, gamesync included; a busy session is a
 // busy log. Lines are capped at maxLine. Add a per-method filter if a title's traffic drowns it.
 package rpclog
 
@@ -126,17 +126,22 @@ func Unary(ctx context.Context, req any, info *grpc.UnaryServerInfo, h grpc.Unar
 	return resp, err
 }
 
-// Stream logs every message the client sends on a stream.
+// Stream logs every message on a stream, both ways.
 func Stream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, h grpc.StreamHandler) error {
-	return h(srv, &recvLogger{ServerStream: ss, method: info.FullMethod})
+	return h(srv, &streamLogger{ServerStream: ss, method: info.FullMethod})
 }
 
-type recvLogger struct {
+type streamLogger struct {
 	grpc.ServerStream
 	method string
 }
 
-func (r *recvLogger) RecvMsg(m any) error {
+func (r *streamLogger) SendMsg(m any) error {
+	log.Printf("[RPC<] %s %s", r.method, Body(m))
+	return r.ServerStream.SendMsg(m)
+}
+
+func (r *streamLogger) RecvMsg(m any) error {
 	err := r.ServerStream.RecvMsg(m)
 	if err == nil {
 		log.Printf("[RPC>] %s %s", r.method, Body(m))

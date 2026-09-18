@@ -3,6 +3,13 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.7 — 2026-09-18
+
+- The room-code answer (`CreateGameSessionShortAlias`) names the session with the real tenant
+  instead of echoing the client's `tenants/current/…`; Dinkum's NPLN SDK aborted right after
+  receiving it.
+- Stream messages the server sends are logged too (`[RPC<]`), not only what it receives.
+
 ## v0.5.6 — 2026-09-18
 
 - `PresenceService/KeepAlive` opens with a heartbeat. Dinkum opens the stream and waits for

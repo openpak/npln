@@ -447,12 +447,16 @@ func (g *sessionServer) GetUserSession(ctx context.Context, req *mmpb.GetUserSes
 
 // ---- invites by code ----
 
+// CreateGameSessionShortAlias mints the room code. Every name in the answer is spelled with the
+// real tenant: Dinkum's NPLN SDK aborted right after an answer that echoed its own
+// "tenants/current/gameSessions/…" back (2026-09-18).
 func (g *sessionServer) CreateGameSessionShortAlias(ctx context.Context, req *mmpb.CreateGameSessionShortAliasRequest) (*mmpb.GameSessionShortAlias, error) {
 	code := uuid4()[:8]
+	gs := tenantFromCtx(ctx) + "/gameSessions/" + lastSeg(req.GetGameSessionShortAlias().GetGameSession())
 	g.mu.Lock()
-	g.aliases[code] = req.GetGameSessionShortAlias().GetGameSession()
+	g.aliases[code] = gs
 	g.mu.Unlock()
-	return &mmpb.GameSessionShortAlias{Name: tenantFromCtx(ctx) + "/gameSessionShortAliases/" + code, GameSession: req.GetGameSessionShortAlias().GetGameSession(), ExpireTime: timestamppb.New(time.Now().Add(time.Hour))}, nil
+	return &mmpb.GameSessionShortAlias{Name: tenantFromCtx(ctx) + "/gameSessionShortAliases/" + code, GameSession: gs, ExpireTime: timestamppb.New(time.Now().Add(time.Hour))}, nil
 }
 
 func (g *sessionServer) GetGameSessionShortAlias(ctx context.Context, req *mmpb.GetGameSessionShortAliasRequest) (*mmpb.GameSessionShortAlias, error) {
