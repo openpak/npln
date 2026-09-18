@@ -3,6 +3,12 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.8 — 2026-09-18
+
+- A call with a valid access token (ours) counts as proof of its user for that connection,
+  like a login does. A console that reconnects after a server restart keeps its token, never
+  logs in again, and was refused when it then hosted.
+
 ## v0.5.7 — 2026-09-18
 
 - The room-code answer (`CreateGameSessionShortAlias`) names the session with the real tenant

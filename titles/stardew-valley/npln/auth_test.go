@@ -11,7 +11,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	authpb "github.com/openpak/npln/proto/auth/v1"
 )
@@ -63,5 +65,16 @@ func TestIssueTokenTrustsOnlyItsOwnConnection(t *testing.T) {
 	}
 	if _, err := dial().IssueToken(ctx, &authpb.IssueTokenRequest{User: me, ExternalIdToken: garbage}); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("new connection: %v", err)
+	}
+
+	// a connection that only ever showed our access token (a console reconnecting after a
+	// server restart) has proven the user too
+	back := dial()
+	bctx := metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+first.GetToken().GetAccessToken())
+	if _, err := back.ValidateToken(bctx, &emptypb.Empty{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := back.IssueToken(ctx, &authpb.IssueTokenRequest{User: me, ExternalIdToken: garbage}); err != nil {
+		t.Fatalf("reconnected with a bearer: %v", err)
 	}
 }
