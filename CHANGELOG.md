@@ -3,6 +3,10 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.12 — 2026-09-18
+
+- Room codes leave out Z as well: Dinkum's room-code screen refuses I, O, Z and symbols.
+
 ## v0.5.11 — 2026-09-18
 
 - KeepAlive never answers an ack. A real console acks each heartbeat at once, and answering it

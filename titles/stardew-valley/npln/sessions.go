@@ -454,10 +454,10 @@ func (g *sessionServer) GetUserSession(ctx context.Context, req *mmpb.GetUserSes
 // game when the room-code answer says "gameSessionShortAliases".
 const shortAliases = "/GameSessionShortAliases/"
 
-// roomCodeLetters: Dinkum's room-code screen takes 6 characters, all caps (seen on a console,
-// 2026-09-18). Letters only, so the code fits whether or not the field takes digits, and no
-// I/O to misread as 1/0.
-const roomCodeLetters = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+// roomCodeLetters: Dinkum's room-code screen takes 6 characters, all caps, and refuses I, O, Z
+// and symbols (seen on a console, 2026-09-18). Letters only, so the code fits whether or not
+// the field takes digits.
+const roomCodeLetters = "ABCDEFGHJKLMNPQRSTUVWXY"
 
 func roomCode() string {
 	b := make([]byte, 6)
