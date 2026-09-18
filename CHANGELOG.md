@@ -3,6 +3,12 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.3 — 2026-09-18
+
+- Every call's content is in the log by default, for every title: `[RPC>]` for each request
+  and stream message, `[RPC<]` for unary answers, fields the proto does not define in hex, and
+  the first message of an unimplemented call. Token fields show only length and JWT-or-not.
+
 ## v0.5.1 — 2026-09-18
 
 - Dinkum's tenant is `t-35b7d576-lp1` (from a boot), now its default; deployed as

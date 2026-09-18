@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/openpak/npln/rpclog"
 	"log"
 	"math/big"
 	"net/http"
@@ -457,6 +458,7 @@ func typeStream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, h gr
 // unknownService logs any method we do not serve yet: that log line IS the next work item, and
 // for this title it is the whole point of deploying the skeleton.
 func unknownService(_ any, ss grpc.ServerStream) error {
+	rpclog.Unimplemented(ss)
 	m, _ := grpc.MethodFromServerStream(ss)
 	log.Printf("[RPC] UNIMPLEMENTED %s — next handler to write", m)
 	return status.Errorf(codes.Unimplemented, "method %s not implemented", m)
@@ -483,8 +485,8 @@ func (c *connTracer) HandleConn(_ context.Context, s stats.ConnStats) {
 // server still works, and the game will report that stage information is unavailable.
 func NewServer(creds credentials.TransportCredentials, rot *rotation.File) *grpc.Server {
 	opts := []grpc.ServerOption{
-		grpc.UnaryInterceptor(typeUnary),
-		grpc.StreamInterceptor(typeStream),
+		grpc.ChainUnaryInterceptor(typeUnary, rpclog.Unary),
+		grpc.ChainStreamInterceptor(typeStream, rpclog.Stream),
 		grpc.UnknownServiceHandler(unknownService),
 		grpc.StatsHandler(&connTracer{}),
 		// The client pings often, also without streams; grpc-go's default policy answers with
