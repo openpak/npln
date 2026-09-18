@@ -106,3 +106,12 @@ func proven(ctx context.Context, pid uint64, userPath string) {
 		p.mu.Unlock()
 	}
 }
+
+// provenByBearer counts a call's valid access token (signed by us) as proof for its connection.
+// A console that reconnects after a server restart keeps using its token and never logs in
+// again, then re-issues when it hosts (2026-09-18).
+func provenByBearer(ctx context.Context) {
+	if pid, uid, ok := bearer(ctx); ok && uid != "" {
+		proven(ctx, pid, tenantFromCtx(ctx)+"/users/"+uid)
+	}
+}

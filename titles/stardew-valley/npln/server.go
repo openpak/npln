@@ -100,6 +100,7 @@ func short(s string) string {
 // Nintendo's gateway stamps npln-grpc-type on every response; the client is used to reading it.
 func typeUnary(ctx context.Context, req any, info *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
 	_ = grpc.SetHeader(ctx, metadata.Pairs("npln-grpc-type", "Unary"))
+	provenByBearer(ctx)
 	auth := mdGet(ctx, "authorization")
 	log.Printf("[RPC] %s tenant=%q uid=%q auth=%q", info.FullMethod, mdGet(ctx, "npln-tenant-id"), uidFromCtx(ctx), short(auth))
 	resp, err := h(ctx, req)
@@ -118,6 +119,7 @@ func typeStream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, h gr
 		kind = "ClientStreaming"
 	}
 	_ = ss.SetHeader(metadata.Pairs("npln-grpc-type", kind))
+	provenByBearer(ss.Context())
 	log.Printf("[RPC] %s (%s) uid=%q", info.FullMethod, kind, uidFromCtx(ss.Context()))
 	err := h(srv, ss)
 	if err != nil {
