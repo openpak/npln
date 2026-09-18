@@ -172,6 +172,7 @@ func NewServer(creds credentials.TransportCredentials, tenant string) *grpc.Serv
 	s := grpc.NewServer(opts...)
 	authpb.RegisterAuthServer(s, &authServer{})
 	friendspb.RegisterFriendsServer(s, &friendsServer{})
+	friendspb.RegisterPresenceServiceServer(s, &presenceServer{})
 	mm := newSessionServer()
 	mmpb.RegisterGameSessionServiceServer(s, mm)
 	gspb.RegisterGamesyncServer(s, newGamesync(mm)) // session transport: same listener (host:port points here)
