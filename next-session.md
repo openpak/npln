@@ -1,10 +1,40 @@
 # Next session — servers/npln
 
-**Updated 2026-09-18 — read this first.** v0.5.0 is live (Stardew, Wonder, Splatoon 3).
-Dinkum and Human Fall Flat are registered but need their tenants from a boot; the
-step-by-step (reading the tenant from the Ryujinx log, cert, quadlet, route, firewall) is
-in `../switch-nex/next-session.md` → *At home*. Splatoon 3's rotation runs out
-**2026-10-18**; regenerate before then.
+**Updated 2026-09-18 evening — read this first.** v0.5.12 is live (Stardew, Wonder,
+Splatoon 3, **Dinkum**). Splatoon 3's rotation runs out **2026-10-18**; regenerate before then.
+
+## Dinkum works online (2026-09-18)
+
+Ryujinx (fork) hosted, a **real console joined with the room code** and landed on the island.
+Tenant `t-35b7d576-lp1`, deployed as `openpak-dinkum` (21122, session 22230). The console
+does **not** pin the certificate. P2P went direct: the TURN relay logged nothing.
+
+What it took, each a lesson for every title on the Stardew set:
+
+- **Every call's content is logged** (`rpclog`: `[RPC>]` in, `[RPC<]` out, unknown fields in
+  hex, token fields as length/shape/fingerprint). Read the log before guessing.
+- Tokens carry the serving title's `npln.app_id` (they all said Stardew's).
+- `IssueToken` while hosting carries a 32-byte hex non-JWT: accepted for the user its
+  connection already proved (by login or by our own access token), refused otherwise.
+- PresenceService: **open KeepAlive with a heartbeat**, heartbeat on a 10 s timer, answer
+  presence updates, **never answer acks** (a console acks instantly: answering was a storm
+  that dropped its connection). SubscribePresences ported from Splatoon 3.
+- Room codes: name `…/GameSessionShortAliases/<code>` — **capital G**, the SDK compares 23
+  bytes and aborts the game otherwise (read from Dinkum's NPLN 1.43.3 code). Codes are 6
+  capitals without I, O, Z (Dinkum's code screen); lookup ignores case. Splatoon 3's server
+  still says lowercase `gameSessionShortAliases` — check first if its room codes misbehave.
+- The Ryujinx fork answers `getifaddrs` (sysctl NET_RT_IFLISTL) — without it the host
+  gathers no ICE candidates and the joiner fails with 2321-5248.
+
+Open:
+
+1. **Friend list shows no open games** on the console: after a fresh boot it logs in,
+   activates, opens KeepAlive and SubscribeFriendUsers, but never publishes its own
+   presence nor calls SubscribePresences. It did once (20:17), right after a failed join.
+   Find what triggers the SDK's presence subscription.
+2. Human Fall Flat: needs its tenant from a boot, then the same deploy as Dinkum.
+3. Dinkum's IL2CPP dump (`/mnt/media/nextendo-research/catalogue/dinkum/il2cpp/`, with
+   `main.img` the unpacked NSO) answers SDK questions: that is how the capital G was found.
 
 Updated 2026-09-15.
 
