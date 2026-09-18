@@ -3,6 +3,13 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.1 — 2026-09-18
+
+- Dinkum's tenant is `t-35b7d576-lp1` (from a boot), now its default; deployed as
+  `openpak-dinkum`. Login, ActivateUser and the friends stream work; TLS is not pinned.
+- The Stardew set answers `PresenceService/KeepAlive`, which Dinkum opens right after
+  ActivateUser (it got Unimplemented). Pings only; published presence is not kept yet.
+
 ## v0.5.0 — 2026-09-18
 
 - Dinkum (21122, session 22230) and Human Fall Flat (21124, session 22240) registered: NPLN
