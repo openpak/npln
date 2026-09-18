@@ -3,6 +3,11 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.13 — 2026-09-18
+
+- Human Fall Flat's tenant is `t-5cbc0f31-lp1` (from a boot), now its default; deployed as
+  `openpak-human-fall-flat`.
+
 ## v0.5.12 — 2026-09-18
 
 - Room codes leave out Z as well: Dinkum's room-code screen refuses I, O, Z and symbols.
