@@ -1,7 +1,29 @@
 # Next session — servers/npln
 
-**Updated 2026-09-18 evening — read this first.** v0.5.12 is live (Stardew, Wonder,
-Splatoon 3, **Dinkum**). Splatoon 3's rotation runs out **2026-10-18**; regenerate before then.
+**Updated 2026-09-18 night — read this first.** v0.5.15 is live: **13 titles**, each checked from
+outside (Traefik on 443 and its session port). Splatoon 3's rotation runs out **2026-10-18**.
+
+| Tested | Titles |
+| --- | --- |
+| console | Stardew Valley, Dinkum (host/join both ways, Ryujinx ↔ console) |
+| Ryujinx | Human Fall Flat (tenant `t-5cbc0f31`, found by boot today) |
+| never booted | Wonder, Splatoon 3, Jamboree, Scarlet/Violet, Arceus, MH Rise, Bayonetta 3, Endless Ocean, Hamster Playground, Wavecade |
+
+Session ports: 22200–22290 is full; new titles take **24000–24999** (open at OCI, one host
+ACCEPT per port). Held back: Puyo Puyo Tetris 2S (Switch 2), Nintendo Classics and Violet
+(need a per-caller `app_id` from the id token), MACHI KORO (no tenant).
+
+## Tomorrow (owner at home)
+
+1. Human Fall Flat: console ↔ Ryujinx. It also resolved `g2122d301.lp1.p.srv.nintendo.net`
+   (a `.p.srv` host, not served) — watch whether play needs it.
+2. Dinkum friend list: host on Ryujinx, press **Search** on the console. From Dinkum's code:
+   `Search → SearchRoutine → LoadFriend`, which checks the online account and membership and
+   only then registers for presence (the SDK's `SubscribePresences`). No call = one of those
+   checks fails on that device.
+3. Dinkum invites (`JoinFromInviteRoutine` → room-code join; the Switch's own invitation system).
+4. Boot We Were Here and Blaze (dumps on disk, stack unknown); first boots of the Wave 3 titles
+   when dumps exist — confirm each title id in the Ryujinx log first.
 
 ## Dinkum works online (2026-09-18)
 
