@@ -18,7 +18,7 @@ var Title = host.Title{
 	Listen:       ":21010",
 	HealthListen: ":21011",
 	Run: func(creds credentials.TransportCredentials, lis net.Listener) error {
-		srv := npln.NewServer(creds, npln.StardewTenant)
+		srv := npln.NewServer(creds, npln.StardewTenant, npln.AppID)
 		// A host creates a session and the server hands every joiner an
 		// address to dial. The console dials THAT directly -- not through
 		// Traefik, which only knows SNI -- so it has to be a port of its own,

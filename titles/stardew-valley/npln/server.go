@@ -37,7 +37,8 @@ var Tenant = StardewTenant
 // StardewTenant is Stardew Valley's tenant.
 const StardewTenant = "tenants/t-9f607adf-lp1"
 
-// AppID is Stardew Valley's title id, carried in the access token's npln.app_id claim.
+// AppID is Stardew Valley's title id; each title passes its own to NewServer for the access
+// token's npln.app_id claim.
 const AppID = "0100e65002bb8000"
 
 func envOr(k, d string) string {
@@ -150,7 +151,7 @@ func (c *connTracer) HandleConn(_ context.Context, s stats.ConnStats) {
 
 // NewServer wires every service. creds==nil gives plaintext h2c (behind a TLS-terminating edge).
 // tenant is the title's NPLN tenant ("tenants/t-…-lp1"); "" keeps Stardew Valley's.
-func NewServer(creds credentials.TransportCredentials, tenant string) *grpc.Server {
+func NewServer(creds credentials.TransportCredentials, tenant, appID string) *grpc.Server {
 	if tenant != "" {
 		Tenant = tenant
 	}
@@ -172,7 +173,7 @@ func NewServer(creds credentials.TransportCredentials, tenant string) *grpc.Serv
 		opts = append(opts, grpc.Creds(creds))
 	}
 	s := grpc.NewServer(opts...)
-	authpb.RegisterAuthServer(s, &authServer{})
+	authpb.RegisterAuthServer(s, &authServer{appID: appID})
 	friendspb.RegisterFriendsServer(s, &friendsServer{})
 	friendspb.RegisterPresenceServiceServer(s, &presenceServer{})
 	mm := newSessionServer()

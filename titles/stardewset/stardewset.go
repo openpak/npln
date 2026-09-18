@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strings"
 
 	"google.golang.org/grpc/credentials"
 
@@ -22,9 +23,9 @@ var tenantShape = regexp.MustCompile(`^tenants/t-[0-9a-f]{8}-lp1$`)
 // Title builds a title's host entry. session is the gamesync/session address every
 // joiner dials directly (not through Traefik, which only knows SNI); without it a
 // session is advertised at the relay default, 127.0.0.1, and nobody can join.
-// defaultTenant may be empty when no source gives the tenant yet: the title then
+// titleID is the Switch application id, the access token's app_id. defaultTenant may be empty when no source gives the tenant yet: the title then
 // refuses to start until NPLN_TENANT is set.
-func Title(name, listen, healthListen, session, defaultTenant string) host.Title {
+func Title(name, titleID, listen, healthListen, session, defaultTenant string) host.Title {
 	return host.Title{
 		Name:         name,
 		Listen:       listen,
@@ -34,7 +35,7 @@ func Title(name, listen, healthListen, session, defaultTenant string) host.Title
 			if err != nil {
 				return err
 			}
-			srv := npln.NewServer(creds, tenant)
+			srv := npln.NewServer(creds, tenant, strings.ToLower(titleID))
 			if addr := env("NPLN_SESSION_LISTEN", session); addr != "" && addr != lis.Addr().String() {
 				if sl, err := net.Listen("tcp", addr); err != nil {
 					log.Printf("session endpoint: cannot listen on %s: %v", addr, err)

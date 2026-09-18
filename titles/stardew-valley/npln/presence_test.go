@@ -17,7 +17,7 @@ func TestKeepAliveAnswersEveryPing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := NewServer(nil, "")
+	srv := NewServer(nil, "", AppID)
 	go srv.Serve(lis)
 	defer srv.Stop()
 

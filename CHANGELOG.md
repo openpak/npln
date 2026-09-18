@@ -3,6 +3,12 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.4 — 2026-09-18
+
+- Access tokens name the title they were issued for (`npln.app_id`). Every title on the
+  Stardew set (Wonder, Dinkum, Human Fall Flat) was getting Stardew's id, and Dinkum refused
+  to create a session (2321-5760) without making a call.
+
 ## v0.5.3 — 2026-09-18
 
 - Every call's content is in the log by default, for every title: `[RPC>]` for each request

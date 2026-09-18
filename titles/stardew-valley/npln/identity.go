@@ -228,7 +228,7 @@ func accountID(uid string) string { // "u-xyz…" -> "a-ayz…", the shape Ninte
 	return "a-openpak"
 }
 
-func mintAccessToken(pid uint64, userPath, tenant string) string {
+func mintAccessToken(pid uint64, userPath, tenant, appID string) string {
 	now := time.Now()
 	uid := lastSeg(userPath)
 	return signJWT(
@@ -236,7 +236,7 @@ func mintAccessToken(pid uint64, userPath, tenant string) string {
 		map[string]any{
 			"exp": now.Add(tokenTTL).Unix(), "iat": now.Unix(), "iss": "default iss", "sub": uid,
 			"npln": map[string]any{
-				"aid": accountID(uid), "app_id": AppID,
+				"aid": accountID(uid), "app_id": appID,
 				"authorization": map[string]any{"allow": []string{"**"}, "deny": []string{}, "nso_restricted": false},
 				"ext_id":        fmt.Sprintf("%016x", pid), "ext_id_type": 1,
 				"tid": strings.TrimPrefix(tenant, "tenants/"),
@@ -266,13 +266,13 @@ func refreshKey() []byte {
 	return sum[:]
 }
 
-func newToken(pid uint64, userPath, tenant string) *authpb.Token {
+func newToken(pid uint64, userPath, tenant, appID string) *authpb.Token {
 	mac := hmac.New(sha256.New, refreshKey())
 	body := fmt.Sprintf("openpak-npln-refresh.%d", pid)
 	mac.Write([]byte(body))
 	return &authpb.Token{
 		User:         userPath,
-		AccessToken:  mintAccessToken(pid, userPath, tenant),
+		AccessToken:  mintAccessToken(pid, userPath, tenant, appID),
 		RefreshToken: body + "." + b64u(mac.Sum(nil)),
 		Ttl:          durationpb.New(tokenTTL),
 	}

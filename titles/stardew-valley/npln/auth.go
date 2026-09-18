@@ -11,7 +11,13 @@ import (
 	authpb "github.com/openpak/npln/proto/auth/v1"
 )
 
-type authServer struct{ authpb.UnimplementedAuthServer }
+// authServer issues tokens for one title: appID goes into every access token's npln.app_id,
+// which the client compares with its own title before it creates a session (Dinkum refused
+// to host, 2321-5760, with no call made, while the tokens named Stardew).
+type authServer struct {
+	authpb.UnimplementedAuthServer
+	appID string
+}
 
 // IssuePrearrangedUserToken is Stardew's first RPC (confirmed 2026-09-01), sent on two connections.
 func (s *authServer) IssuePrearrangedUserToken(ctx context.Context, req *authpb.IssuePrearrangedUserTokenRequest) (*authpb.IssuePrearrangedUserTokenResponse, error) {
@@ -22,7 +28,7 @@ func (s *authServer) IssuePrearrangedUserToken(ctx context.Context, req *authpb.
 	log.Printf("[Auth] IssuePrearrangedUserToken pid=%d user=%s", pid, userPath)
 	return &authpb.IssuePrearrangedUserTokenResponse{
 		User:  &authpb.User{Name: userPath, ShortId: int64(req.GetUserIndex())},
-		Token: newToken(pid, userPath, req.GetTenant()),
+		Token: newToken(pid, userPath, req.GetTenant(), s.appID),
 	}, nil
 }
 
@@ -32,7 +38,7 @@ func (s *authServer) IssueToken(ctx context.Context, req *authpb.IssueTokenReque
 		return nil, err
 	}
 	log.Printf("[Auth] IssueToken pid=%d user=%s", pid, userPath)
-	return &authpb.IssueTokenResponse{Token: newToken(pid, userPath, tenantFromCtx(ctx))}, nil
+	return &authpb.IssueTokenResponse{Token: newToken(pid, userPath, tenantFromCtx(ctx), s.appID)}, nil
 }
 
 func (s *authServer) IssueAnonymousUserToken(ctx context.Context, req *authpb.IssueAnonymousUserTokenRequest) (*authpb.IssueAnonymousUserTokenResponse, error) {
@@ -40,7 +46,7 @@ func (s *authServer) IssueAnonymousUserToken(ctx context.Context, req *authpb.Is
 	if err != nil {
 		return nil, err
 	}
-	return &authpb.IssueAnonymousUserTokenResponse{Token: newToken(pid, userPath, req.GetTenant())}, nil
+	return &authpb.IssueAnonymousUserTokenResponse{Token: newToken(pid, userPath, req.GetTenant(), s.appID)}, nil
 }
 
 // RefreshToken re-issues for an identity ALREADY proven (bearer or signed refresh token); never anonymous.
@@ -58,7 +64,7 @@ func (s *authServer) RefreshToken(ctx context.Context, req *authpb.RefreshTokenR
 		return nil, err
 	}
 	log.Printf("[Auth] RefreshToken pid=%d", pid)
-	return &authpb.RefreshTokenResponse{Token: newToken(pid, userPath, tenantFromCtx(ctx))}, nil
+	return &authpb.RefreshTokenResponse{Token: newToken(pid, userPath, tenantFromCtx(ctx), s.appID)}, nil
 }
 
 // ValidateToken: the bearer's signature is checked by callerPID on every call; the account gate

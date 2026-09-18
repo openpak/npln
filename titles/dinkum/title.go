@@ -16,4 +16,4 @@ const TitleID = "0100A5A020D5E000"
 
 // Title is this game's entry in the shared NPLN host: tenant port 21122, session 22230
 // (ports.md).
-var Title = stardewset.Title("dinkum", ":21122", ":21123", ":22230", "tenants/t-35b7d576-lp1")
+var Title = stardewset.Title("dinkum", TitleID, ":21122", ":21123", ":22230", "tenants/t-35b7d576-lp1")

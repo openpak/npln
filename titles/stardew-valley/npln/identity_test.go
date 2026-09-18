@@ -2,10 +2,12 @@ package npln
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc/metadata"
@@ -49,12 +51,31 @@ func TestIdentityRoundTrip(t *testing.T) {
 		t.Fatalf("pid lookup: %+v %v", me, err)
 	}
 
-	tok := newToken(1800000005, Tenant+"/users/"+acc.UserID(), Tenant)
+	tok := newToken(1800000005, Tenant+"/users/"+acc.UserID(), Tenant, AppID)
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "bearer "+tok.AccessToken))
 	if pid, ok := callerPID(ctx); !ok || pid != 1800000005 {
 		t.Fatalf("bearer did not resolve: pid=%d ok=%v", pid, ok)
 	}
 	if pid, ok := pidFromRefresh(tok.RefreshToken); !ok || pid != 1800000005 {
 		t.Fatalf("refresh did not resolve: pid=%d ok=%v", pid, ok)
+	}
+}
+
+// A title on this service set must get tokens naming itself, not Stardew: the client checks
+// npln.app_id before it creates a session.
+func TestAccessTokenNamesTheServingTitle(t *testing.T) {
+	tok := newToken(1, Tenant+"/users/u-x", Tenant, "0100a5a020d5e000")
+	seg := strings.Split(tok.GetAccessToken(), ".")
+	payload, err := base64.RawURLEncoding.DecodeString(seg[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c struct {
+		Npln struct {
+			AppID string `json:"app_id"`
+		} `json:"npln"`
+	}
+	if err := json.Unmarshal(payload, &c); err != nil || c.Npln.AppID != "0100a5a020d5e000" {
+		t.Fatalf("app_id = %q (%v)", c.Npln.AppID, err)
 	}
 }
