@@ -3,6 +3,13 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.5 — 2026-09-18
+
+- `IssueToken` without a provable id token is re-issued for the user the same connection
+  already proved, and refused for anyone else. Dinkum sends a 32-byte non-JWT when it hosts.
+- Token fields in the log also say hex/printable/binary and carry a short SHA-256
+  fingerprint; still never the value.
+
 ## v0.5.4 — 2026-09-18
 
 - Access tokens name the title they were issued for (`npln.app_id`). Every title on the

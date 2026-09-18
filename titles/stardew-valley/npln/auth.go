@@ -3,6 +3,7 @@ package npln
 import (
 	"context"
 	"log"
+	"sync"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -25,6 +26,7 @@ func (s *authServer) IssuePrearrangedUserToken(ctx context.Context, req *authpb.
 	if err != nil {
 		return nil, err
 	}
+	proven(ctx, pid, userPath)
 	log.Printf("[Auth] IssuePrearrangedUserToken pid=%d user=%s", pid, userPath)
 	return &authpb.IssuePrearrangedUserTokenResponse{
 		User:  &authpb.User{Name: userPath, ShortId: int64(req.GetUserIndex())},
@@ -35,8 +37,17 @@ func (s *authServer) IssuePrearrangedUserToken(ctx context.Context, req *authpb.
 func (s *authServer) IssueToken(ctx context.Context, req *authpb.IssueTokenRequest) (*authpb.IssueTokenResponse, error) {
 	pid, userPath, err := gatedIdentity(req.GetExternalIdToken(), tenantFromCtx(ctx))
 	if err != nil {
-		return nil, err
+		p, ok := ctx.Value(connProofKey{}).(*connProof)
+		if !ok || req.GetUser() == "" || p.user() != req.GetUser() {
+			return nil, err
+		}
+		// Dinkum re-issues when it hosts, with a 32-byte non-JWT in place of the id token
+		// (2026-09-18), on the connection that proved this same user moments before. Nobody else
+		// can be on that connection, so the earlier proof stands; any other user still fails.
+		pid, userPath = p.pid, p.path
+		log.Printf("[Auth] IssueToken: token not provable, user already proven on this connection -> re-issued")
 	}
+	proven(ctx, pid, userPath)
 	log.Printf("[Auth] IssueToken pid=%d user=%s", pid, userPath)
 	return &authpb.IssueTokenResponse{Token: newToken(pid, userPath, tenantFromCtx(ctx), s.appID)}, nil
 }
@@ -71,4 +82,27 @@ func (s *authServer) RefreshToken(ctx context.Context, req *authpb.RefreshTokenR
 // happened at issue time (the adapter only knows verified, linked accounts).
 func (s *authServer) ValidateToken(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
 	return &emptypb.Empty{}, nil
+}
+
+// connProof is what one connection has proven: the last identity an id token established on it.
+type connProof struct {
+	mu   sync.Mutex
+	pid  uint64
+	path string
+}
+
+type connProofKey struct{}
+
+func (p *connProof) user() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.path
+}
+
+func proven(ctx context.Context, pid uint64, userPath string) {
+	if p, ok := ctx.Value(connProofKey{}).(*connProof); ok {
+		p.mu.Lock()
+		p.pid, p.path = pid, userPath
+		p.mu.Unlock()
+	}
 }

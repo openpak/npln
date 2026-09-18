@@ -137,9 +137,13 @@ func unknownService(_ any, ss grpc.ServerStream) error {
 // connTracer logs connection lifetime: "h2 established" with zero RPCs is the client-side cancel signature.
 type connTracer struct{ open atomic.Int64 }
 
-func (*connTracer) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context   { return ctx }
-func (*connTracer) HandleRPC(context.Context, stats.RPCStats)                         {}
-func (*connTracer) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context { return ctx }
+func (*connTracer) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context { return ctx }
+func (*connTracer) HandleRPC(context.Context, stats.RPCStats)                       {}
+
+// TagConn gives every connection its own record of the identity it has proven (auth.go).
+func (*connTracer) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return context.WithValue(ctx, connProofKey{}, &connProof{})
+}
 func (c *connTracer) HandleConn(_ context.Context, s stats.ConnStats) {
 	switch s.(type) {
 	case *stats.ConnBegin:
