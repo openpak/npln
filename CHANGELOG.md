@@ -3,6 +3,11 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.15 — 2026-09-18
+
+- Hamster Playground (21118, session 24510) and Wavecade (21120, session 24520), both Switch 1,
+  on their public tenants. NPLN session ports continue in 24000–24999 (open at the provider).
+
 ## v0.5.14 — 2026-09-18
 
 - Six titles on the Stardew set under their public tenants, deployed before any boot:
