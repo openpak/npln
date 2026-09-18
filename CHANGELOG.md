@@ -3,6 +3,12 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.9 — 2026-09-18
+
+- Room codes are named `tenants/…/GameSessionShortAliases/<code>`, capital G. The NPLN SDK
+  compares that collection name byte for byte (read from Dinkum's code) and aborted the game
+  on our lowercase `gameSessionShortAliases` — the freeze right after hosting.
+
 ## v0.5.8 — 2026-09-18
 
 - A call with a valid access token (ours) counts as proof of its user for that connection,

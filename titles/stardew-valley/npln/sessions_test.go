@@ -2,6 +2,7 @@ package npln
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,6 +75,9 @@ func TestShortAliasNamesTheRealTenant(t *testing.T) {
 		GameSessionShortAlias: &mmpb.GameSessionShortAlias{GameSession: "tenants/current/gameSessions/g1"}})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.HasPrefix(a.GetName(), Tenant+"/GameSessionShortAliases/") {
+		t.Fatalf("name = %q: the SDK parses the collection as GameSessionShortAliases", a.GetName())
 	}
 	if want := Tenant + "/gameSessions/g1"; a.GetGameSession() != want {
 		t.Fatalf("game_session = %q, want %q", a.GetGameSession(), want)
