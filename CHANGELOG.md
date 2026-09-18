@@ -3,6 +3,14 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.11 — 2026-09-18
+
+- KeepAlive never answers an ack. A real console acks each heartbeat at once, and answering it
+  was a heartbeat/ack storm that dropped the console's connection every few seconds, before
+  it could ask for its friends' presence. Heartbeats now come from a 10 s timer.
+- Room codes are 6 capital letters (no I/O), what Dinkum's room-code screen accepts; lookup
+  ignores case. They were 8 lowercase hex, which could not be typed in.
+
 ## v0.5.10 — 2026-09-18
 
 - The Stardew set serves `PresenceService/SubscribePresences` and keeps who is online and

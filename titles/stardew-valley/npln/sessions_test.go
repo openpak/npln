@@ -82,7 +82,11 @@ func TestShortAliasNamesTheRealTenant(t *testing.T) {
 	if want := Tenant + "/gameSessions/g1"; a.GetGameSession() != want {
 		t.Fatalf("game_session = %q, want %q", a.GetGameSession(), want)
 	}
-	b, err := g.GetGameSessionShortAlias(context.Background(), &mmpb.GetGameSessionShortAliasRequest{Name: a.GetName()})
+	code := lastSeg(a.GetName())
+	if len(code) != 6 || strings.Trim(code, roomCodeLetters) != "" {
+		t.Fatalf("room code %q: Dinkum's screen takes 6 capitals", code)
+	}
+	b, err := g.GetGameSessionShortAlias(context.Background(), &mmpb.GetGameSessionShortAliasRequest{Name: "tenants/current/GameSessionShortAliases/" + strings.ToLower(code)})
 	if err != nil || b.GetGameSession() != a.GetGameSession() {
 		t.Fatalf("lookup: %v %v", b, err)
 	}
