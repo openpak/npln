@@ -3,6 +3,12 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.10 — 2026-09-18
+
+- The Stardew set serves `PresenceService/SubscribePresences` and keeps who is online and
+  what they published (ported from Splatoon 3): a friend now sees a Dinkum host as hosting.
+- First real console on Dinkum: TLS accepted, no certificate pinning, login and friends work.
+
 ## v0.5.9 — 2026-09-18
 
 - Room codes are named `tenants/…/GameSessionShortAliases/<code>`, capital G. The NPLN SDK
