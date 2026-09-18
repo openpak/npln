@@ -11,12 +11,14 @@ package npln
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -452,9 +454,23 @@ func (g *sessionServer) GetUserSession(ctx context.Context, req *mmpb.GetUserSes
 // game when the room-code answer says "gameSessionShortAliases".
 const shortAliases = "/GameSessionShortAliases/"
 
+// roomCodeLetters: Dinkum's room-code screen takes 6 characters, all caps (seen on a console,
+// 2026-09-18). Letters only, so the code fits whether or not the field takes digits, and no
+// I/O to misread as 1/0.
+const roomCodeLetters = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+
+func roomCode() string {
+	b := make([]byte, 6)
+	_, _ = rand.Read(b)
+	for i := range b {
+		b[i] = roomCodeLetters[int(b[i])%len(roomCodeLetters)]
+	}
+	return string(b)
+}
+
 // CreateGameSessionShortAlias mints the room code, every name spelled with the real tenant.
 func (g *sessionServer) CreateGameSessionShortAlias(ctx context.Context, req *mmpb.CreateGameSessionShortAliasRequest) (*mmpb.GameSessionShortAlias, error) {
-	code := uuid4()[:8]
+	code := roomCode()
 	gs := tenantFromCtx(ctx) + "/gameSessions/" + lastSeg(req.GetGameSessionShortAlias().GetGameSession())
 	g.mu.Lock()
 	g.aliases[code] = gs
@@ -464,7 +480,7 @@ func (g *sessionServer) CreateGameSessionShortAlias(ctx context.Context, req *mm
 
 func (g *sessionServer) GetGameSessionShortAlias(ctx context.Context, req *mmpb.GetGameSessionShortAliasRequest) (*mmpb.GameSessionShortAlias, error) {
 	g.mu.Lock()
-	gs := g.aliases[lastSeg(req.GetName())]
+	gs := g.aliases[strings.ToUpper(lastSeg(req.GetName()))] // typed codes may come in any case
 	g.mu.Unlock()
 	if gs == "" {
 		return nil, status.Errorf(codes.NotFound, "alias %q not found", req.GetName())

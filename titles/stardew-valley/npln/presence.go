@@ -100,18 +100,46 @@ type presenceServer struct {
 	friendspb.UnimplementedPresenceServiceServer
 }
 
-// KeepAlive opens with a heartbeat, then answers every ping: the client gives up when its own
-// pings go unanswered, even if we heartbeat on a timer of our own.
+// KeepAlive: we open with a heartbeat, heartbeat again on our own timer, and answer each
+// presence update. We never answer an ack: the client acks every heartbeat, a real console
+// instantly, so answering acks is a heartbeat/ack storm (357 KB of log in 30 s, 2026-09-18)
+// that drops the connection before the console ever asks for its friends' presence.
 //
-// The opening heartbeat is what makes the presence client "connected". Dinkum opens the stream
-// and sends nothing; without it, SetPresenceHosting fails (2026-09-18).
+// The opening heartbeat is what makes the presence client "connected": Dinkum opens the stream
+// and sends nothing until it has one (SetPresenceHosting aborted the game without it).
 func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveServer) error {
 	_, uid, _ := bearer(stream.Context())
 	goOnline(uid)
 	defer goOffline(uid)
-	if err := stream.Send(&friendspb.KeepAliveResponse{Heartbeat: presenceHeartbeat}); err != nil {
+
+	var mu sync.Mutex // Send is not safe from two goroutines
+	beat := func() error {
+		mu.Lock()
+		defer mu.Unlock()
+		return stream.Send(&friendspb.KeepAliveResponse{Heartbeat: presenceHeartbeat})
+	}
+	if beat() != nil {
 		return nil
 	}
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		t := time.NewTicker(keepAliveBeat)
+		defer t.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-stream.Context().Done():
+				return
+			case <-t.C:
+				if beat() != nil {
+					return
+				}
+			}
+		}
+	}()
+
 	for {
 		req, err := stream.Recv()
 		if err != nil {
@@ -121,12 +149,15 @@ func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveSer
 			attrs := up.GetPresence().GetAttributes()
 			publish(uid, attrs)
 			log.Printf("[Presence] UpdatePresence from %s: %d attribute(s)", uid, len(attrs))
-		}
-		if err := stream.Send(&friendspb.KeepAliveResponse{Heartbeat: presenceHeartbeat}); err != nil {
-			return nil
+			if beat() != nil {
+				return nil
+			}
 		}
 	}
 }
+
+// keepAliveBeat is how often we heartbeat unprompted: well inside the 50 s deadline.
+var keepAliveBeat = 10 * time.Second
 
 // presencesFor builds one Presence per friend of the caller.
 func presencesFor(ctx context.Context) []*friendspb.Presence {
