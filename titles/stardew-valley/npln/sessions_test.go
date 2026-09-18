@@ -13,7 +13,7 @@ import (
 )
 
 func bearerCtx(pid uint64, uid string) context.Context {
-	tok := newToken(pid, Tenant+"/users/"+uid, Tenant)
+	tok := newToken(pid, Tenant+"/users/"+uid, Tenant, AppID)
 	return metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "bearer "+tok.AccessToken))
 }
 
@@ -44,7 +44,7 @@ func TestSessionIdentityIsTheBearer(t *testing.T) {
 	}
 
 	// A joiner claiming the host's uid in metadata is still the joiner.
-	joinTok := newToken(2, Tenant+"/users/u-joiner", Tenant)
+	joinTok := newToken(2, Tenant+"/users/u-joiner", Tenant, AppID)
 	joiner := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "bearer "+joinTok.AccessToken, "uid", "u-host"))
 	if _, err := g.JoinGameSession(joiner, &mmpb.JoinGameSessionRequest{Name: gsName}); err != nil {
 		t.Fatal(err)

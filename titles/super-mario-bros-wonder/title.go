@@ -21,4 +21,4 @@ const DefaultTenant = "tenants/t-ba973ec6-lp1"
 
 // Title is this game's entry in the shared NPLN host: tenant port 21014, session 22220
 // (ports.md).
-var Title = stardewset.Title("super-mario-bros-wonder", ":21014", ":21015", ":22220", DefaultTenant)
+var Title = stardewset.Title("super-mario-bros-wonder", TitleID, ":21014", ":21015", ":22220", DefaultTenant)
