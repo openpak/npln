@@ -17,7 +17,7 @@ service owns a block of ten: +0 HTTP, +1 gRPC, +2 metrics/pprof, +3..+9 spare.
 | 21013 | Splatoon 3 server health (plain HTTP `/health`, not console-facing) | — |
 | 21014 | Super Mario Bros. Wonder NPLN tenant (deployed 2026-09-11, not console-verified) | `t-ba973ec6-lp1.lp1.t.npln.srv.nintendo.net` |
 | 21015 | Super Mario Bros. Wonder server health (plain HTTP `/health`) | — |
-| 21122 | Dinkum NPLN tenant (registered 2026-09-18; tenant not yet known — set `NPLN_TENANT` from a boot; health 21123, session 22230) | from the console's DNS log |
+| 21122 | Dinkum NPLN tenant (deployed 2026-09-18 as `openpak-dinkum`, not console-verified; tenant from a Ryujinx boot; health 21123, session 22230) | `t-35b7d576-lp1.lp1.t.npln.srv.nintendo.net` |
 | 21124 | Human Fall Flat NPLN tenant (registered 2026-09-18; tenant not yet known — set `NPLN_TENANT` from a boot; health 21125, session 22240) | from the console's DNS log |
 
 Other services' rows live in the canonical ports.md.
