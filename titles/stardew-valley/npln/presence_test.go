@@ -11,7 +11,7 @@ import (
 	friendspb "github.com/openpak/npln/proto/friends/v1"
 )
 
-// Dinkum's KeepAlive stream must be answered once per ping, through the real server.
+// Dinkum's KeepAlive stream opens with a heartbeat and answers once per ping, through the real server.
 func TestKeepAliveAnswersEveryPing(t *testing.T) {
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -29,6 +29,10 @@ func TestKeepAliveAnswersEveryPing(t *testing.T) {
 	stream, err := friendspb.NewPresenceServiceClient(conn).KeepAlive(context.Background())
 	if err != nil {
 		t.Fatal(err)
+	}
+	// the server speaks first: a client that sends nothing still gets its heartbeat
+	if resp, err := stream.Recv(); err != nil || resp.GetHeartbeat().GetInterval().AsDuration() == 0 {
+		t.Fatalf("opening heartbeat: %v %v", resp, err)
 	}
 	for i := 0; i < 2; i++ {
 		if err := stream.Send(&friendspb.KeepAliveRequest{}); err != nil {
