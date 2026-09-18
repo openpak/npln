@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"github.com/openpak/npln/rpclog"
 	"log"
 	"os"
 	"strconv"
@@ -126,6 +127,7 @@ func typeStream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, h gr
 
 // unknownService logs any method we do not serve yet: that log line IS the next work item.
 func unknownService(_ any, ss grpc.ServerStream) error {
+	rpclog.Unimplemented(ss)
 	m, _ := grpc.MethodFromServerStream(ss)
 	log.Printf("[RPC] UNIMPLEMENTED %s uid=%q — next handler to write", m, uidFromCtx(ss.Context()))
 	return grpc.Errorf(12, "method %s not implemented", m) //nolint:staticcheck // codes.Unimplemented
@@ -154,8 +156,8 @@ func NewServer(creds credentials.TransportCredentials, tenant string) *grpc.Serv
 	}
 	startRegions()
 	opts := []grpc.ServerOption{
-		grpc.UnaryInterceptor(typeUnary),
-		grpc.StreamInterceptor(typeStream),
+		grpc.ChainUnaryInterceptor(typeUnary, rpclog.Unary),
+		grpc.ChainStreamInterceptor(typeStream, rpclog.Stream),
 		grpc.UnknownServiceHandler(unknownService),
 		grpc.StatsHandler(&connTracer{}),
 		// The client pings often, also without streams; grpc-go's default policy answers with
