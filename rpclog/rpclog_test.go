@@ -21,7 +21,7 @@ func TestBodyHidesTokensAndShowsUnknownFields(t *testing.T) {
 	if strings.Contains(got, jwt) || strings.Contains(got, "eyJ") {
 		t.Fatalf("token value leaked: %s", got)
 	}
-	for _, want := range []string{"u-x", "external_id_token.nsa_id_token=<41 bytes, jwt>", "unknown=4801"} {
+	for _, want := range []string{"u-x", "external_id_token.nsa_id_token=<41 bytes, jwt, sha256 ", "unknown=4801"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in %s", want, got)
 		}

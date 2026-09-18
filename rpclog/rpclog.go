@@ -11,6 +11,7 @@ package rpclog
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -80,12 +81,22 @@ func redact(m protoreflect.Message, path string, secrets *[]string) {
 	})
 }
 
+// shape describes a secret without revealing it: length, what it looks like, and a short
+// fingerprint (first 8 hex of its SHA-256) to compare against a candidate value offline.
 func shape(s string) string {
 	kind := "not a jwt"
-	if strings.Count(s, ".") == 2 && strings.HasPrefix(s, "ey") {
+	switch {
+	case strings.Count(s, ".") == 2 && strings.HasPrefix(s, "ey"):
 		kind = "jwt"
+	case s != "" && strings.Trim(s, "0123456789abcdefABCDEF") == "":
+		kind = "not a jwt, hex"
+	case s != "" && strings.IndexFunc(s, func(r rune) bool { return r < 0x20 || r > 0x7e }) < 0:
+		kind = "not a jwt, printable"
+	case s != "":
+		kind = "not a jwt, binary"
 	}
-	return fmt.Sprintf("%d bytes, %s", len(s), kind)
+	sum := sha256.Sum256([]byte(s))
+	return fmt.Sprintf("%d bytes, %s, sha256 %x", len(s), kind, sum[:4])
 }
 
 // unknown collects the raw bytes of fields our proto does not define, at any depth.
