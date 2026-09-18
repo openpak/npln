@@ -26,9 +26,16 @@ var presenceHeartbeat = &friendspb.Heartbeat{
 	Deadline: durationpb.New(50 * time.Second),
 }
 
-// KeepAlive answers every ping: the client gives up when its own pings go unanswered, even if
-// we heartbeat on a timer of our own.
+// KeepAlive opens with a heartbeat, then answers every ping: the client gives up when its own
+// pings go unanswered, even if we heartbeat on a timer of our own.
+//
+// The opening heartbeat is what makes the presence client "connected". Dinkum opens the stream
+// and sends nothing; without it, SetPresenceHosting fails and the game aborts right after its
+// room code arrives (2026-09-18, 56 s of silence on the stream before the abort).
 func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveServer) error {
+	if err := stream.Send(&friendspb.KeepAliveResponse{Heartbeat: presenceHeartbeat}); err != nil {
+		return nil
+	}
 	for {
 		req, err := stream.Recv()
 		if err != nil {

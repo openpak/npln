@@ -3,6 +3,12 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.6 — 2026-09-18
+
+- `PresenceService/KeepAlive` opens with a heartbeat. Dinkum opens the stream and waits for
+  the server; without it the presence client never connected and the game aborted as soon
+  as it published its room code.
+
 ## v0.5.5 — 2026-09-18
 
 - `IssueToken` without a provable id token is re-issued for the user the same connection
