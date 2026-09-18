@@ -1,5 +1,11 @@
 # Next session — servers/npln
 
+**Updated 2026-09-18 — read this first.** v0.5.0 is live (Stardew, Wonder, Splatoon 3).
+Dinkum and Human Fall Flat are registered but need their tenants from a boot; the
+step-by-step (reading the tenant from the Ryujinx log, cert, quadlet, route, firewall) is
+in `../switch-nex/next-session.md` → *At home*. Splatoon 3's rotation runs out
+**2026-10-18**; regenerate before then.
+
 Updated 2026-09-15.
 
 The shared NPLN host and, under `titles/`, every OpenPak NPLN title in one image
