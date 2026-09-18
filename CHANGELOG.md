@@ -3,6 +3,14 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.0 — 2026-09-18
+
+- Dinkum (21122, session 22230) and Human Fall Flat (21124, session 22240) registered: NPLN
+  titles found in our own dumps and on no public list. Their dumps carry no tenant, so both
+  refuse to start until `NPLN_TENANT` is set from a boot.
+- `titles/stardewset`: Stardew's verified service set under another tenant, shared by
+  Wonder, Dinkum and Human Fall Flat. Wonder's behaviour is unchanged.
+
 ## v0.3.1 — 2026-09-12
 
 
