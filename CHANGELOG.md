@@ -3,6 +3,15 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.5.14 — 2026-09-18
+
+- Six titles on the Stardew set under their public tenants, deployed before any boot:
+  Super Mario Party Jamboree (21100), Pokémon Scarlet/Violet (21102, Scarlet's app_id),
+  Legends: Arceus (21104), Monster Hunter Rise (21106), Bayonetta 3 (21110), Endless Ocean
+  Luminous (21112). Held back: Puyo Puyo Tetris 2S (Switch 2), Hamster Playground and
+  Wavecade (platform unconfirmed), Nintendo Classics (several apps, one tenant), MACHI KORO
+  (no tenant).
+
 ## v0.5.13 — 2026-09-18
 
 - Human Fall Flat's tenant is `t-5cbc0f31-lp1` (from a boot), now its default; deployed as
