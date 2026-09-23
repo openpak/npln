@@ -44,6 +44,7 @@ type sessionServer struct {
 	sessions map[string]*mmpb.GameSession               // session id -> session (no user_sessions)
 	members  map[string][]*mmpb.UserSession             // session id -> participants
 	aliases  map[string]string                          // short code -> session name
+	pools    map[string]string                          // session id -> Matchmaker pool key, for pool sessions only
 }
 
 func newSessionServer() *sessionServer {
@@ -52,6 +53,7 @@ func newSessionServer() *sessionServer {
 		sessions: map[string]*mmpb.GameSession{},
 		members:  map[string][]*mmpb.UserSession{},
 		aliases:  map[string]string{},
+		pools:    map[string]string{},
 	}
 }
 
@@ -186,6 +188,9 @@ func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req
 			room.MaxParticipantCount = rg.GetMaxParticipantCount()
 		}
 	}
+	if strings.HasPrefix(lastSeg(in.GetMatchmakingConfig()), "Friend") {
+		room.IsPublic = false // Wonder's FriendMatch rooms are friends-only (docs/provenance.md of Wonder)
+	}
 	// Keep the host's session properties EXACTLY as sent (only _Pia_SystemData). Measured via the
 	// client's own join filter (main FUN_07bb3d30 + criteria matcher at 0x76ecee4): the joiner
 	// compares each session's config id against its search criteria (bit1). Injecting Nintendo/S3's
@@ -217,7 +222,7 @@ func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req
 	// store holds one farm per host instead of accumulating stale duplicates (which the joiner's
 	// QueryGameSessions then returns as N copies). The host is member rank 1 (first added).
 	for gsid, mem := range g.members {
-		if len(mem) > 0 && mem[0].GetUser() == hostUser {
+		if _, pooled := g.pools[gsid]; !pooled && len(mem) > 0 && mem[0].GetUser() == hostUser {
 			delete(g.sessions, gsid)
 			delete(g.members, gsid)
 			log.Printf("[MM] evict stale farm session=%s (host %s re-hosted)", gsid, lastSeg(hostUser))
@@ -265,11 +270,20 @@ func (g *sessionServer) CancelGameSessionCreationTicket(ctx context.Context, req
 	return &emptypb.Empty{}, nil
 }
 
-// capacityFromConfig reads the lobby size a matchmaking config name carries as a trailing
-// number ("Mmc_CoOps2" holds 2, Peace Walker's naming); 0 when the name carries none. Only the
-// Mmc_ family is read: other titles' names may end in digits that mean something else.
+// capacityFromConfig reads the lobby size a matchmaking config name implies: Peace Walker's
+// carry it as a trailing number ("Mmc_CoOps2" holds 2), Wonder's by family (world-map and
+// friend rooms 12, courses 4). 0 when the name says nothing. Only those families are read:
+// other titles' names may end in digits that mean something else.
 func capacityFromConfig(cfg string) int32 {
 	name := lastSeg(cfg)
+	for _, p := range []string{"WorldMapMatch", "FriendWorldMapMatch", "FriendMatch"} {
+		if strings.HasPrefix(name, p) {
+			return 12
+		}
+	}
+	if strings.HasPrefix(name, "CourseMatch") {
+		return 4
+	}
 	if !strings.HasPrefix(name, "Mmc_") {
 		return 0
 	}
@@ -318,7 +332,7 @@ func (g *sessionServer) QueryGameSessions(ctx context.Context, req *mmpb.QueryGa
 	defer g.mu.Unlock()
 	out := &mmpb.QueryGameSessionsResponse{}
 	for id, s := range g.sessions {
-		if s.GetState() != mmpb.GameSession_ACTIVE {
+		if s.GetState() != mmpb.GameSession_ACTIVE || friendPool(s) {
 			continue
 		}
 		full := g.withMembers(id)
@@ -406,13 +420,14 @@ func (g *sessionServer) JoinGameSession(ctx context.Context, req *mmpb.JoinGameS
 	defer g.mu.Unlock()
 	gsid := lastSeg(req.GetName())
 	s := g.sessions[gsid]
-	if s == nil {
+	ud := userDef(user, firstUserDef(req.GetUserDefinitions()))
+	if s == nil || (friendPool(s) && !memberOf(g.members[gsid], ud.GetUser())) {
+		// a friend pool is entered through the Matchmaker from its base room, never by name
 		return nil, status.Errorf(codes.NotFound, "game session %q not found", req.GetName())
 	}
 	if s.GetPassword() != "" && req.GetPassword() != s.GetPassword() {
 		return nil, status.Error(codes.PermissionDenied, "wrong password")
 	}
-	ud := userDef(user, firstUserDef(req.GetUserDefinitions()))
 	if int32(len(g.members[gsid])) >= s.GetMaxParticipantCount() && !memberOf(g.members[gsid], ud.GetUser()) {
 		return nil, status.Error(codes.ResourceExhausted, "game session is full")
 	}
@@ -435,7 +450,8 @@ func (g *sessionServer) dropMember(gsid, user string) {
 	if len(list) == 0 {
 		return
 	}
-	if lastSeg(list[0].GetUser()) == lastSeg(user) {
+	_, pooled := g.pools[gsid]
+	if !pooled && lastSeg(list[0].GetUser()) == lastSeg(user) {
 		delete(g.sessions, gsid)
 		delete(g.members, gsid)
 		log.Printf("[MM] host %s left: farm %s closed", lastSeg(user), gsid)
@@ -448,7 +464,23 @@ func (g *sessionServer) dropMember(gsid, user string) {
 		}
 	}
 	g.members[gsid] = kept
+	if s := g.sessions[gsid]; s != nil {
+		s.CurrentParticipantCount = int32(len(kept))
+	}
+	if pooled && len(kept) == 0 { // a pool has no host: it closes with its last member
+		delete(g.sessions, gsid)
+		delete(g.members, gsid)
+		delete(g.pools, gsid)
+		log.Printf("[MM] pool session %s emptied and closed", gsid)
+		return
+	}
 	log.Printf("[MM] %s left farm %s (%d left)", lastSeg(user), gsid, len(kept))
+}
+
+// friendPool: a Matchmaker session tied to a base room through FriendGameSessionId. It is
+// never listed nor joinable as a room of its own (docs/provenance.md of Wonder).
+func friendPool(s *mmpb.GameSession) bool {
+	return s.GetProperties().GetFields()["FriendGameSessionId"].GetStringValue() != ""
 }
 
 func memberOf(list []*mmpb.UserSession, user string) bool {

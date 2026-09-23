@@ -277,7 +277,7 @@ func (g *gamesyncServer) mutableFields(s *gsSession) *commonpb.MapValue {
 		g.mm.mu.Unlock()
 	}
 	return &commonpb.MapValue{Fields: map[string]*commonpb.Value{
-		"gsid": gsStr(gsid), "addr": gsStr(addr), "p": gsInt(int64(port)), "mcn": gsStr("Farm4Player"), "maxu": gsInt(int64(maxp)),
+		"gsid": gsStr(gsid), "addr": gsStr(addr), "p": gsInt(int64(port)), "mcn": gsStr(configName(prp)), "maxu": gsInt(int64(maxp)),
 		"rs": gsMap(map[string]*commonpb.Value{
 			"cp": gsBool(true), "ip": gsBool(pub && pw == ""), "pw": gsStr(pw), "ebf": gsBool(false),
 			"bfmin": gsInt(1), "bfmax": gsInt(int64(maxp)), "prp": gsMap(prp.GetFields()),
@@ -389,7 +389,7 @@ func (g *gamesyncServer) roomFields(sub string, s *gsSession) *commonpb.MapValue
 	case "f":
 		sum := sha256.Sum256([]byte("stardew-gs-rs:" + gsid))
 		return &commonpb.MapValue{Fields: map[string]*commonpb.Value{
-			"addr": gsStr(addr), "gsid": gsStr(gsid), "maxu": gsInt(int64(maxp)), "mcn": gsStr("Farm4Player"),
+			"addr": gsStr(addr), "gsid": gsStr(gsid), "maxu": gsInt(int64(maxp)), "mcn": gsStr(configName(prp)),
 			"p": gsInt(int64(port)), "rs": {ValueType: &commonpb.Value_BytesValue{BytesValue: sum[:]}}, "tid": gsStr(lastSeg(Tenant)),
 		}}
 	case "m", "s":
@@ -405,6 +405,21 @@ func (g *gamesyncServer) roomFields(sub string, s *gsSession) *commonpb.MapValue
 		return &commonpb.MapValue{Fields: map[string]*commonpb.Value{"k": gsStr(pw)}}
 	}
 	return nil
+}
+
+// stardewConfigName is the `mcn` every title on the set served before titles carried their
+// own; Stardew and Dinkum play with it, so a title that stamps no config properties keeps it.
+const stardewConfigName = "Farm4Player"
+
+// configName is a session's `mcn`: the session's own _BaseConfigName for a title that stamps
+// config properties (Nintendo's backend serves that, docs/provenance.md), else Stardew's.
+func configName(prp *commonpb.MapValue) string {
+	if titleOptions.ConfigProperties {
+		if n := prp.GetFields()["_BaseConfigName"].GetStringValue(); n != "" {
+			return n
+		}
+	}
+	return stardewConfigName
 }
 
 func doc(name string, f *commonpb.MapValue, now *timestamppb.Timestamp) *gspb.Document {

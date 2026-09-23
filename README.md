@@ -9,10 +9,10 @@ Stardew Valley and Splatoon 3 use instead of NEX.
 | --- | --- | --- | --- |
 | [`titles/stardew-valley`](titles/stardew-valley) | `stardew-valley` | 21010 (health 21011) | live, console-verified |
 | [`titles/splatoon-3`](titles/splatoon-3) | `splatoon-3` | 21012 (health 21013), session 22210 | early, not run against retail |
-| [`titles/super-mario-bros-wonder`](titles/super-mario-bros-wonder) | `super-mario-bros-wonder` | 21014 (health 21015) | early: Stardew's service set under Wonder's tenant `t-ba973ec6-lp1`; deployed, not console-verified; the console needs a client patch (v1.2.1 pins its certificate) |
+| [`titles/super-mario-bros-wonder`](titles/super-mario-bros-wonder) | `super-mario-bros-wonder` | 21014 (health 21015), session 22220 | early: Stardew's service set under Wonder's tenant `t-ba973ec6-lp1`, plus the Matchmaker (course/world-map and friend pools), messaging, UGC store and hydro datastore; deployed, not console-verified. Served with a leaf chained to the OpenPak CA, which the console/emulator trusts via its system store; unverified until booted |
 | [`titles/dinkum`](titles/dinkum) | `dinkum` | 21122 (health 21123), session 22230 | registered: Stardew's service set; tenant unknown, so `NPLN_TENANT` is required; NPLN 1.43.3 with WebRTC/QUIC P2P add-ons |
 | [`titles/human-fall-flat`](titles/human-fall-flat) | `human-fall-flat` | 21124 (health 21125), session 22240 | registered: Stardew's service set; tenant unknown, so `NPLN_TENANT` is required; NPLN 1.41.1, Pia 6.42.0 |
-| [`titles/metal-gear-solid-peace-walker`](titles/metal-gear-solid-peace-walker) | `metal-gear-solid-peace-walker` | 21114 (health 21115), session 24530 | registered, never booted: Stardew's service set under tenant `t-4f53195c-lp1`, with config-name lobby sizes, FriendSearch and config properties; needs a client patch (pinned certificate) |
+| [`titles/metal-gear-solid-peace-walker`](titles/metal-gear-solid-peace-walker) | `metal-gear-solid-peace-walker` | 21114 (health 21115), session 24530 | registered, never booted: Stardew's service set under tenant `t-4f53195c-lp1`, with config-name lobby sizes, FriendSearch and config properties, plus the Matchmaker, messaging, UGC store and hydro datastore. Served with a leaf chained to the OpenPak CA, which the console/emulator trusts via its system store; unverified until booted |
 
 ## Shape
 
@@ -26,6 +26,15 @@ Stardew Valley and Splatoon 3 use instead of NEX.
 - `titles/<game>/npln` is that title's service implementations. Stardew and Splatoon still
   carry their own auth, friends and gamesync code. Titles not yet observed run Stardew's set
   under their own tenant through `titles/stardewset` (Wonder, Dinkum, Human Fall Flat).
+- Services beyond Stardew's set are opt-in per title through `npln.Options`: `Matchmaker`
+  (matchmaking.v1 ticket pools and friend pools), `Messaging` (messaging.v1), `UGC`
+  (ugcstore.v1 Ugcstore and Screening) and `Hydro` (hydro.v1 Datastore). Wonder and Peace Walker
+  take all four; every other title is unchanged and logs `UNIMPLEMENTED` for them.
+  `ConfigProperties` also makes gamesync's `mcn` the session's own config name; titles without
+  it keep Stardew's `Farm4Player`.
+- The UGC store keeps its documents in one JSON file, `NPLN_UGC_FILE` (default
+  `ugcstore.json` in the working directory; point it into the data volume, e.g.
+  `/app/data/ugcstore.json`). Everything else is in memory.
 - Each title keeps its own README, docs and tools (`titles/stardew-valley/cmd/observer`,
   `cmd/probe`; `titles/splatoon-3/cmd/genrotation`) in its directory.
 

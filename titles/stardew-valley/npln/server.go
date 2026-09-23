@@ -25,7 +25,10 @@ import (
 	authpb "github.com/openpak/npln/proto/auth/v1"
 	friendspb "github.com/openpak/npln/proto/friends/v1"
 	gspb "github.com/openpak/npln/proto/gamesync/v1"
+	hydropb "github.com/openpak/npln/proto/hydro/v1"
 	mmpb "github.com/openpak/npln/proto/matchmaking/v1"
+	msgpb "github.com/openpak/npln/proto/messaging/v1"
+	ugcpb "github.com/openpak/npln/proto/ugcstore/v1"
 )
 
 // Tenant is the hosted title's NPLN tenant (observed in every RPC's npln-tenant-id).
@@ -160,8 +163,16 @@ func (c *connTracer) HandleConn(_ context.Context, s stats.ConnStats) {
 type Options struct {
 	// ConfigProperties adds _BaseConfigName (the matchmaking config's last segment) and an
 	// empty _AliasSuffix to a created session's properties, as Nintendo's backend does. Off by
-	// default: Stardew's joiners drop any farm whose properties carry them.
+	// default: Stardew's joiners drop any farm whose properties carry them. It also makes the
+	// gamesync `mcn` the session's own config name instead of Stardew's "Farm4Player".
 	ConfigProperties bool
+
+	// The services beyond Stardew's set, each registered only for a title that asks for it (a
+	// title without one keeps logging UNIMPLEMENTED for it, as before):
+	Matchmaker bool // matchmaking.v1 Matchmaker: ticket pools, friend pools (matchmaker.go)
+	Messaging  bool // messaging.v1 Messaging (messaging.go)
+	UGC        bool // ugcstore.v1 Ugcstore and Screening (ugcstore.go)
+	Hydro      bool // hydro.v1 Datastore (hydro.go)
 }
 
 // titleOptions are the hosted title's Options; a package variable for the same reason as Tenant.
@@ -202,5 +213,18 @@ func NewServer(creds credentials.TransportCredentials, tenant, appID string, tit
 	mm := newSessionServer()
 	mmpb.RegisterGameSessionServiceServer(s, mm)
 	gspb.RegisterGamesyncServer(s, newGamesync(mm)) // session transport: same listener (host:port points here)
+	if titleOptions.Matchmaker {
+		mmpb.RegisterMatchmakerServer(s, newMatchmaker(mm))
+	}
+	if titleOptions.Messaging {
+		msgpb.RegisterMessagingServer(s, newMessaging(mm))
+	}
+	if titleOptions.UGC {
+		ugcpb.RegisterUgcstoreServer(s, newUGCStore(envOr("NPLN_UGC_FILE", "ugcstore.json")))
+		ugcpb.RegisterScreeningServer(s, &screening{})
+	}
+	if titleOptions.Hydro {
+		hydropb.RegisterDatastoreServer(s, newHydro())
+	}
 	return s
 }

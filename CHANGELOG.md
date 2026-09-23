@@ -5,6 +5,38 @@ of truth; this file is the readable summary.
 
 ## Unreleased
 
+- NPLN services beyond Stardew's set, opt-in per title through new `npln.Options` fields, and
+  on for Super Mario Bros. Wonder and METAL GEAR SOLID: Peace Walker (facts and sources in
+  `titles/super-mario-bros-wonder/docs/provenance.md`; new `.proto` files under `proto/messaging`,
+  `proto/ugcstore`, `proto/hydro`, written from the protocol descriptors):
+  - `Matchmaker` (matchmaking.v1): tickets pooled by config, `MatchingKey` and friend room;
+    `CourseMatch_*` pools hold 4, `WorldMapMatch_*` / `FriendWorldMapMatch_*` 12. Friend pools
+    need `FriendGameSessionId` naming a live base room the caller is in, are private, and are
+    never listed by `QueryGameSessions` nor joinable by name. A pool closes when its last member
+    leaves. Tracking streams SEARCHING, PLACING, then SUCCEEDED with every member; only the
+    caller's entry carries a token.
+  - `Messaging` (messaging.v1): `RecvMessage` opens with a 95 s keep-alive and repeats every
+    45 s; `SendMessage` to friends or session mates, resume tokens, `need_ack` messages kept
+    until acked and the ack delivered to the sender.
+  - `UGC` (ugcstore.v1 Ugcstore + Screening): documents stored in `NPLN_UGC_FILE` (default
+    `ugcstore.json`); Firestore-style queries (Wonder's course query answers read_time alone
+    when empty); writes only by a document's first writer, user-id path segments must be the
+    caller's, size and count limits, atomic commits; short codes; reports logged. Attachments
+    and upload URIs are not served.
+  - `Hydro` (hydro.v1 Datastore): contents in memory, owner-only changes unless UPDATE is
+    granted, etags, `payload` / `attributes.<n>` transforms, search, TrackContent.
+  - The ban gate covers all of them (the server-wide interceptors).
+- Shared session changes: `FriendMatch*` / `WorldMapMatch*` / `FriendWorldMapMatch*` rooms hold
+  12 and `CourseMatch*` 4 when the ticket names no size; `Friend*` rooms are not public;
+  friend pools are skipped by `QueryGameSessions` and refused by `JoinGameSession` to
+  non-members; a re-hosting player no longer evicts pool sessions.
+- `mcn` in gamesync `docs/__stg/All` and `docs/__gs/f` is the session's `_BaseConfigName` for a
+  title with `ConfigProperties` (Wonder, Peace Walker); every other title keeps `Farm4Player`.
+- Wonder now stamps `_BaseConfigName` / `_AliasSuffix` on its sessions (`ConfigProperties`).
+- Docs: no title needs a client-side game patch. Wonder and Peace Walker are served with a leaf
+  chained to the OpenPak CA, which the console/emulator trusts via its system store; unverified
+  until booted.
+
 - METAL GEAR SOLID: Peace Walker (Master Collection, `0100C6F01C4F8000`) on tenant
   `t-4f53195c-lp1`: `NPLN_TITLE=metal-gear-solid-peace-walker`, tenant 21114, health 21115,
   session 24530. Facts and sources in its `docs/provenance.md`. Shared session changes, for

@@ -20,7 +20,7 @@ Nothing below has been observed by OpenPak yet: no boot, no capture of ours.
 | Title | METAL GEAR SOLID: Peace Walker, Master Collection version | N `README.md` |
 | Title id / `npln.app_id` | `0100C6F01C4F8000` (lower-case in the token) | N `README.md`, `token_jwt.go` |
 | NPLN tenant | `t-4f53195c-lp1`, host `t-4f53195c-lp1.lp1.t.npln.srv.nintendo.net` | N `README.md`, `token_jwt.go` |
-| Client patch | the title pins Nintendo's certificate and rejects the local peer name; the patch lives in the emulators' NPLN patch tables, keyed by title and build id | N `README.md` |
+| TLS trust | served with a leaf chained to the OpenPak CA, which the console/emulator trusts via its system store; unverified until booted | O |
 
 ## Services the title reaches
 
@@ -60,7 +60,7 @@ OpenPak's shared session code already answered a join with the joiner alone and 
 | Query | `QueryGameSessions` with `game_session_search_config` ending `FriendSearch`, one or more friend users, and a `MatchingKey` property | N `README.md`, `session_service.go` |
 | Server's duty | refuse the search unless every named user is the caller or the caller's friend; apply the requested filters; return only active rooms the caller may see | N `README.md`, `session_service.go` |
 | An unset property value | a property sent with no value is the search screen's "any" and matches every room | N `session_service.go` |
-| Friend pools | Matchmaker tickets for `Friend*` configs carry `FriendGameSessionId`; the pooled session keeps that property and is not listed as a joinable room of its own | N `README.md`, `session_service.go`, `matchmaking.go` — not implemented here: the Stardew set has no Matchmaker service, and nothing in N ties those configs to Peace Walker rather than Wonder |
+| Friend pools | Matchmaker tickets for `Friend*` configs carry `FriendGameSessionId`; the pooled session keeps that property and is not listed as a joinable room of its own | N `README.md`, `session_service.go`, `matchmaking.go`; implemented in the shared Matchmaker (facts in Wonder's `docs/provenance.md`) |
 
 ## Signalling
 
@@ -72,11 +72,22 @@ OpenPak's shared session code already answered a join with the joiner alone and 
 OpenPak's gamesync stores and relays whatever a player writes, field by field, so an `mp` map
 reaches the recipient unchanged; the NAT traversal report is stored like any other document.
 
+## Services beyond the Stardew set (2026-09-23)
+
+| Fact | Value | Source |
+| --- | --- | --- |
+| What N registers for this title | Matchmaker, Messaging, Ugcstore, Datastore, next to the services the Stardew set already has (Screening is not registered) | N `main.go` |
+| Their schemas and behaviour | recorded once, in Wonder's provenance, since N's code for them is Wonder's | [`../../super-mario-bros-wonder/docs/provenance.md`](../../super-mario-bros-wonder/docs/provenance.md) |
+| `mcn` in `docs/__stg/All` and `docs/__gs/f` | the session's `_BaseConfigName` | N `gamesync_store.go` |
+
+Decision: Peace Walker gets all four services (`npln.Options` `Matchmaker`, `Messaging`, `UGC`,
+`Hydro`). N is the server this title was brought up against and it registers them for it; a
+service the title never calls costs nothing, while a call answered `UNIMPLEMENTED` could stall
+it. Its sessions already stamp config properties, so `mcn` now serves the session's config name
+(`Mmc_CoOps2`) as N does; titles without config properties keep `Farm4Player`.
+
 ## Unexplained / open
 
-- `mcn` in `docs/__stg/All` and `docs/__gs/f`: N serves the session's `_BaseConfigName` there;
-  the Stardew set serves `Farm4Player` for every title, and Dinkum plays with that. Watch it on
-  the first boot.
-- Whether Peace Walker calls the Matchmaker service, messaging `RecvMessage` or the UGC store at
-  all: N serves them, but its code for them is Wonder's. The first boot's `UNIMPLEMENTED` lines
-  will say.
+- Whether Peace Walker calls the Matchmaker, messaging or the UGC store at all: N serves them,
+  but its code for them is Wonder's and nothing there names a Peace Walker call. The first boot's
+  log will say.

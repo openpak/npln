@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package nn.npln.ugcstore.v1;
+
+import "google/protobuf/timestamp.proto";
+
+import "proto/common/value.proto";
+
+option go_package = "github.com/openpak/npln/proto/ugcstore/v1;ugcstore";
+
+message Document {
+  string name = 1;
+
+  nn.npln.common.MapValue fields = 2;
+
+  google.protobuf.Timestamp create_time = 3;
+
+  google.protobuf.Timestamp update_time = 4;
+}
+
+message DocumentShortAlias {
+  string name = 1;
+
+  string document = 2;
+
+  string scope = 3;
+}
