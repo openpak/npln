@@ -156,11 +156,27 @@ func (c *connTracer) HandleConn(_ context.Context, s stats.ConnStats) {
 	}
 }
 
+// Options are the per-title differences a title on this service set may ask for.
+type Options struct {
+	// ConfigProperties adds _BaseConfigName (the matchmaking config's last segment) and an
+	// empty _AliasSuffix to a created session's properties, as Nintendo's backend does. Off by
+	// default: Stardew's joiners drop any farm whose properties carry them.
+	ConfigProperties bool
+}
+
+// titleOptions are the hosted title's Options; a package variable for the same reason as Tenant.
+var titleOptions Options
+
 // NewServer wires every service. creds==nil gives plaintext h2c (behind a TLS-terminating edge).
-// tenant is the title's NPLN tenant ("tenants/t-…-lp1"); "" keeps Stardew Valley's.
-func NewServer(creds credentials.TransportCredentials, tenant, appID string) *grpc.Server {
+// tenant is the title's NPLN tenant ("tenants/t-…-lp1"); "" keeps Stardew Valley's. title, at
+// most one, is the title's Options.
+func NewServer(creds credentials.TransportCredentials, tenant, appID string, title ...Options) *grpc.Server {
 	if tenant != "" {
 		Tenant = tenant
+	}
+	titleOptions = Options{}
+	if len(title) > 0 {
+		titleOptions = title[0]
 	}
 	startRegions()
 	opts := []grpc.ServerOption{

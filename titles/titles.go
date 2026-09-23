@@ -8,6 +8,7 @@ import (
 	endlessocean "github.com/openpak/npln/titles/endless-ocean-luminous"
 	hamsterplayground "github.com/openpak/npln/titles/hamster-playground"
 	humanfallflat "github.com/openpak/npln/titles/human-fall-flat"
+	peacewalker "github.com/openpak/npln/titles/metal-gear-solid-peace-walker"
 	mhrise "github.com/openpak/npln/titles/monster-hunter-rise"
 	arceus "github.com/openpak/npln/titles/pokemon-legends-arceus"
 	scarletviolet "github.com/openpak/npln/titles/pokemon-scarlet-violet"
@@ -33,4 +34,5 @@ var All = map[string]host.Title{
 	mhrise.Title.Name:            mhrise.Title,
 	bayonetta3.Title.Name:        bayonetta3.Title,
 	endlessocean.Title.Name:      endlessocean.Title,
+	peacewalker.Title.Name:       peacewalker.Title,
 }

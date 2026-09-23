@@ -5,6 +5,18 @@ of truth; this file is the readable summary.
 
 ## Unreleased
 
+- METAL GEAR SOLID: Peace Walker (Master Collection, `0100C6F01C4F8000`) on tenant
+  `t-4f53195c-lp1`: `NPLN_TITLE=metal-gear-solid-peace-walker`, tenant 21114, health 21115,
+  session 24530. Facts and sources in its `docs/provenance.md`. Shared session changes, for
+  every title on the Stardew set:
+  - A creation ticket with no size takes it from an `Mmc_<mode><n>` config name (`Mmc_CoOps2`
+    holds 2); other names keep 4.
+  - `QueryGameSessions` with the `FriendSearch` config is refused unless every named user is
+    the caller or a friend (nx-baas friend list).
+  - A search property sent without a value matches every room.
+  - `npln.Options` (passed through `stardewset.Title`): `ConfigProperties` stamps
+    `_BaseConfigName` / `_AliasSuffix` on created sessions; only Peace Walker sets it.
+
 - Bans (website/docs/ban-lookup.md): new package `bans`. An account banned in the OpenPak
   admin is refused by every title with gRPC `PermissionDenied` "This OpenPak account has been
   banned". nx-baas answers `/internal/switch/identity` with 403 `account_banned` for it.

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -173,6 +174,9 @@ func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req
 		Port: envInt("NPLN_RELAY_PORT", 21010),
 	}
 	room.IsPublic = true // a farm is listed to friends even when the host sends no flag (measured: the create carries none)
+	if n := capacityFromConfig(in.GetMatchmakingConfig()); n > 0 {
+		room.MaxParticipantCount = n
+	}
 	if rg := in.GetGameSession(); rg != nil {
 		room.Password = rg.GetPassword()
 		if rg.GetIsPublic() {
@@ -191,6 +195,12 @@ func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req
 	cfg := in.GetMatchmakingConfig()
 	if cfg != "" {
 		cfg = tn + "/matchmakingConfigs/" + lastSeg(cfg) // echoed with the concrete tenant, as Nintendo does
+		if titleOptions.ConfigProperties {
+			room.Properties = mergeFields(room.Properties, &commonpb.MapValue{Fields: map[string]*commonpb.Value{
+				"_BaseConfigName": {ValueType: &commonpb.Value_StringValue{StringValue: lastSeg(cfg)}},
+				"_AliasSuffix":    {ValueType: &commonpb.Value_StringValue{StringValue: ""}},
+			}})
+		}
 	}
 	userSess := gsName + "/userSessions/" + uuid4()
 	t := &mmpb.GameSessionCreationTicket{
@@ -255,6 +265,22 @@ func (g *sessionServer) CancelGameSessionCreationTicket(ctx context.Context, req
 	return &emptypb.Empty{}, nil
 }
 
+// capacityFromConfig reads the lobby size a matchmaking config name carries as a trailing
+// number ("Mmc_CoOps2" holds 2, Peace Walker's naming); 0 when the name carries none. Only the
+// Mmc_ family is read: other titles' names may end in digits that mean something else.
+func capacityFromConfig(cfg string) int32 {
+	name := lastSeg(cfg)
+	if !strings.HasPrefix(name, "Mmc_") {
+		return 0
+	}
+	head := strings.TrimRightFunc(name, func(r rune) bool { return r >= '0' && r <= '9' })
+	n, err := strconv.Atoi(name[len(head):]) // "" (no trailing number) is an error too
+	if err != nil || n < 2 || n > 16 {
+		return 0
+	}
+	return int32(n)
+}
+
 // ---- finding and joining ----
 
 func (g *sessionServer) GetGameSession(ctx context.Context, req *mmpb.GetGameSessionRequest) (*mmpb.GameSession, error) {
@@ -283,6 +309,11 @@ func (g *sessionServer) BatchGetGameSessions(ctx context.Context, req *mmpb.Batc
 // ponytail: linear scan; fine for a private network.
 func (g *sessionServer) QueryGameSessions(ctx context.Context, req *mmpb.QueryGameSessionsRequest) (*mmpb.QueryGameSessionsResponse, error) {
 	diag("QueryGameSessions", req)
+	if lastSeg(req.GetGameSessionSearchConfig()) == "FriendSearch" {
+		if err := friendSearchAllowed(ctx, req.GetUsers()); err != nil {
+			return nil, err
+		}
+	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	out := &mmpb.QueryGameSessionsResponse{}
@@ -306,13 +337,49 @@ func (g *sessionServer) QueryGameSessions(ctx context.Context, req *mmpb.QueryGa
 	return out, nil
 }
 
+// propsMatch: every requested property must match; one sent without a value is the search
+// screen's "any" and matches every room.
 func propsMatch(have, want *commonpb.MapValue) bool {
 	for k, v := range want.GetFields() {
+		if v.GetValueType() == nil {
+			continue
+		}
 		if !proto.Equal(have.GetFields()[k], v) {
 			return false
 		}
 	}
 	return true
+}
+
+// friendSearchAllowed: a FriendSearch names whose rooms to look in, and each of them must be the
+// caller or one of the caller's friends; otherwise it would list a stranger's private rooms.
+func friendSearchAllowed(ctx context.Context, users []string) error {
+	if len(users) == 0 {
+		return status.Error(codes.InvalidArgument, "FriendSearch names no user")
+	}
+	me, err := callerUser(ctx)
+	if err != nil {
+		return err
+	}
+	pid, ok := callerPID(ctx)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "no bearer token for this call")
+	}
+	acct, err := lookupAccount(pid)
+	if err != nil {
+		log.Printf("[MM] FriendSearch: account lookup for pid=%d: %v", pid, err)
+		return status.Error(codes.Unavailable, "friend list unavailable")
+	}
+	allowed := map[string]bool{lastSeg(me): true}
+	for _, f := range acct.Friends {
+		allowed[f.UserID()] = true
+	}
+	for _, u := range users {
+		if id := lastSeg(u); id != "current" && !allowed[id] {
+			return status.Errorf(codes.PermissionDenied, "FriendSearch: %s is not a friend", id)
+		}
+	}
+	return nil
 }
 
 func hasAnyUser(s *mmpb.GameSession, users []string) bool {

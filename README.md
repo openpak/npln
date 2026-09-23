@@ -12,6 +12,7 @@ Stardew Valley and Splatoon 3 use instead of NEX.
 | [`titles/super-mario-bros-wonder`](titles/super-mario-bros-wonder) | `super-mario-bros-wonder` | 21014 (health 21015) | early: Stardew's service set under Wonder's tenant `t-ba973ec6-lp1`; deployed, not console-verified; the console needs a client patch (v1.2.1 pins its certificate) |
 | [`titles/dinkum`](titles/dinkum) | `dinkum` | 21122 (health 21123), session 22230 | registered: Stardew's service set; tenant unknown, so `NPLN_TENANT` is required; NPLN 1.43.3 with WebRTC/QUIC P2P add-ons |
 | [`titles/human-fall-flat`](titles/human-fall-flat) | `human-fall-flat` | 21124 (health 21125), session 22240 | registered: Stardew's service set; tenant unknown, so `NPLN_TENANT` is required; NPLN 1.41.1, Pia 6.42.0 |
+| [`titles/metal-gear-solid-peace-walker`](titles/metal-gear-solid-peace-walker) | `metal-gear-solid-peace-walker` | 21114 (health 21115), session 24530 | registered, never booted: Stardew's service set under tenant `t-4f53195c-lp1`, with config-name lobby sizes, FriendSearch and config properties; needs a client patch (pinned certificate) |
 
 ## Shape
 

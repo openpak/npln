@@ -24,8 +24,9 @@ var tenantShape = regexp.MustCompile(`^tenants/t-[0-9a-f]{8}-lp1$`)
 // joiner dials directly (not through Traefik, which only knows SNI); without it a
 // session is advertised at the relay default, 127.0.0.1, and nobody can join.
 // titleID is the Switch application id, the access token's app_id. defaultTenant may be empty when no source gives the tenant yet: the title then
-// refuses to start until NPLN_TENANT is set.
-func Title(name, titleID, listen, healthListen, session, defaultTenant string) host.Title {
+// refuses to start until NPLN_TENANT is set. opts, at most one, is what the title needs
+// different from Stardew (npln.Options).
+func Title(name, titleID, listen, healthListen, session, defaultTenant string, opts ...npln.Options) host.Title {
 	return host.Title{
 		Name:         name,
 		Listen:       listen,
@@ -35,7 +36,7 @@ func Title(name, titleID, listen, healthListen, session, defaultTenant string) h
 			if err != nil {
 				return err
 			}
-			srv := npln.NewServer(creds, tenant, strings.ToLower(titleID))
+			srv := npln.NewServer(creds, tenant, strings.ToLower(titleID), opts...)
 			if addr := env("NPLN_SESSION_LISTEN", session); addr != "" && addr != lis.Addr().String() {
 				if sl, err := net.Listen("tcp", addr); err != nil {
 					log.Printf("session endpoint: cannot listen on %s: %v", addr, err)
