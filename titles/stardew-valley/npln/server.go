@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 
+	"github.com/openpak/npln/bans"
 	authpb "github.com/openpak/npln/proto/auth/v1"
 	friendspb "github.com/openpak/npln/proto/friends/v1"
 	gspb "github.com/openpak/npln/proto/gamesync/v1"
@@ -163,8 +164,8 @@ func NewServer(creds credentials.TransportCredentials, tenant, appID string) *gr
 	}
 	startRegions()
 	opts := []grpc.ServerOption{
-		grpc.ChainUnaryInterceptor(typeUnary, rpclog.Unary),
-		grpc.ChainStreamInterceptor(typeStream, rpclog.Stream),
+		grpc.ChainUnaryInterceptor(typeUnary, bans.Default.Unary(banSubject), rpclog.Unary),
+		grpc.ChainStreamInterceptor(typeStream, bans.Default.Stream(banSubject), rpclog.Stream),
 		grpc.UnknownServiceHandler(unknownService),
 		grpc.StatsHandler(&connTracer{}),
 		// The client pings often, also without streams; grpc-go's default policy answers with

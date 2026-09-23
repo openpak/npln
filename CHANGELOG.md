@@ -3,6 +3,23 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## Unreleased
+
+- Bans (website/docs/ban-lookup.md): new package `bans`. An account banned in the OpenPak
+  admin is refused by every title with gRPC `PermissionDenied` "This OpenPak account has been
+  banned". nx-baas answers `/internal/switch/identity` with 403 `account_banned` for it.
+  - Sign-in (`IssueToken`, `IssuePrearrangedUserToken`, `IssueAnonymousUserToken`) refuses a
+    banned account; Stardew's re-issue on an already-proven connection is refused too.
+  - `RefreshToken` re-checks the account, and refuses when the check cannot be answered.
+  - Every RPC carrying one of our tokens is checked (an access token by its pid, a gamesync
+    session token by the user id recorded at token issue). An open stream, KeepUserSession
+    among them, is re-checked every 30 s and ended when the account is banned. Active
+    answers are cached for 30 s here and at most 30 s in nx-baas, so a ban lands within a
+    minute. An nx-baas outage mid-session keeps the player.
+  - No new environment variables: it uses `NX_INTERNAL_URL` and `NX_INTERNAL_KEY`.
+  - Known, not from this change: `TestKeepAliveAnswersEveryPing` in `titles/stardew-valley/npln`
+    already reports a data race under `-race`.
+
 ## v0.5.15 — 2026-09-18
 
 - Hamster Playground (21118, session 24510) and Wavecade (21120, session 24520), both Switch 1,

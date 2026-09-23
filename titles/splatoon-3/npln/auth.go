@@ -2,12 +2,14 @@ package npln
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"github.com/openpak/npln/bans"
 	authpb "github.com/openpak/npln/proto/auth/v1"
 )
 
@@ -54,6 +56,12 @@ func (s *authServer) RefreshToken(ctx context.Context, req *authpb.RefreshTokenR
 	}
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "refresh token without a proven identity")
+	}
+	// A token issue: a banned account gets none, and an unanswerable check refuses too.
+	if err := bans.Default.Check(pid); errors.Is(err, bans.ErrBanned) {
+		return nil, bans.Refused()
+	} else if err != nil {
+		return nil, status.Error(codes.Unavailable, "account check unavailable")
 	}
 	// The user the request names is not consulted: the new token is for whoever proved the PID.
 	userPath, err := userPathForPID(ctx, pid)

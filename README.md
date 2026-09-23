@@ -28,6 +28,15 @@ Stardew Valley and Splatoon 3 use instead of NEX.
 - Each title keeps its own README, docs and tools (`titles/stardew-valley/cmd/observer`,
   `cmd/probe`; `titles/splatoon-3/cmd/genrotation`) in its directory.
 
+## Bans
+
+`bans` locks a banned OpenPak account out of every title
+([`website/docs/ban-lookup.md`](../../website/docs/ban-lookup.md)): no token is issued or
+refreshed for it, calls carrying its token are refused with `PermissionDenied`, and its open
+streams end within a minute. The source is nx-baas (`/internal/switch/identity` answers 403
+`account_banned`), reached with the `NX_INTERNAL_URL` / `NX_INTERNAL_KEY` every title already
+has. A title wires it with `bans.Default.Unary` / `bans.Default.Stream` in its server chain.
+
 ## Run
 
 ```sh

@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"github.com/openpak/npln/rpclog"
 	"log"
@@ -48,6 +49,7 @@ import (
 	mmpb "github.com/openpak/npln/proto/matchmaking/v1"
 	toyohrpb "github.com/openpak/npln/proto/toyohr/v1"
 
+	"github.com/openpak/npln/bans"
 	"github.com/openpak/npln/titles/splatoon-3/rotation"
 )
 
@@ -170,6 +172,9 @@ func adapterIdentity(q map[string]any) (*Account, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return nil, fmt.Errorf("switch identity: %s: %w", resp.Status, bans.ErrBanned)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("switch identity: %s", resp.Status)
 	}
@@ -212,6 +217,10 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 		tenant = Tenant
 	}
 	acc, err := accountFromOpenPak(ext.GetNsaIdToken())
+	if errors.Is(err, bans.ErrBanned) {
+		log.Printf("[Auth] account banned (%v) -> REFUSED", err)
+		return 0, "", bans.Refused()
+	}
 	if err != nil {
 		log.Printf("[Auth] identity not provable (%v) -> REFUSED", err)
 		return 0, "", status.Error(codes.PermissionDenied, "OpenPak account not recognised — link your OpenPak account to play online")
@@ -330,6 +339,7 @@ func refreshKey() []byte {
 }
 
 func newToken(pid uint64, userPath, tenant string) *authpb.Token {
+	bans.Default.Remember(lastSeg(userPath), pid)
 	mac := hmac.New(sha256.New, refreshKey())
 	body := fmt.Sprintf("openpak-npln-refresh.%d", pid)
 	mac.Write([]byte(body))
@@ -485,8 +495,8 @@ func (c *connTracer) HandleConn(_ context.Context, s stats.ConnStats) {
 // server still works, and the game will report that stage information is unavailable.
 func NewServer(creds credentials.TransportCredentials, rot *rotation.File) *grpc.Server {
 	opts := []grpc.ServerOption{
-		grpc.ChainUnaryInterceptor(typeUnary, rpclog.Unary),
-		grpc.ChainStreamInterceptor(typeStream, rpclog.Stream),
+		grpc.ChainUnaryInterceptor(typeUnary, bans.Default.Unary(banSubject), rpclog.Unary),
+		grpc.ChainStreamInterceptor(typeStream, bans.Default.Stream(banSubject), rpclog.Stream),
 		grpc.UnknownServiceHandler(unknownService),
 		grpc.StatsHandler(&connTracer{}),
 		// The client pings often, also without streams; grpc-go's default policy answers with
@@ -517,4 +527,26 @@ func NewServer(creds credentials.TransportCredentials, rot *rotation.File) *grpc
 		log.Printf("[Schedule] no rotation loaded — the lobby will report stage information unavailable")
 	}
 	return s
+}
+
+// banSubject names the caller for the ban gate from a token we signed: the pid of an access
+// token, or the user id of a gamesync session token (which carries no pid).
+func banSubject(ctx context.Context) (uint64, string) {
+	a := strings.TrimSpace(mdGet(ctx, "authorization"))
+	a = strings.TrimPrefix(strings.TrimPrefix(a, "Bearer "), "bearer ")
+	payload, ok := verifyJWT(a)
+	if !ok {
+		return 0, ""
+	}
+	var c struct {
+		Sub  string `json:"sub"`
+		Npln struct {
+			ExtID string `json:"ext_id"`
+		} `json:"npln"`
+	}
+	if json.Unmarshal(payload, &c) != nil {
+		return 0, ""
+	}
+	pid, _ := strconv.ParseUint(c.Npln.ExtID, 16, 64)
+	return pid, c.Sub
 }
