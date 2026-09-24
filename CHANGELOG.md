@@ -3,6 +3,14 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.7.1 — 2026-09-24
+
+- Splatoon 3: the server keeps its rotation current itself. A missing file is written, and one
+  within 7 days of running out is renewed 30 days ahead (checked hourly, swapped in while
+  running), so the rotation no longer expires and a restart after it ran out no longer refuses to
+  start. The schedule set id now changes with each renewal. `cmd/genrotation` stays for hand-made
+  files.
+
 ## v0.7.0 — 2026-09-24
 
 - NPLN services beyond Stardew's set, opt-in per title through new `npln.Options` fields, and

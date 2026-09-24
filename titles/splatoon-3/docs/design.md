@@ -110,15 +110,15 @@ rights" and the game declares itself offline while every RPC returns success.
 **Schedules were not ported — they are generated.** A working server replays recorded response
 bytes with the timestamps shifted forward. Those bytes are Nintendo's and are not redistributable,
 so OpenPak splits code from data instead: `internal/rotation` defines and validates a rotation
-file, `cmd/genrotation` writes a valid one anchored to real time, and the server reads it at
-start-up. Nothing captured enters the repository, and an operator with their own recorded rotation
+file, `rotation.Generate` builds a valid one anchored to real time, and the server keeps the file
+current itself (`rotation.Keep`: written when missing, renewed within 7 days of running out,
+checked hourly; `cmd/genrotation` remains for hand-made files). Nothing captured enters the repository, and an operator with their own recorded rotation
 points `NPLN_ROTATION` at it.
 
 The validation is strict for a specific reason. A stale set is *rejected* by the game with a
 visible error; an inconsistent set — kinds whose windows disagree about the present — is not
 rejected at all, it aborts the console. So a rotation that would abort the console is a refusal to
-start, with the offending entry named; a missing rotation is only a warning, because the rest of
-the server still works.
+start, with the offending entry named; a missing or expiring one is renewed, not refused.
 
 **The pre-gRPC REST chain is nx-baas's, and it is currently wrong for this title.** nx-baas routes
 the Vermillion and Penne hosts today and answers them well enough for the console link, but

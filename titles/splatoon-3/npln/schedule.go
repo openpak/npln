@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -28,7 +29,7 @@ import (
 
 type scheduleServer struct {
 	toyohrpb.UnimplementedScheduleServer
-	rot *rotation.File
+	cur *atomic.Pointer[rotation.File] // swapped when the rotation is renewed; read once per call
 }
 
 // etag identifies a response so the client can skip one it already holds.
@@ -59,15 +60,16 @@ func overlaps(ws, we, s, e time.Time) bool { return s.Before(we) && e.After(ws) 
 func ts(t time.Time) *timestamppb.Timestamp { return timestamppb.New(t) }
 
 // setID names the rotation a response came from. It is the same for every kind in one file,
-// which is exactly the property the game needs them to share.
-func (s *scheduleServer) setID() string {
-	return fmt.Sprintf("openpak-%d", len(s.rot.Vs))
+// which is exactly the property the game needs them to share, and changes when it is renewed.
+func setID(rot *rotation.File) string {
+	return fmt.Sprintf("openpak-%d", rot.Vs[0].Start.Unix())
 }
 
 func (s *scheduleServer) SelectVsSchedules(_ context.Context, req *toyohrpb.SelectVsSchedulesRequest) (*toyohrpb.SelectVsSchedulesResponse, error) {
+	rot := s.cur.Load()
 	from, to := window(req.GetCurrentTime(), req.GetSelectDuration().AsDuration())
 	out := &toyohrpb.SelectVsSchedulesResponse{}
-	for i, w := range s.rot.Vs {
+	for i, w := range rot.Vs {
 		if !overlaps(from, to, w.Start, w.End) {
 			continue
 		}
@@ -78,7 +80,7 @@ func (s *scheduleServer) SelectVsSchedules(_ context.Context, req *toyohrpb.Sele
 			RegularSettings: &toyohrpb.RegularSettings{Stages: w.Regular},
 			XSettings:       &toyohrpb.XSettings{Rule: w.X.Rule, Stages: w.X.Stages},
 			LeagueSettings:  &toyohrpb.LeagueSettings{Rule: w.League.Rule, Stages: w.League.Stages},
-			ScheduleSetId:   s.setID(),
+			ScheduleSetId:   setID(rot),
 		}
 		for _, b := range w.Bankara {
 			sc.BankaraSettings = append(sc.BankaraSettings, &toyohrpb.BankaraSettings{Rule: b.Rule, Stages: b.Stages})
@@ -91,15 +93,16 @@ func (s *scheduleServer) SelectVsSchedules(_ context.Context, req *toyohrpb.Sele
 }
 
 func (s *scheduleServer) SelectCoopSchedules(_ context.Context, req *toyohrpb.SelectCoopSchedulesRequest) (*toyohrpb.SelectCoopSchedulesResponse, error) {
+	rot := s.cur.Load()
 	from, to := window(req.GetCurrentTime(), 0)
 	out := &toyohrpb.SelectCoopSchedulesResponse{}
-	for i, w := range s.rot.Coop {
+	for i, w := range rot.Coop {
 		if !overlaps(from, to, w.Start, w.End) {
 			continue
 		}
 		out.Schedules = append(out.Schedules, &toyohrpb.CoopSchedule{
 			Name:          fmt.Sprintf("%s/coopSchedules/%d", Tenant, i),
-			ScheduleSetId: s.setID(),
+			ScheduleSetId: setID(rot),
 			StartTime:     ts(w.Start),
 			EndTime:       ts(w.End),
 			ShiftId:       fmt.Sprintf("shift-%d", i),
@@ -115,9 +118,10 @@ func (s *scheduleServer) SelectCoopSchedules(_ context.Context, req *toyohrpb.Se
 }
 
 func (s *scheduleServer) SelectSeasonSchedules(_ context.Context, req *toyohrpb.SelectSeasonSchedulesRequest) (*toyohrpb.SelectSeasonSchedulesResponse, error) {
+	rot := s.cur.Load()
 	from, to := window(req.GetCurrentTime(), 0)
 	out := &toyohrpb.SelectSeasonSchedulesResponse{}
-	for i, w := range s.rot.Season {
+	for i, w := range rot.Season {
 		if !overlaps(from, to, w.Start, w.End) {
 			continue
 		}
@@ -125,7 +129,7 @@ func (s *scheduleServer) SelectSeasonSchedules(_ context.Context, req *toyohrpb.
 			Name:          fmt.Sprintf("%s/seasonSchedules/%d", Tenant, i),
 			StartTime:     ts(w.Start),
 			EndTime:       ts(w.End),
-			ScheduleSetId: s.setID(),
+			ScheduleSetId: setID(rot),
 		})
 	}
 	out.Etag = etag(out)
@@ -134,9 +138,10 @@ func (s *scheduleServer) SelectSeasonSchedules(_ context.Context, req *toyohrpb.
 }
 
 func (s *scheduleServer) SelectLeagueSchedules(_ context.Context, req *toyohrpb.SelectLeagueSchedulesRequest) (*toyohrpb.SelectLeagueSchedulesResponse, error) {
+	rot := s.cur.Load()
 	from, to := window(req.GetCurrentTime(), 0)
 	out := &toyohrpb.SelectLeagueSchedulesResponse{}
-	for i, w := range s.rot.League {
+	for i, w := range rot.League {
 		if !overlaps(from, to, w.Start, w.End) {
 			continue
 		}
@@ -144,7 +149,7 @@ func (s *scheduleServer) SelectLeagueSchedules(_ context.Context, req *toyohrpb.
 			Name:          fmt.Sprintf("%s/leagueSchedules/%d", Tenant, i),
 			Rule:          w.Rule,
 			Stages:        w.Stages,
-			ScheduleSetId: s.setID(),
+			ScheduleSetId: setID(rot),
 			Timestamp:     ts(w.Start),
 			StartTime:     ts(w.Start),
 			EndTime:       ts(w.End),
@@ -166,9 +171,10 @@ func (s *scheduleServer) SelectLeagueSchedules(_ context.Context, req *toyohrpb.
 // schedules. Serving it from a different instant than the rotation leaves the game unable to tie
 // the current rotation to its parameters.
 func (s *scheduleServer) SelectVsParams(_ context.Context, req *toyohrpb.SelectVsParamsRequest) (*toyohrpb.SelectVsParamsResponse, error) {
+	rot := s.cur.Load()
 	from, _ := window(req.GetCurrentTime(), 0)
 	cur := from
-	for _, w := range s.rot.Vs {
+	for _, w := range rot.Vs {
 		if !from.Before(w.Start) && from.Before(w.End) {
 			cur = w.Start
 			break
@@ -179,7 +185,7 @@ func (s *scheduleServer) SelectVsParams(_ context.Context, req *toyohrpb.SelectV
 			Name:        Tenant + "/vsParams/current",
 			Timestamp_1: ts(cur),
 			Timestamp_2: ts(cur),
-			ParamsSetId: s.setID(),
+			ParamsSetId: setID(rot),
 		},
 	}
 	out.Etag = etag(out)

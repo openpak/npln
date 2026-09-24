@@ -79,6 +79,18 @@ type File struct {
 // Load reads and validates a rotation file. It never returns a partially valid rotation: either
 // the console can be served from it, or this is an error the operator has to see.
 func Load(path string, at time.Time) (*File, error) {
+	f, err := read(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := f.Validate(at); err != nil {
+		return nil, fmt.Errorf("rotation %s: %w", path, err)
+	}
+	return f, nil
+}
+
+// read decodes a rotation file without judging it.
+func read(path string) (*File, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("rotation: %w", err)
@@ -87,9 +99,6 @@ func Load(path string, at time.Time) (*File, error) {
 	dec := json.NewDecoder(newTrimReader(b))
 	dec.DisallowUnknownFields() // a typo'd key silently doing nothing is how a rotation goes stale
 	if err := dec.Decode(&f); err != nil {
-		return nil, fmt.Errorf("rotation %s: %w", path, err)
-	}
-	if err := f.Validate(at); err != nil {
 		return nil, fmt.Errorf("rotation %s: %w", path, err)
 	}
 	return &f, nil

@@ -22,12 +22,13 @@ ported. Both are in design.md.
 
 ```sh
 go build ./cmd/npln
-go run ./cmd/genrotation -o rotation.json   # the stage rotation; regenerate before it expires
+go run ./cmd/genrotation -o rotation.json   # optional: a hand-made rotation
 ```
 
-The rotation is **data, not code**: generated, never captured, and read at start-up. A rotation
-that would abort the console is a refusal to start, with the offending entry named; a missing one
-is a warning and the lobby reports that stage information is unavailable. Point `NPLN_ROTATION` at
+The rotation is **data, not code**: generated, never captured, and read at start-up. The server
+writes its own when the file is missing and renews it (30 days ahead) whenever it is within 7 days
+of running out, checked hourly, so it never expires. A present, current file that would abort the
+console is a refusal to start, with the offending entry named. Point `NPLN_ROTATION` at
 your own file if you hold a real one.
 
 | Env | Meaning |

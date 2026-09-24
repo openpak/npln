@@ -493,7 +493,7 @@ func (c *connTracer) HandleConn(_ context.Context, s stats.ConnStats) {
 // NewServer wires the services we can answer. creds==nil gives plaintext h2c (behind a
 // TLS-terminating edge). rot==nil leaves the schedule service unregistered — the rest of the
 // server still works, and the game will report that stage information is unavailable.
-func NewServer(creds credentials.TransportCredentials, rot *rotation.File) *grpc.Server {
+func NewServer(creds credentials.TransportCredentials, rot *atomic.Pointer[rotation.File]) *grpc.Server {
 	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(typeUnary, bans.Default.Unary(banSubject), rpclog.Unary),
 		grpc.ChainStreamInterceptor(typeStream, bans.Default.Stream(banSubject), rpclog.Stream),
@@ -521,8 +521,8 @@ func NewServer(creds credentials.TransportCredentials, rot *rotation.File) *grpc
 	mmpb.RegisterGameSessionServiceServer(s, &gameSessionService{})
 	mmpb.RegisterMatchmakerServer(s, &matchmaker{})
 	gspb.RegisterGamesyncServer(s, &gamesync{})
-	if rot != nil {
-		toyohrpb.RegisterScheduleServer(s, &scheduleServer{rot: rot})
+	if rot != nil && rot.Load() != nil {
+		toyohrpb.RegisterScheduleServer(s, &scheduleServer{cur: rot})
 	} else {
 		log.Printf("[Schedule] no rotation loaded — the lobby will report stage information unavailable")
 	}

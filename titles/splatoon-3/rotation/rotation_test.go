@@ -120,3 +120,43 @@ func jsonOf(t *testing.T, f *File) string {
 	}
 	return string(b)
 }
+
+func TestKeep(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "rotation.json")
+
+	// Missing: written, current, and far enough ahead not to be renewed again right away.
+	f, renewed, err := Keep(p, at())
+	if err != nil || !renewed {
+		t.Fatalf("missing file: renewed=%v err=%v", renewed, err)
+	}
+	if _, err := Load(p, at()); err != nil {
+		t.Fatalf("the written file does not load: %v", err)
+	}
+	if f.VsEnd().Sub(at()) < RefreshAhead {
+		t.Fatalf("a fresh rotation already needs renewing: ends %s", f.VsEnd())
+	}
+
+	// Current: served as is.
+	if _, renewed, err := Keep(p, at().Add(24*time.Hour)); err != nil || renewed {
+		t.Fatalf("current file: renewed=%v err=%v", renewed, err)
+	}
+
+	// Close to running out, and long after it ran out (a restart after a stop): renewed, not refused.
+	for _, until := range []time.Duration{RefreshAhead - time.Hour, -24 * time.Hour} {
+		later := f.VsEnd().Add(-until)
+		g, renewed, err := Keep(p, later)
+		if err != nil || !renewed {
+			t.Fatalf("at %s: renewed=%v err=%v", later, renewed, err)
+		}
+		if err := g.Validate(later); err != nil {
+			t.Fatalf("renewed rotation invalid at %s: %v", later, err)
+		}
+		f = g
+	}
+
+	// A present, current, broken file is still refused rather than overwritten.
+	os.WriteFile(p, []byte(strings.Replace(jsonOf(t, good()), `"coop"`, `"co-op"`, 1)), 0o644)
+	if f, _, err := Keep(p, at()); f != nil || err == nil {
+		t.Fatal("a broken file was served")
+	}
+}
