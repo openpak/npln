@@ -3,7 +3,7 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
-## Unreleased
+## v0.7.0 — 2026-09-24
 
 - NPLN services beyond Stardew's set, opt-in per title through new `npln.Options` fields, and
   on for Super Mario Bros. Wonder and METAL GEAR SOLID: Peace Walker (facts and sources in
