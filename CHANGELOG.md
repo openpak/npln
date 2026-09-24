@@ -3,6 +3,10 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.7.2 — 2026-09-24
+
+- deps: grpc 1.83.2 (Dependabot)
+
 ## v0.7.1 — 2026-09-24
 
 - Splatoon 3: the server keeps its rotation current itself. A missing file is written, and one
