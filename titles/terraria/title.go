@@ -8,10 +8,15 @@
 //
 // Its guest threads are nn.npln.* plus Pia (BackgroundScheduler, SendThreadStream,
 // ReceiveThreadStream), so the session layer is Pia over NPLN, not Dinkum's Mirror transport.
-// Terraria is not on Kinnay's NPLN list; the tenant above is from that boot. It starts on
-// Stardew Valley's service set under its own tenant — the first boot's UNIMPLEMENTED log is the
-// list of what it needs beyond that set. The JP (010024B00F9D0000) and KR (0100E990104DC000)
-// releases are untested; they are expected to share this tenant.
+// Terraria is not on Kinnay's NPLN list; the tenant above is from that boot.
+//
+// Verified the same day: Ryujinx hosted and Eden joined, two accounts in one world.
+// CreateGameSessionCreationTicket -> Track -> Gamesync IssueToken -> KeepUserSession ->
+// AllocateIceServerSet -> GetDocument/WriteDocuments, and JoinGameSession for the joiner.
+// Stardew Valley's service set covers it whole: not one UNIMPLEMENTED, so it needs no Options.
+// The Pia relay host it resolves (g2122d301.lp1.p.srv.nintendo.net) is never dialled — ICE
+// through our own TURN is enough. The JP (010024B00F9D0000) and KR (0100E990104DC000) releases
+// are untested; they are expected to share this tenant.
 package terraria
 
 import "github.com/openpak/npln/titles/stardewset"

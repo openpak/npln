@@ -3,6 +3,11 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.7.4 — 2026-09-25
+
+- Terraria is live: Ryujinx hosted, Eden joined, two accounts in one world, no UNIMPLEMENTED.
+  Stardew Valley's service set covers the title whole, so it keeps no title-specific Options.
+
 ## v0.7.3 — 2026-09-25
 
 - Terraria (0100E46006708000), tenant `t-455965db-lp1`, on Stardew Valley's service set; tenant
