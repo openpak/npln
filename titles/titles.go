@@ -16,6 +16,7 @@ import (
 	stardew "github.com/openpak/npln/titles/stardew-valley"
 	wonder "github.com/openpak/npln/titles/super-mario-bros-wonder"
 	jamboree "github.com/openpak/npln/titles/super-mario-party-jamboree"
+	"github.com/openpak/npln/titles/terraria"
 	wavecade "github.com/openpak/npln/titles/wavecade"
 )
 
@@ -35,4 +36,5 @@ var All = map[string]host.Title{
 	bayonetta3.Title.Name:        bayonetta3.Title,
 	endlessocean.Title.Name:      endlessocean.Title,
 	peacewalker.Title.Name:       peacewalker.Title,
+	terraria.Title.Name:          terraria.Title,
 }

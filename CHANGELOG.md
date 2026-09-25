@@ -3,6 +3,13 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.7.3 — 2026-09-25
+
+- Terraria (0100E46006708000), tenant `t-455965db-lp1`, on Stardew Valley's service set; tenant
+  port 21116, health 21117, session 24540. Found by a Ryujinx boot: pressing Host dialled the
+  tenant, called `nn.npln.auth.v1.Auth/IssuePrearrangedUserToken`, got the catch-all's 404 and
+  hung there. Its session layer is Pia over NPLN.
+
 ## v0.7.2 — 2026-09-24
 
 - deps: grpc 1.83.2 (Dependabot)
