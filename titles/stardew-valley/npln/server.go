@@ -22,7 +22,6 @@ import (
 	"google.golang.org/grpc/stats"
 
 	"github.com/openpak/npln/bans"
-	"github.com/openpak/npln/online"
 	authpb "github.com/openpak/npln/proto/auth/v1"
 	friendspb "github.com/openpak/npln/proto/friends/v1"
 	gspb "github.com/openpak/npln/proto/gamesync/v1"
@@ -191,7 +190,6 @@ func NewServer(creds credentials.TransportCredentials, tenant, appID string, tit
 		titleOptions = title[0]
 	}
 	startRegions()
-	online.Default.Start(appID)
 	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(typeUnary, bans.Default.Unary(banSubject), rpclog.Unary),
 		grpc.ChainStreamInterceptor(typeStream, bans.Default.Stream(banSubject), rpclog.Stream),

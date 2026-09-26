@@ -20,7 +20,6 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/types/known/durationpb"
 
-	"github.com/openpak/npln/online"
 	commonpb "github.com/openpak/npln/proto/common"
 	friendspb "github.com/openpak/npln/proto/friends/v1"
 )
@@ -109,10 +108,9 @@ type presenceServer struct {
 // The opening heartbeat is what makes the presence client "connected": Dinkum opens the stream
 // and sends nothing until it has one (SetPresenceHosting aborted the game without it).
 func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveServer) error {
-	pid, uid, _ := bearer(stream.Context())
+	_, uid, _ := bearer(stream.Context())
 	goOnline(uid)
 	defer goOffline(uid)
-	defer online.Default.Join(pid)()
 
 	var mu sync.Mutex // Send is not safe from two goroutines
 	beat := func() error {
