@@ -3,6 +3,14 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.8.0 — 2026-09-26
+
+- Every title reports who is online to nx-baas, so openpak.org counts playtime only while a
+  server confirms the player: every 30 s, `POST {NX_INTERNAL_URL}/internal/switch/online` with
+  the title id and the PID of each player holding a presence KeepAlive open (`online/`, shared by
+  Stardew Valley's service set and Splatoon 3, so all 15 titles). No `NX_INTERNAL_KEY`: nothing
+  is sent. A failure is logged at most once a minute and never touches the game.
+
 ## v0.7.4 — 2026-09-25
 
 - Terraria is live: Ryujinx hosted, Eden joined, two accounts in one world, no UNIMPLEMENTED.

@@ -50,6 +50,7 @@ import (
 	toyohrpb "github.com/openpak/npln/proto/toyohr/v1"
 
 	"github.com/openpak/npln/bans"
+	"github.com/openpak/npln/online"
 	"github.com/openpak/npln/titles/splatoon-3/rotation"
 )
 
@@ -494,6 +495,7 @@ func (c *connTracer) HandleConn(_ context.Context, s stats.ConnStats) {
 // TLS-terminating edge). rot==nil leaves the schedule service unregistered — the rest of the
 // server still works, and the game will report that stage information is unavailable.
 func NewServer(creds credentials.TransportCredentials, rot *atomic.Pointer[rotation.File]) *grpc.Server {
+	online.Default.Start(AppID)
 	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(typeUnary, bans.Default.Unary(banSubject), rpclog.Unary),
 		grpc.ChainStreamInterceptor(typeStream, bans.Default.Stream(banSubject), rpclog.Stream),

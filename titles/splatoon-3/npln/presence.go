@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/types/known/durationpb"
 
+	"github.com/openpak/npln/online"
 	commonpb "github.com/openpak/npln/proto/common"
 	friendspb "github.com/openpak/npln/proto/friends/v1"
 )
@@ -279,6 +280,8 @@ func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveSer
 	}
 	goOnline(uid)
 	defer goOffline(uid)
+	pid, _ := callerPID(ctx)
+	defer online.Default.Join(pid)()
 
 	for {
 		req, err := stream.Recv()
