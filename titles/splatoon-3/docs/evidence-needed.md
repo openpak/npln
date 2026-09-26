@@ -6,9 +6,9 @@ facts. Most of what this file used to ask for is now answered in
 document can supply: whether OpenPak's own stack satisfies this client.
 
 Before touching an emulator, read
-[`emulator-launch-protocol.md`](../../../docs/shared/emulator-launch-protocol.md) — shared host/joiner
-personas, the game NSP path is the only title identifier, and **ask first** if another title is
-running. Raw logs, dumps and captures stay outside this repository.
+[`emulator-launch-protocol.md`](https://github.com/openpak/docs/blob/main/playbooks/emulator-launch-protocol.md) — one instance
+per data dir, the game path on the cmdline is the only title identifier, and **ask first** if
+another title is running. Raw logs, dumps and captures stay outside this repository.
 
 ## 1. The certificate-acceptance patch, for the current build
 

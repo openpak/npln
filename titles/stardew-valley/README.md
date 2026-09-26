@@ -54,9 +54,8 @@ Configuration is through `STARDEW_OBSERVER_TCP_ADDR`, `STARDEW_OBSERVER_UDP_ADDR
 OpenPak side: the `account` core (20000/20001), `nx-baas` with
 `ACCOUNT_BACKEND=openpak` and `NX_INTERNAL_KEY` set (console TLS 21000, internal
 API 20070), and this server on 21010 behind Traefik's SNI passthrough. The
-emulator launchers (`scripts/launch-ryujinx.sh`, `scripts/launch-citron.sh`)
-still wrap the earlier family launchers and BAAS routing; pointing a
-profile at nx-baas is the open client-integration item.
+earlier launch wrappers were retired 2026-09-26; pointing a profile at
+nx-baas is the open client-integration item.
 [docs/local-stack.md](docs/local-stack.md) describes the previous (Reference)
 local stack.
 
@@ -71,7 +70,7 @@ go vet ./...
 
 State a hypothesis and the smallest experiment in [handoff.md](handoff.md) before changing protocol behavior. Record observations immediately, label confidence, and use synthetic fixtures. Raw captures and sensitive or proprietary research inputs must remain outside the repository and be referenced through local configuration only.
 
-The living [handoff.md](handoff.md) is part of the implementation and records current knowledge, experiments, failures, decisions, and next steps. For applying the same method to other titles and backends, see the [Online Compatibility Playbook](../../docs/shared/online-compatibility-playbook.md) and its [NPLN worked example](../../docs/shared/npln-online-gate-playbook.md). Protocol-specific modules will be added only when controlled observations justify them.
+The living [handoff.md](handoff.md) is part of the implementation and records current knowledge, experiments, failures, decisions, and next steps. For applying the same method to other titles and backends, see the [Online Compatibility Playbook](https://github.com/openpak/docs/blob/main/playbooks/online-compatibility-playbook.md) and its [NPLN worked example](https://github.com/openpak/docs/blob/main/playbooks/npln-online-gate-playbook.md). Protocol-specific modules will be added only when controlled observations justify them.
 
 ## Contribution and clean-room policy
 
