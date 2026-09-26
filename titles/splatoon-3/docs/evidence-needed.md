@@ -42,14 +42,14 @@ CERT_FILE=… KEY_FILE=… NPLN_LISTEN=127.0.0.1:21012 HEALTH_LISTEN=127.0.0.1:2
 
 Redirect, one variable at a time:
 
-- **Ryujinx (preferred).** A line in `openpak_routes.env`:
-  `t-dce9377b-lp1.lp1.t.npln.srv.nintendo.net=127.0.0.1:21012`. First match wins, the `:port`
-  rewrites the outgoing port, reloaded on mtime change. Copy `stardew-valley/scripts/launch-ryujinx.sh`
-  and change the NSP and route — do not write a new launcher.
+- **Ryujinx (preferred).** A line for
+  `t-dce9377b-lp1.lp1.t.npln.srv.nintendo.net` in the console's
+  `atmosphere/hosts/default.txt`, which Ryujinx writes and `DnsMitmResolver` reads; `dns.mitm`
+  picks the file up at boot only, so restart after changing it. (The `openpak_routes.env` route
+  table this step used to name was retired with the launch wrappers on 2026-09-26.)
 - **citron.** `OPENPAK_S3_DEBUG_PROXY_IP=127.0.0.1` (its DNS hook matches any host containing
-  `npln`) and `OPENPAK_S3_DEBUG_PROXY_PORT=21012`. `stardew-valley/scripts/launch-citron.sh` is
-  the model, including the `qt-config.ini` pinning — a fresh citron profile silently prefers the
-  production IPs over the environment.
+  `npln`) and `OPENPAK_S3_DEBUG_PROXY_PORT=21012`. Pin the same values in `qt-config.ini` — a
+  fresh citron profile silently prefers the production IPs over the environment.
 
 **Decision rule.** `[Auth] IssuePrearrangedUserToken pid=…` means the identity chain works end to
 end. `identity not provable` → check, in order, that the id_token's `openpak` claim was minted by the
