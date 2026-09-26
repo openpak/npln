@@ -18,7 +18,7 @@ go build ./cmd/npln          # NPLN_LISTEN=:21010 CERT_FILE=… KEY_FILE=… NX_
 
 | Env | Meaning |
 | --- | --- |
-| `NPLN_LISTEN` | gRPC/TLS listener, default `:21010` (Stardew tenant, [ports.md](../../../../ports.md)); gamesync shares it |
+| `NPLN_LISTEN` | gRPC/TLS listener, default `:21010` (Stardew tenant, [ports.md](https://github.com/openpak/docs/blob/main/ports.md)); gamesync shares it |
 | `NX_INTERNAL_URL` | nx-baas game/internal API, default `http://127.0.0.1:20070` |
 | `NX_INTERNAL_KEY` | nx-baas's `NX_INTERNAL_KEY`, sent as `X-Internal-Key` |
 | `NPLN_JWT_KEY` | persisted ES256 key for the access tokens |

@@ -1,7 +1,7 @@
 # Provenance
 
 Every non-obvious fact this title relies on, and where it came from, as
-[`docs/clean-room-policy.md`](../../../../../docs/clean-room-policy.md) asks.
+[`docs/clean-room-policy.md`](https://github.com/openpak/docs/blob/main/clean-room-policy.md) asks.
 
 Source keys:
 

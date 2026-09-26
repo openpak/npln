@@ -1,7 +1,7 @@
 # Provenance
 
 Every non-obvious fact this repository relies on, and where it came from. Required by
-[`docs/clean-room-policy.md`](../../../docs/clean-room-policy.md): it is what makes "we rewrote it
+[`docs/clean-room-policy.md`](https://github.com/openpak/docs/blob/main/clean-room-policy.md): it is what makes "we rewrote it
 from the facts" checkable later instead of a claim.
 
 Source keys:

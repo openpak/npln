@@ -33,7 +33,7 @@ your own file if you hold a real one.
 
 | Env | Meaning |
 | --- | --- |
-| `NPLN_LISTEN` | gRPC/TLS listener, default `:21012` ([ports.md](../../../../ports.md)) |
+| `NPLN_LISTEN` | gRPC/TLS listener, default `:21012` ([ports.md](https://github.com/openpak/docs/blob/main/ports.md)) |
 | `HEALTH_LISTEN` | plain-HTTP `/health`, default `:21013`; empty disables it |
 | `CERT_FILE` / `KEY_FILE` | TLS cert covering `t-dce9377b-lp1.lp1.t.npln.srv.nintendo.net` |
 | `NX_INTERNAL_URL` | nx-baas game/internal API, default `http://127.0.0.1:20070` |
@@ -60,7 +60,7 @@ go build ./... && go vet ./... && go test ./...
 
 ## Clean room
 
-Read [`docs/clean-room-policy.md`](../../docs/clean-room-policy.md) before writing a line. The
+Read [`docs/clean-room-policy.md`](https://github.com/openpak/docs/blob/main/clean-room-policy.md) before writing a line. The
 earlier network `splatoon-3` server is source-available and was read **for facts only** —
 ports, hostnames, endpoint paths, wire field names, error codes, flows, and what actually runs. No
 code, comments, docs, structure, type or function names were copied or translated. Every fact taken

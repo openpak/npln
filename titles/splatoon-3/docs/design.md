@@ -206,4 +206,4 @@ the console dials directly, and takes `22210` out of this title's reserved NPLN 
 now opens it (`NPLN_SESSION_LISTEN`, default `:22210`) and serves the same gRPC server there, and the
 game sessions advertise `NPLN_SESSION_HOST:NPLN_SESSION_PORT` as `GameSession.Host:Port`. STUN/TURN
 needs no port of its own here: coturn lives in the shared `22900–22999` helper block. Claimed in
-[`ports.md`](../../../../../ports.md).
+[`ports.md`](https://github.com/openpak/docs/blob/main/ports.md).

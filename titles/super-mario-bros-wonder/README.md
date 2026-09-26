@@ -10,7 +10,7 @@ missing logs `UNIMPLEMENTED` and that log is the next work list.
 | Fact | Value | Source |
 | --- | --- | --- |
 | NPLN tenant | `tenants/t-ba973ec6-lp1`, host `t-ba973ec6-lp1.lp1.t.npln.srv.nintendo.net` | Kinnay's NintendoClients wiki, "NPLN Servers" (read 2026-09-11); cross-checked against Splatoon 3's `dce9377b`, which the same table lists and this project had observed |
-| Tenant port | 21014 (health 21015), session 22220 | [ports.md](../../../../ports.md) |
+| Tenant port | 21014 (health 21015), session 22220 | [ports.md](https://github.com/openpak/docs/blob/main/ports.md) |
 | TLS trust | served with a leaf chained to the OpenPak CA, which the console/emulator trusts via its system store; unverified until booted | OpenPak |
 | Matchmaker | `CourseMatch_*` pools of 4, `WorldMapMatch_*` / `FriendWorldMapMatch_*` of 12, grouped by config, `MatchingKey` and friend room; friend pools (`FriendGameSessionId`) only for members of their `FriendMatch` base room, never listed | [provenance](docs/provenance.md) |
 | Session properties | `_BaseConfigName` / `_AliasSuffix` stamped (`npln.Options.ConfigProperties`), so gamesync's `mcn` is the session's config name | [provenance](docs/provenance.md) |
