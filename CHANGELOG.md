@@ -3,6 +3,15 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.7.5 — 2026-10-09
+
+- Latest version only. A login whose NSA id token names a version below the latest (nx-baas's
+  `/internal/title-version`, the table aauth refuses with) gets FAILED_PRECONDITION, 2321-3072.
+  An nx-baas that cannot answer refuses no one.
+- Versions never share a session: rooms and Matchmaker pools keep their creator's version
+  server-side, and a player of another version is not listed them, placed in them or let in by
+  name. An unknown version meets everyone. Splatoon 3's own service copy is not covered yet.
+
 ## v0.7.4 — 2026-09-25
 
 - Terraria is live: Ryujinx hosted, Eden joined, two accounts in one world, no UNIMPLEMENTED.
