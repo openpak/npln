@@ -147,6 +147,13 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 	if acc.Country != "" {
 		countryByUID.Store(acc.UserID(), strings.ToUpper(acc.Country))
 	}
+	// Latest version only (appversion.go): the same table aauth refuses with.
+	ai, av := appClaims(ext.GetNsaIdToken())
+	if old, latest := titleOutdated(ai, av); old {
+		log.Printf("[Auth] pid=%d title %s version %s is older than %s -> FAILED_PRECONDITION", acc.PID, ai, av, latest)
+		return 0, "", errOutdated()
+	}
+	rememberAppVersion(acc.UserID(), av)
 	return acc.PID, tenant + "/users/" + acc.UserID(), nil
 }
 

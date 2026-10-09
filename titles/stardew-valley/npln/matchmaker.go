@@ -143,11 +143,12 @@ func (m *matchmaker) place(ctx context.Context, t *mmpb.MatchmakingTicket) (stri
 	g := m.rooms
 	ud := t.GetUserDefinitions()[0]
 	key := poolKey(t)
+	mine := callerVersion(ctx)
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	var gsid string
 	for id, k := range g.pools {
-		if k != key || g.sessions[id].GetState() != mmpb.GameSession_ACTIVE {
+		if k != key || g.sessions[id].GetState() != mmpb.GameSession_ACTIVE || !g.versionFits(id, mine) {
 			continue
 		}
 		for _, us := range g.members[id] {
@@ -198,6 +199,7 @@ func (m *matchmaker) newPool(ctx context.Context, t *mmpb.MatchmakingTicket, key
 	gsid := lastSeg(gsName)
 	m.rooms.sessions[gsid] = s
 	m.rooms.pools[gsid] = key
+	m.rooms.versions[gsid] = callerVersion(ctx)
 	log.Printf("[MM] pool session %s opened: config=%s capacity=%d friend room=%q", gsid, cfg, capacity, room)
 	return gsid
 }

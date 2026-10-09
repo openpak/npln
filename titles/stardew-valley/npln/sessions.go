@@ -45,6 +45,7 @@ type sessionServer struct {
 	members  map[string][]*mmpb.UserSession             // session id -> participants
 	aliases  map[string]string                          // short code -> session name
 	pools    map[string]string                          // session id -> Matchmaker pool key, for pool sessions only
+	versions map[string]string                          // session id -> its creator's title version (appversion.go)
 }
 
 func newSessionServer() *sessionServer {
@@ -54,6 +55,7 @@ func newSessionServer() *sessionServer {
 		members:  map[string][]*mmpb.UserSession{},
 		aliases:  map[string]string{},
 		pools:    map[string]string{},
+		versions: map[string]string{},
 	}
 }
 
@@ -224,12 +226,14 @@ func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req
 	for gsid, mem := range g.members {
 		if _, pooled := g.pools[gsid]; !pooled && len(mem) > 0 && mem[0].GetUser() == hostUser {
 			delete(g.sessions, gsid)
+			delete(g.versions, gsid)
 			delete(g.members, gsid)
 			log.Printf("[MM] evict stale farm session=%s (host %s re-hosted)", gsid, lastSeg(hostUser))
 		}
 	}
 	g.tickets[lastSeg(ticketName)] = t
 	g.sessions[lastSeg(gsName)] = room
+	g.versions[lastSeg(gsName)] = callerVersion(ctx)
 	g.addMember(lastSeg(gsName), &mmpb.UserSession{Name: userSess, User: hostUD.GetUser(), State: mmpb.UserSession_ACTIVE, Attributes: hostUD.GetAttributes(), CreateTime: timestamppb.Now()})
 	g.mu.Unlock()
 	log.Printf("[MM] Create host=%s ticket=%s session=%s @ %s:%d", lastSeg(hostUD.GetUser()), lastSeg(ticketName), lastSeg(gsName), room.Host, room.Port)
@@ -263,6 +267,7 @@ func (g *sessionServer) CancelGameSessionCreationTicket(ctx context.Context, req
 		gsid := lastSeg(t.GetGameSession().GetName())
 		delete(g.tickets, lastSeg(req.GetName()))
 		delete(g.sessions, gsid)
+		delete(g.versions, gsid)
 		delete(g.members, gsid)
 	}
 	g.mu.Unlock()
@@ -328,11 +333,16 @@ func (g *sessionServer) QueryGameSessions(ctx context.Context, req *mmpb.QueryGa
 			return nil, err
 		}
 	}
+	mine := callerVersion(ctx)
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	out := &mmpb.QueryGameSessionsResponse{}
 	for id, s := range g.sessions {
 		if s.GetState() != mmpb.GameSession_ACTIVE || friendPool(s) {
+			continue
+		}
+		if !g.versionFits(id, mine) {
+			log.Printf("[MM] QueryGameSessions: %s hidden (version %s, caller %s)", id, g.versions[id], mine)
 			continue
 		}
 		full := g.withMembers(id)
@@ -425,6 +435,11 @@ func (g *sessionServer) JoinGameSession(ctx context.Context, req *mmpb.JoinGameS
 		// a friend pool is entered through the Matchmaker from its base room, never by name
 		return nil, status.Errorf(codes.NotFound, "game session %q not found", req.GetName())
 	}
+	if mine := callerVersion(ctx); !memberOf(g.members[gsid], ud.GetUser()) && !g.versionFits(gsid, mine) {
+		// Another version's session does not exist for this player.
+		log.Printf("[MM] Join %s refused for %s (version %s, theirs %s)", gsid, lastSeg(ud.GetUser()), g.versions[gsid], mine)
+		return nil, status.Errorf(codes.NotFound, "game session %q not found", req.GetName())
+	}
 	if s.GetPassword() != "" && req.GetPassword() != s.GetPassword() {
 		return nil, status.Error(codes.PermissionDenied, "wrong password")
 	}
@@ -453,6 +468,7 @@ func (g *sessionServer) dropMember(gsid, user string) {
 	_, pooled := g.pools[gsid]
 	if !pooled && lastSeg(list[0].GetUser()) == lastSeg(user) {
 		delete(g.sessions, gsid)
+		delete(g.versions, gsid)
 		delete(g.members, gsid)
 		log.Printf("[MM] host %s left: farm %s closed", lastSeg(user), gsid)
 		return
@@ -469,6 +485,7 @@ func (g *sessionServer) dropMember(gsid, user string) {
 	}
 	if pooled && len(kept) == 0 { // a pool has no host: it closes with its last member
 		delete(g.sessions, gsid)
+		delete(g.versions, gsid)
 		delete(g.members, gsid)
 		delete(g.pools, gsid)
 		log.Printf("[MM] pool session %s emptied and closed", gsid)

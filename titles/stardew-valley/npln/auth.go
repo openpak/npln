@@ -40,7 +40,7 @@ func (s *authServer) IssueToken(ctx context.Context, req *authpb.IssueTokenReque
 	pid, userPath, err := gatedIdentity(req.GetExternalIdToken(), tenantFromCtx(ctx))
 	if err != nil {
 		p, ok := ctx.Value(connProofKey{}).(*connProof)
-		if bans.IsRefused(err) || !ok || req.GetUser() == "" || p.user() != req.GetUser() {
+		if bans.IsRefused(err) || isOutdated(err) || !ok || req.GetUser() == "" || p.user() != req.GetUser() {
 			return nil, err
 		}
 		if errors.Is(bans.Default.Check(p.pid), bans.ErrBanned) {
