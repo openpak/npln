@@ -38,4 +38,15 @@ func TestRefereeVerdict(t *testing.T) {
 	if g.store["room|p/docs/@@RefereeResult/123_room/User/uss1"] != nil {
 		t.Fatal("verdict published one level too deep")
 	}
+	// A re-push reads the verdict back for the watching stream's room, although its last segment
+	// looks like a session id.
+	if f := g.fields("p/docs/@@RefereeResult/1791000000_0e3c1b2a-aaaa-bbbb-cccc-0123456789ab", "uss1"); f.GetFields()["request_id"] != nil {
+		t.Fatalf("unexpected: %v", f)
+	}
+	g.mu.Lock()
+	g.publishVerdict("room", "p/docs/@@RefereeRequest/1791000000_0e3c1b2a-aaaa-bbbb-cccc-0123456789ab", f(nil))
+	g.mu.Unlock()
+	if f := g.fields("p/docs/@@RefereeResult/1791000000_0e3c1b2a-aaaa-bbbb-cccc-0123456789ab", "uss1"); f.GetFields()["request_id"] == nil {
+		t.Fatalf("re-push lost the verdict: %v", f)
+	}
 }

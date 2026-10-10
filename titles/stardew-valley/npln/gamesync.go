@@ -294,6 +294,11 @@ func (g *gamesyncServer) fields(name, streamUss string) *commonpb.MapValue {
 		uss = streamUss
 	}
 	s := g.lookup(uss)
+	if s == nil && uss != streamUss {
+		// A last segment that only looks like a session id (Splatoon 3's referee documents end in
+		// "<time>_<game session>"): the document belongs to the reading stream's room.
+		uss, s = streamUss, g.lookup(streamUss)
+	}
 	gsid := ""
 	if s != nil {
 		gsid = s.gsid
@@ -578,6 +583,9 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 				t.coll = c.GetCollection()
 			}
 			log.Printf("[GS] update_target %s docs=%d collection=%s", redact.Tag(tid), len(t.docs), redact.Tag(t.coll))
+			if titleOptions.Referee && strings.Contains(t.coll, "@@") {
+				log.Printf("[GS] referee watch %s", nameShape(t.coll))
+			}
 			_ = send(targetChange(tid, gspb.TargetChange_UPDATED))
 			names := t.docs
 			if t.coll != "" {

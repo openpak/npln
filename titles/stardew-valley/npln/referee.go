@@ -128,7 +128,20 @@ func (g *gamesyncServer) publishVerdict(gsid, name string, written *commonpb.Map
 	if v == nil {
 		return
 	}
+	log.Printf("[GS] referee request %s", nameShape(name))
 	g.store[gsid+"|"+resultName] = v
 	g.deliver(gsid, resultName, "UPDATED", v)
-	log.Printf("[GS] referee verdict room=%s status=%d fields=%d", redact.Tag(gsid), v.GetFields()["status"].GetIntegerValue(), len(v.GetFields()))
+	log.Printf("[GS] referee verdict room=%s %s status=%d fields=%d", redact.Tag(gsid), nameShape(resultName), v.GetFields()["status"].GetIntegerValue(), len(v.GetFields()))
+}
+
+// nameShape is a document or collection name for the log with every id-like segment (one holding
+// a digit and longer than 6 characters, e.g. a session uuid or "<time>_<session>") replaced.
+func nameShape(n string) string {
+	seg := strings.Split(n, "/")
+	for i, x := range seg {
+		if len(x) > 6 && strings.ContainsAny(x, "0123456789") {
+			seg[i] = "<id>"
+		}
+	}
+	return strings.Join(seg, "/")
 }
