@@ -583,13 +583,20 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 				t.coll = c.GetCollection()
 			}
 			log.Printf("[GS] update_target %s docs=%d collection=%s", redact.Tag(tid), len(t.docs), redact.Tag(t.coll))
-			if titleOptions.Referee && strings.Contains(t.coll, "@@") {
-				log.Printf("[GS] referee watch %s", nameShape(t.coll))
+			if titleOptions.Referee {
+				log.Printf("[GS] watch %s docs=%d", nameShape(t.coll), len(t.docs))
 			}
 			_ = send(targetChange(tid, gspb.TargetChange_UPDATED))
 			names := t.docs
 			if t.coll != "" {
 				names = g.collectionDocs(t.coll, streamUss)
+			}
+			if titleOptions.Referee {
+				shapes := make([]string, 0, len(names))
+				for _, n := range names {
+					shapes = append(shapes, nameShape(n))
+				}
+				log.Printf("[GS] watch %s lists %v", nameShape(t.coll), shapes)
 			}
 			for _, n := range names {
 				if err := w.push(tid, "EXIST", n, g.fields(n, streamUss), false); err != nil {

@@ -4,7 +4,9 @@ package npln
 // server's notes on real Nintendo matches (titles/splatoon-3/docs/provenance.md):
 //
 //   - When every player is ready, each console writes "…/@@RefereeRequest/<time>_<game session>"
-//     and watches the "@@RefereeResult" collection. With no verdict the "players are getting ready"
+//     and watches the "@@RefereeResult" collection. The verdict goes -1 (accepted), then the console
+//     writes "…/@@Profile/…" and the verdict goes 0 (kickoff); -1/0/1 in the wrong order are ignored,
+//     and status -1 must carry the console's own game_mode/game_rule and one `users` entry per player. With no verdict the "players are getting ready"
 //     countdown ends in a communication error. At the end of a match each writes
 //     "…/@@RefereeReport/<time>_<game session>/User/<user session>" and waits for a verdict again.
 //   - The verdict is ONE document, "…/@@RefereeResult/<time>_<game session>" (the first segment
@@ -19,6 +21,7 @@ package npln
 // (VsResults, catalog points, Splatfest tallies); a private battle needs neither.
 
 import (
+	"fmt"
 	"log"
 	"sort"
 	"strings"
@@ -26,6 +29,26 @@ import (
 	commonpb "github.com/openpak/npln/proto/common"
 	"github.com/openpak/npln/redact"
 )
+
+// refereeKickoff moves the room's accepted verdicts (status -1) to kickoff (status 0) once a
+// console has written its @@Profile, the step the game takes after seeing -1. Caller holds g.mu.
+func (g *gamesyncServer) refereeKickoff(gsid string) {
+	for k, v := range g.store {
+		name := strings.TrimPrefix(k, gsid+"|")
+		if name == k || !strings.Contains(name, "@@RefereeResult/") || v.GetFields()["status"].GetIntegerValue() != -1 {
+			continue
+		}
+		f := map[string]*commonpb.Value{}
+		for kk, vv := range v.GetFields() {
+			f[kk] = vv
+		}
+		f["status"] = gsInt(0)
+		nv := &commonpb.MapValue{Fields: f}
+		g.store[k] = nv
+		g.deliver(gsid, name, "UPDATED", nv)
+		log.Printf("[GS] referee kickoff room=%s %s", redact.Tag(gsid), nameShape(name))
+	}
+}
 
 // refereeFields is the versus verdict's field inventory (a Turf War verdict as Nintendo sends it).
 var refereeFields = map[string]bool{
@@ -85,10 +108,17 @@ func (g *gamesyncServer) refereeVerdict(gsid, name string, written *commonpb.Map
 	if _, ok := out["teams"]; !ok {
 		out["teams"] = g.refereeTeams(gsid)
 	}
+	if _, ok := out["users"]; !ok { // one entry per player: the game compares the count
+		var us []*commonpb.Value
+		for _, t := range out["teams"].GetMapValue().GetFields() {
+			us = append(us, t.GetArrayValue().GetValues()...)
+		}
+		out["users"] = &commonpb.Value{ValueType: &commonpb.Value_ArrayValue{ArrayValue: &commonpb.ArrayValue{Values: us}}}
+	}
 	if end {
 		out["status"] = gsInt(1)
 	} else {
-		out["status"] = gsInt(0)
+		out["status"] = gsInt(-1) // accepted; kickoff (0) follows the consoles' @@Profile
 	}
 	return resultName, &commonpb.MapValue{Fields: out}
 }
@@ -124,11 +154,15 @@ func (g *gamesyncServer) publishVerdict(gsid, name string, written *commonpb.Map
 	if !titleOptions.Referee || gsid == "" {
 		return
 	}
+	if strings.Contains(name, "@@Profile/") {
+		g.refereeKickoff(gsid)
+		return
+	}
 	resultName, v := g.refereeVerdict(gsid, name, written)
 	if v == nil {
 		return
 	}
-	log.Printf("[GS] referee request %s", nameShape(name))
+	log.Printf("[GS] referee request %s users=%s teams=%s", nameShape(name), valueShape(written.GetFields()["users"]), valueShape(written.GetFields()["teams"]))
 	g.store[gsid+"|"+resultName] = v
 	g.deliver(gsid, resultName, "UPDATED", v)
 	log.Printf("[GS] referee verdict room=%s %s status=%d fields=%d", redact.Tag(gsid), nameShape(resultName), v.GetFields()["status"].GetIntegerValue(), len(v.GetFields()))
@@ -144,4 +178,31 @@ func nameShape(n string) string {
 		}
 	}
 	return strings.Join(seg, "/")
+}
+
+// valueShape describes a value's structure for the log: types, keys and lengths, never contents.
+func valueShape(v *commonpb.Value) string {
+	switch x := v.GetValueType().(type) {
+	case nil:
+		return "-"
+	case *commonpb.Value_StringValue:
+		return fmt.Sprintf("str(%d)", len(x.StringValue))
+	case *commonpb.Value_IntegerValue:
+		return "int"
+	case *commonpb.Value_ArrayValue:
+		vs := x.ArrayValue.GetValues()
+		if len(vs) == 0 {
+			return "[]"
+		}
+		return fmt.Sprintf("[%d x %s]", len(vs), valueShape(vs[0]))
+	case *commonpb.Value_MapValue:
+		keys := make([]string, 0, len(x.MapValue.GetFields()))
+		for k, vv := range x.MapValue.GetFields() {
+			keys = append(keys, k+":"+valueShape(vv))
+		}
+		sort.Strings(keys)
+		return "{" + strings.Join(keys, ",") + "}"
+	default:
+		return fmt.Sprintf("%T", x)
+	}
 }

@@ -21,13 +21,19 @@ func TestRefereeVerdict(t *testing.T) {
 	g.publishVerdict("room", "p/docs/@@RefereeRequest/123_room", f(map[string]*commonpb.Value{"stage": gsInt(5), "battle_id": gsStr("x")}))
 	g.mu.Unlock()
 	v := g.store["room|p/docs/@@RefereeResult/123_room"].GetFields()
-	if v["status"].GetIntegerValue() != 0 || v["stage"].GetIntegerValue() != 5 || v["request_id"].GetStringValue() != "123_room" || v["battle_id"] != nil {
+	if v["status"].GetIntegerValue() != -1 || v["stage"].GetIntegerValue() != 5 || v["request_id"].GetStringValue() != "123_room" || v["battle_id"] != nil {
 		t.Fatalf("start verdict: %v", v)
 	}
 	if n := len(v["teams"].GetMapValue().GetFields()["team1"].GetArrayValue().GetValues()); n != 1 {
 		t.Fatalf("teams: %v", v["teams"])
 	}
 
+	g.mu.Lock()
+	g.publishVerdict("room", "p/docs/@@Profile/123_room/User/uss1", f(nil))
+	g.mu.Unlock()
+	if v = g.store["room|p/docs/@@RefereeResult/123_room"].GetFields(); v["status"].GetIntegerValue() != 0 {
+		t.Fatalf("kickoff: %v", v["status"])
+	}
 	g.mu.Lock()
 	g.publishVerdict("room", "p/docs/@@RefereeReport/123_room/User/uss1", f(map[string]*commonpb.Value{"team_result": gsStr("r")}))
 	g.mu.Unlock()
