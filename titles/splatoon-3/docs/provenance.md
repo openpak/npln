@@ -284,6 +284,7 @@ in its generated bindings); the schema is Nintendo's and shared across NPLN tena
 | `IceServerSet` | `{name, stun_server, turn_servers[], ttl, update_time, client_cache_duration}`. `StunServer{host, port, protocol}`; `TurnServer{host, port, protocol, username, password}`; protocol enum `UDP=1, TCP=2, TLS=3` | N |
 | coturn ephemeral credentials | TURN `username = "<unix-expiry>:<user>"`, `password = base64(HMAC-SHA1(static-auth-secret, username))`, STUN/TURN on `3478`. The reference points `AllocateIceServerSet` at a stock coturn using this scheme | N; P — coturn's published REST-auth (TURN REST API / RFC 7635 §2.2) |
 | A partial ICE object | the client rejects the whole set and emits no STUN probe. So every field must be filled — measured the same day as the relay captures | N |
+| A created room's properties | the client's own properties plus `_BaseConfigName` (the matchmaking config's last segment) and `_AliasSuffix` (the room code); the config is echoed under the concrete tenant | N (`matchmaking.go`) |
 
 ## Boot-time toyohr services (2026-10-10)
 

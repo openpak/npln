@@ -1,9 +1,11 @@
 package npln
 
 import (
+	"context"
 	"testing"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
@@ -51,4 +53,10 @@ func TestUgcCommit(t *testing.T) {
 	if again := newUGCStore(u.file); len(again.docs) != 1 {
 		t.Fatalf("store not persisted: %d", len(again.docs))
 	}
+}
+
+// bearerCtx is an incoming call carrying an access token we signed for uid.
+func bearerCtx(pid uint64, uid string) context.Context {
+	tok := newToken(pid, Tenant+"/users/"+uid, Tenant)
+	return metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "bearer "+tok.GetAccessToken()))
 }

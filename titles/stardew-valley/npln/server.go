@@ -230,3 +230,21 @@ func NewServer(creds credentials.TransportCredentials, tenant, appID string, tit
 	}
 	return s
 }
+
+// RegisterSessions puts this package's room services (GameSessionService and Gamesync, plus the
+// Matchmaker when opts.Matchmaker) on a server another title built itself, for a title whose own
+// copy of these services never hosted a session. The title's access tokens must be signed with
+// the same NPLN_JWT_KEY, as every title's are. tenant is the title's NPLN tenant.
+func RegisterSessions(s *grpc.Server, tenant string, opts Options) {
+	if tenant != "" {
+		Tenant = tenant
+	}
+	titleOptions = opts
+	startRegions()
+	mm := newSessionServer()
+	mmpb.RegisterGameSessionServiceServer(s, mm)
+	gspb.RegisterGamesyncServer(s, newGamesync(mm))
+	if opts.Matchmaker {
+		mmpb.RegisterMatchmakerServer(s, newMatchmaker(mm))
+	}
+}

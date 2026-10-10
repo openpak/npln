@@ -42,9 +42,9 @@ answers the rest from recorded traffic:
 | `auth.v1.Auth` | tokens; the identity gate | **implemented** |
 | `friends.v1.Friends` | friend and block lists | **implemented** |
 | `friends.v1.PresenceService` | `KeepAlive` (bidirectional), presence subscriptions | **implemented** |
-| `matchmaking.v1.Matchmaker` | public matchmaking | **implemented** (protocol; the pool forms a real match only at 8 players — unverified) |
-| `matchmaking.v1.GameSessionService` | host-created rooms, room codes, invitations, ICE allocation, latency servers | **implemented** (protocol; unverified on hardware) |
-| `gamesync.v1.Gamesync` | the document/session mailbox | **implemented** (protocol; document naming/field schema unverified — see below) |
+| `matchmaking.v1.Matchmaker` | public matchmaking | Stardew Valley's (`titles/stardew-valley/npln`, since 2026-10-10); unverified for Splatoon 3 |
+| `matchmaking.v1.GameSessionService` | host-created rooms, room codes, invitations, ICE allocation, latency servers | Stardew Valley's, with `_BaseConfigName`/`_AliasSuffix` on rooms; unverified for Splatoon 3 |
+| `gamesync.v1.Gamesync` | the document/session mailbox | Stardew Valley's (`__us`/`__pus`/`__stg`/`__gs` documents, Pia mailboxes); no referee results yet |
 | `ugcstore.v1.Ugcstore` | player-published documents | not started |
 | `toyohr.v1.Schedule` | stage/mode rotation | **implemented**, served from a generated rotation file |
 | `toyohr.v1.FestService` | Splatfest | not started |
@@ -185,16 +185,13 @@ Short list now, and none of it blocks the next step:
 
 New with this round's protocol work, all unverifiable without a console (and a match, eight players):
 
-5. **The gamesync document naming and field schema.** The mailbox is generic — consoles write their
-   own Pia contact blobs and we relay them, no field schema needed for that. The one place we
-   synthesise fields is the session document seeded on `Gamesync/IssueToken` (`<userSession>/SessionInfo`,
-   concrete-typed keys). The exact document *name* the host waits on, and which keys it reads, are
-   guessed from the reference's document paths; a capture corrects them. What we *do* honour from the
-   measurements: never an empty-fields document, always concrete typed Values, pushed as EXISTING.
-6. **The public match forms only at 8 players.** `Matchmaker` pools tickets and resolves them into one
-   game session at `NPLN_MATCH_SIZE` (default 8); below that they stay `SEARCHING`, because the console
-   refuses a battle below the mode's roster. A two-client test can validate the ticket/track/ICE
-   sequence but cannot start a battle — lower `NPLN_MATCH_SIZE` to exercise the resolution path.
+5. **Rooms and the session transport are Stardew Valley's.** Since 2026-10-10 Splatoon 3 registers
+   `titles/stardew-valley/npln`'s GameSessionService, Matchmaker and Gamesync (`RegisterSessions`), the
+   set every Pia-over-NPLN title OpenPak hosts plays on. This package's own earlier copy never hosted
+   a session and is gone. Splatoon-specific gaps known from the reference: referee results
+   (`@@RefereeRequest`), per-room capacity (10 for a private battle).
+6. **The public match forms only with a full pool**, as the console refuses a battle below the
+   mode's roster. A two-client test can validate the ticket/track/ICE sequence only.
 7. **ICE against a real coturn.** `AllocateIceServerSet` returns coturn REST ephemeral credentials
    (`base64(HMAC-SHA1(NPLN_TURN_SECRET, "<expiry>:<user>"))`); the secret must match the deployed
    coturn's `static-auth-secret`. Untested against a live coturn.
@@ -204,6 +201,6 @@ New with this round's protocol work, all unverifiable without a console (and a m
 `21012` gRPC/TLS tenant, `21013` health. The session/gamesync endpoint is a **separate listener**
 the console dials directly, and takes `22210` out of this title's reserved NPLN block — `cmd/npln`
 now opens it (`NPLN_SESSION_LISTEN`, default `:22210`) and serves the same gRPC server there, and the
-game sessions advertise `NPLN_SESSION_HOST:NPLN_SESSION_PORT` as `GameSession.Host:Port`. STUN/TURN
+game sessions advertise `NPLN_RELAY_HOST:NPLN_RELAY_PORT` as `GameSession.Host:Port`. STUN/TURN
 needs no port of its own here: coturn lives in the shared `22900–22999` helper block. Claimed in
 [`ports.md`](https://github.com/openpak/docs/blob/main/ports.md).

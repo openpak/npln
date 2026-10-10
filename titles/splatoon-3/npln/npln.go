@@ -46,11 +46,10 @@ import (
 
 	authpb "github.com/openpak/npln/proto/auth/v1"
 	friendspb "github.com/openpak/npln/proto/friends/v1"
-	gspb "github.com/openpak/npln/proto/gamesync/v1"
 	mtpb "github.com/openpak/npln/proto/maintenance/v1"
-	mmpb "github.com/openpak/npln/proto/matchmaking/v1"
 	toyohrpb "github.com/openpak/npln/proto/toyohr/v1"
 	ugcpb "github.com/openpak/npln/proto/ugcstore/v1"
+	stardew "github.com/openpak/npln/titles/stardew-valley/npln"
 
 	"github.com/openpak/npln/bans"
 	"github.com/openpak/npln/titles/splatoon-3/rotation"
@@ -519,13 +518,11 @@ func NewServer(creds credentials.TransportCredentials, rot *atomic.Pointer[rotat
 	// setup, and a static presence list means two players can never see each other.
 	friendspb.RegisterFriendsServer(s, &friendsServer{})
 	friendspb.RegisterPresenceServiceServer(s, &presenceServer{})
-	// Matchmaking and the gamesync mailbox: Splatoon 3 relays, so these are protocol bookkeeping
-	// over an in-memory store, not a game server. GameSessionService serves host-created rooms
-	// (room codes, invitations) and AllocateIceServerSet; Matchmaker serves public matchmaking;
-	// Gamesync is the document mailbox the consoles rendezvous through.
-	mmpb.RegisterGameSessionServiceServer(s, &gameSessionService{})
-	mmpb.RegisterMatchmakerServer(s, &matchmaker{})
-	gspb.RegisterGamesyncServer(s, &gamesync{})
+	// Rooms, matchmaking and the gamesync session transport: Stardew Valley's services, the ones
+	// every Pia-over-NPLN title OpenPak hosts plays on (Stardew, Dinkum, Terraria). This package's
+	// own copy never hosted a session. Nintendo's backend adds _BaseConfigName/_AliasSuffix to a
+	// Splatoon 3 room (docs/provenance.md), hence ConfigProperties.
+	stardew.RegisterSessions(s, Tenant, stardew.Options{ConfigProperties: true, Matchmaker: true})
 	// The toyohr services the game calls on its way to the lobby, and the maintenance feed.
 	s.RegisterService(withRawUnary(toyohrpb.CloudSave_ServiceDesc, map[string]rawHandler{"GetSaveRecord": getSaveRecord}), &cloudSave{})
 	s.RegisterService(withRawUnary(toyohrpb.UserScreening_ServiceDesc, map[string]rawHandler{"GetViolation": getViolation}), &userScreening{})

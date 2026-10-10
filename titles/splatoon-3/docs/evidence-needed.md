@@ -131,7 +131,7 @@ so this is the first end-to-end target once 1–7 pass. A regular battle needs *
 game checks the roster itself and refuses below the mode's size — so a two-client test can validate
 the matchmaking call sequence (`CreateMatchmakingTicket` → `TrackMatchmakingTicket` →
 `AllocateIceServerSet` on `GameSessionService`) and the gamesync mailbox, but it cannot start a real
-battle. Lower `NPLN_MATCH_SIZE` to exercise the ticket-resolution path with fewer clients. Plan for
+battle. A Private Battle (two consoles, one room) is the first two-console target. Plan for
 that rather than reading the roster refusal as a bug.
 
 **Decision rule.** With the matchmaking pool lowered, `CreateMatchmakingTicket` must reach
