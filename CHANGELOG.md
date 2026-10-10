@@ -3,6 +3,13 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.7.8 — 2026-10-10
+
+- Splatoon 3 enters the lobby on a Harbor console and the Stages tab lists the rotation. Co-op
+  shifts carry a monthly reward (the lobby refused a shift without one), and
+  GameRecord/InitializeAttributes gives a new player zeroed coop and VS attributes.
+- Not yet: Private Battle is locked for a new player ("Try some Regular Battles first!").
+
 ## v0.7.7 — 2026-10-10
 
 - Splatoon 3 boots online and reaches the Square on a Harbor console: the toyohr boot services
