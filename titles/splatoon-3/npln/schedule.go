@@ -59,6 +59,18 @@ func overlaps(ws, we, s, e time.Time) bool { return s.Before(we) && e.After(ws) 
 
 func ts(t time.Time) *timestamppb.Timestamp { return timestamppb.New(t) }
 
+// targetName is the schedule target a request names ("tenants/current/targets/<id>"), under the
+// real tenant. The game parses every vs, coop and league schedule name and the vs params name as
+// "tenants/{tenant}/targets/{target}/<collection>/{id}" (seasons are "tenants/{tenant}/
+// seasonSchedules/{id}", no target) and aborts with 2162-0001 on a name that does not parse.
+func targetName(target string) string {
+	id := lastSeg(target)
+	if id == "" {
+		id = "default"
+	}
+	return Tenant + "/targets/" + id
+}
+
 // setID names the rotation a response came from. It is the same for every kind in one file,
 // which is exactly the property the game needs them to share, and changes when it is renewed.
 func setID(rot *rotation.File) string {
@@ -74,7 +86,7 @@ func (s *scheduleServer) SelectVsSchedules(_ context.Context, req *toyohrpb.Sele
 			continue
 		}
 		sc := &toyohrpb.VsSchedule{
-			Name:            fmt.Sprintf("%s/vsSchedules/%d", Tenant, i),
+			Name:            fmt.Sprintf("%s/vsSchedules/%d", targetName(req.GetTarget()), i),
 			StartTime:       ts(w.Start),
 			EndTime:         ts(w.End),
 			RegularSettings: &toyohrpb.RegularSettings{Stages: w.Regular},
@@ -101,7 +113,7 @@ func (s *scheduleServer) SelectCoopSchedules(_ context.Context, req *toyohrpb.Se
 			continue
 		}
 		out.Schedules = append(out.Schedules, &toyohrpb.CoopSchedule{
-			Name:          fmt.Sprintf("%s/coopSchedules/%d", Tenant, i),
+			Name:          fmt.Sprintf("%s/coopSchedules/%d", targetName(req.GetTarget()), i),
 			ScheduleSetId: setID(rot),
 			StartTime:     ts(w.Start),
 			EndTime:       ts(w.End),
@@ -146,7 +158,7 @@ func (s *scheduleServer) SelectLeagueSchedules(_ context.Context, req *toyohrpb.
 			continue
 		}
 		sc := &toyohrpb.LeagueSchedule{
-			Name:          fmt.Sprintf("%s/leagueSchedules/%d", Tenant, i),
+			Name:          fmt.Sprintf("%s/leagueSchedules/%d", targetName(req.GetTarget()), i),
 			Rule:          w.Rule,
 			Stages:        w.Stages,
 			ScheduleSetId: setID(rot),
@@ -156,7 +168,7 @@ func (s *scheduleServer) SelectLeagueSchedules(_ context.Context, req *toyohrpb.
 		}
 		for j, sl := range w.Slots {
 			sc.Slots = append(sc.Slots, &toyohrpb.LeagueSchedule_Slot{
-				Name:      fmt.Sprintf("%s/leagueSchedules/%d/slots/%d", Tenant, i, j),
+				Name:      fmt.Sprintf("%s/leagueSchedules/%d/slots/%d", targetName(req.GetTarget()), i, j),
 				StartTime: ts(sl.Start),
 				EndTime:   ts(sl.End),
 			})
@@ -182,7 +194,7 @@ func (s *scheduleServer) SelectVsParams(_ context.Context, req *toyohrpb.SelectV
 	}
 	out := &toyohrpb.SelectVsParamsResponse{
 		Params: &toyohrpb.VsParams{
-			Name:        Tenant + "/vsParams/current",
+			Name:        targetName(req.GetTarget()) + "/vsParams/current",
 			Timestamp_1: ts(cur),
 			Timestamp_2: ts(cur),
 			ParamsSetId: setID(rot),
