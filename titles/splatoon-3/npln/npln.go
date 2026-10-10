@@ -47,6 +47,7 @@ import (
 	authpb "github.com/openpak/npln/proto/auth/v1"
 	friendspb "github.com/openpak/npln/proto/friends/v1"
 	gspb "github.com/openpak/npln/proto/gamesync/v1"
+	mtpb "github.com/openpak/npln/proto/maintenance/v1"
 	mmpb "github.com/openpak/npln/proto/matchmaking/v1"
 	toyohrpb "github.com/openpak/npln/proto/toyohr/v1"
 
@@ -456,6 +457,8 @@ func typeStream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, h gr
 		kind = "BidirectionalStreaming"
 	case info.IsClientStream:
 		kind = "ClientStreaming"
+	case !info.IsServerStream:
+		kind = "Unary" // a unary method served raw (rawunary.go)
 	}
 	_ = ss.SetHeader(metadata.Pairs("npln-grpc-type", kind))
 	log.Printf("[RPC] %s (%s)", info.FullMethod, kind)
@@ -522,6 +525,13 @@ func NewServer(creds credentials.TransportCredentials, rot *atomic.Pointer[rotat
 	mmpb.RegisterGameSessionServiceServer(s, &gameSessionService{})
 	mmpb.RegisterMatchmakerServer(s, &matchmaker{})
 	gspb.RegisterGamesyncServer(s, &gamesync{})
+	// The toyohr services the game calls on its way to the lobby, and the maintenance feed.
+	s.RegisterService(withRawUnary(toyohrpb.CloudSave_ServiceDesc, map[string]rawHandler{"GetSaveRecord": getSaveRecord}), &cloudSave{})
+	s.RegisterService(withRawUnary(toyohrpb.UserScreening_ServiceDesc, map[string]rawHandler{"GetViolation": getViolation}), &userScreening{})
+	toyohrpb.RegisterLobbyMessagingServer(s, &lobbyMessaging{})
+	mtpb.RegisterMaintenanceScheduleServiceServer(s, &maintenance{})
+	toyohrpb.RegisterLockerServer(s, &locker{})
+	toyohrpb.RegisterCanolaServer(s, &canola{})
 	if rot != nil && rot.Load() != nil {
 		toyohrpb.RegisterScheduleServer(s, &scheduleServer{cur: rot})
 	} else {

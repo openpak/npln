@@ -13,6 +13,11 @@ Source keys:
 - **E** — OpenPak's own emulator trees (`Openpak/emulators/*`, GPL forks).
 - **O** — OpenPak's own repositories (`nx-baas`, `servers/stardew-valley`, `ports.md`).
 - **P** — public documentation (upstream Ryujinx data, Kinnay's NPLN pages, switchbrew).
+- **G** — the game's own code: Splatoon 3 v11.3.0 (`main` NSO, build id `28C4287A…`), read with
+  our own disassembly (resource-name parsers, the abort sites behind 2162-0001). Module bases are
+  recovered from the `svcBreak` site in `sdk` (offset `0x17574c`); `main` sits `0x61f9000` below it.
+- **M** — measured: a Harbor console running the retail game against this server, server log plus
+  the guest thread dump at the abort.
 
 ## Identity of the title
 
@@ -280,6 +285,26 @@ in its generated bindings); the schema is Nintendo's and shared across NPLN tena
 | coturn ephemeral credentials | TURN `username = "<unix-expiry>:<user>"`, `password = base64(HMAC-SHA1(static-auth-secret, username))`, STUN/TURN on `3478`. The reference points `AllocateIceServerSet` at a stock coturn using this scheme | N; P — coturn's published REST-auth (TURN REST API / RFC 7635 §2.2) |
 | A partial ICE object | the client rejects the whole set and emits no STUN probe. So every field must be filled — measured the same day as the relay captures | N |
 
+## Boot-time toyohr services (2026-10-10)
+
+Order measured (M) on a Harbor console with a linked account and no cloud save: IssuePrearrangedUserToken,
+ListLatencyMeasurementServers, LobbyMessaging/RecvMessage, LobbyMessaging/SendMessage (an `NplnLogin` the
+player addresses to itself), Friends/ActivateUser, PresenceService/KeepAlive,
+MaintenanceScheduleService/SubscribeMaintenanceSchedules, UserScreening/GetViolation, the five Schedule
+selects, Friends/SubscribeFriendUsers, CloudSave/GetSaveRecord, Schedule/SelectVsParams,
+PresenceService/SubscribePresences, then Locker/SelectDocuments every 8 s once the game is up.
+
+| Fact | Value | Source |
+| --- | --- | --- |
+| The game parses resource names and aborts (`AbortImpl`, 2162-0001 on thread `nn.npln.Worker`) when one does not parse | parsers for: `tenants/{t}/lobbies/{l}`, `tenants/{t}/targets/{x}/vsParams/{p}`, `…/targets/{x}/vsSchedules/{s}`, `…/targets/{x}/coopSchedules/{s}`, `…/targets/{x}/leagueSchedules/{s}`, `tenants/{t}/seasonSchedules/{s}`, `tenants/{t}/fests/{f}/entries/{e}`, `tenants/{t}/festResults/{r}`, `tenants/{t}/festSchedules/{s}`, `tenants/{t}/fests/{f}/decryptionKey`, `tenants/{t}/fests/{f}/breakingNews`, `tenants/{t}/replayCodes/{c}`, `tenants/{t}/reports/{r}`, `tenants/{t}/users/{u}/violations/{v}`, `tenants/{t}/tags/{t}`, `tenants/{t}/users/{u}/snapshots/{s}`, `tenants/{t}/coopScenarioCodes/{c}` | G (`main+0x7d1990`…`0x7d6e00`) |
+| Schedule names before 2026-10-10 (`tenants/{t}/coopSchedules/{i}`, no target) were the boot abort | the coop-schedule parser aborted right after the selects | G + M |
+| GetViolation with no violation | an OK answer without a message makes the SDK build a default violation with an empty name, which the violation parser rejects: abort. A non-OK status takes the SDK's error path, which does not abort; NOT_FOUND (after a headers frame) lets the boot continue | G (`main+0x7c7ce4` handler, `main+0x7d58a0` parser) + M |
+| Nintendo's answer to GetViolation has no message and `content-length: 0` | the capture N describes never recorded trailers, so its status is not established; the parse above says it cannot be OK | N (capture notes) + G |
+| GetSaveRecord for a player with no record | NOT_FOUND after the headers; the game continues to its first-run screens | M |
+| LobbyMessaging | RecvMessage opens with a KeepAlive carrying a `{"v":1,"t":"<ms>-<n>"}` resume token; the game sends `NplnLogin` to itself and expects it back; `sender_user` is the resolved `tenants/t-dce9377b-lp1/users/<id>` | N (field names, the self-echo), M (the request: one receiver, the sender) |
+| CloudSave write rules | partial `save_data`, maps merge recursively, other values replace, empty arrays are stored as null, the response timestamp is the next request's `update_time` | N (replayed captured writes) |
+| Locker and Canola SelectDocuments | polled every 8 s while unanswered; an empty list is accepted | M |
+
 ## Proto provenance
 
 The `proto/gamesync/**` and `proto/matchmaking/**` `.proto` files were copied from
@@ -289,3 +314,8 @@ bindings are regenerated locally by stock `protoc`. This is a reuse of OpenPak's
 of Nintendo's shared NPLN schema, not a second read of the Shield-licensed tree — the field
 names/numbers/types were checked against N's descriptors (the tables above) and match. The
 duplication is deliberate debt: see `design.md`, "Lift the shared NPLN layer".
+
+The toyohr `cloud_save`, `lobby_messaging`, `userscreening`, `common`, `locker` and `canola` schemas and
+`maintenance/v1` (2026-10-10) take their field names, numbers and types from N's compiled descriptors
+(facts: wire layout), written out as fresh `.proto` text in this repository's style. The game binary
+carries no descriptors, only the method paths, which match (G).
