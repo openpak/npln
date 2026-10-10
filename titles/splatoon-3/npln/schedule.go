@@ -132,6 +132,9 @@ func (s *scheduleServer) SelectCoopSchedules(_ context.Context, req *toyohrpb.Se
 			// rotation file written before these rules carries made-up ids, so they are set here.
 			Normal: &toyohrpb.CoopSchedule_Normal{
 				Stage: coopStage(w.Start), Boss: "SakelienGiant", MainWeapons: []int64{-1, -1, -1, -1}, KumaWeapon: -1,
+				// The lobby refuses a shift without a monthly reward: a gear type and a gear id
+				// that exists in that type's table (docs/provenance.md).
+				RewardType: "Head", RewardGearId: 21010,
 			},
 		})
 	}

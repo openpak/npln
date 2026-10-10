@@ -314,6 +314,8 @@ PresenceService/SubscribePresences, then Locker/SelectDocuments every 8 s once t
 | Co-op `shift_id` | the shift's start as `YYYYMMDDhhmmss` | N (`coop_carte_points.go`) |
 | What the lobby checks before it opens (snapshot at `main+0x35340b0`, "now" = network clock seconds) | VS: the window covering now and the next two exist, the current one's stages exist in the VS stage table. Co-op: the shift covering now and the next two exist; the current one's stage exists in the co-op stage table, each main weapon exists or is -1 (random), the Grizzco weapon exists or is negative. Season: the last entry covers now and its field 2 is a season-table id (field 2 itself when <= 8, else `((n-1)&3)+5`). League: at most one event | G (`0x35340b0`, `0x352ec90`, `0x353703c`) |
 | Table ids (v11.3.0 RSDB, looked up by `Id`) | VS stages 1-26; co-op stages 1, 2, 4, 6, 7, 8, 9 (Big Run 100, 102-107); seasons 0-9; weapons are not rows for -1 and -2 | G (romfs `VersusSceneInfo`, `CoopSceneInfo`, `SeasonInfo`, `WeaponInfoMain`) |
+| Co-op monthly reward | the lobby's CoopReward step refuses the current shift unless `reward_type` is "Head", "Clothes" or "Shoes" and `reward_gear_id` (21000-21999) exists in that gear table (Head 21000-21005, 21007-21023; Clothes 21000-21006, 21008-21017; Shoes 21001-21009). Without it the lobby shows a communication error with no code (measured live: reward record +0x60 = 7) | G (`0x3879c00`, `0x37e98f0`; romfs `GearInfoHead/Clothes/Shoes`) + M |
+| GameRecord/InitializeAttributes | called after a NOT_FOUND `CoopUserAttribute/Data` (or `VsUserAttribute/Data`) read; UNIMPLEMENTED shows 2321-4224. The game parses only `attributes`, every key optional (coop: `shift_id`, `limited_shift_id`, `mm_disable_limit`, `total_grade_point`, `smell`; VS: `season_id`, `udemae`, ...). Request/response field numbers from the reference's descriptors | G (`0x327fe6c`, `0x327ba70`, `0x327a230`) + N (descriptors) + M |
 | Hammer `UserAttribute/Data` | read at login; any non-OK status is taken as `total_participants` = 0, no error raised | G (`0x32b4f20`, handler `0x32acd88`) |
 | SelectVsParams | the SDK keeps only the name (parsed), the two timestamps and the attributes; `params_set_id` and both responses' `schedule_set_id` are dropped and never compared; the game reads only the attributes map, every key optional | G (`main+0x7b8620`, `0x7bbee0`, `0x32a4968`-`0x32a4dac`) |
 
@@ -327,7 +329,7 @@ of Nintendo's shared NPLN schema, not a second read of the Shield-licensed tree 
 names/numbers/types were checked against N's descriptors (the tables above) and match. The
 duplication is deliberate debt: see `design.md`, "Lift the shared NPLN layer".
 
-The toyohr `cloud_save`, `lobby_messaging`, `userscreening`, `common`, `locker`, `canola` and `fest` schemas and
+The toyohr `cloud_save`, `lobby_messaging`, `userscreening`, `common`, `locker`, `canola`, `fest` and `game_record` schemas and
 `maintenance/v1` (2026-10-10) take their field names, numbers and types from N's compiled descriptors
 (facts: wire layout), written out as fresh `.proto` text in this repository's style. The game binary
 carries no descriptors, only the method paths, which match (G).

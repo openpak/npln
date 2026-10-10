@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	commonpb "github.com/openpak/npln/proto/common"
+	toyohrpb "github.com/openpak/npln/proto/toyohr/v1"
 	ugcpb "github.com/openpak/npln/proto/ugcstore/v1"
 )
 
@@ -59,4 +60,18 @@ func TestUgcCommit(t *testing.T) {
 func bearerCtx(pid uint64, uid string) context.Context {
 	tok := newToken(pid, Tenant+"/users/"+uid, Tenant)
 	return metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "bearer "+tok.GetAccessToken()))
+}
+
+// A new player's coop attributes are returned and land in the store the next read uses.
+func TestInitializeAttributesCoop(t *testing.T) {
+	t.Setenv("NPLN_JWT_KEY", t.TempDir()+"/k.pem")
+	u := newUGCStore(t.TempDir() + "/ugc.pb")
+	g := &gameRecord{ugc: u}
+	r, err := g.InitializeAttributes(bearerCtx(1, "u-me"), &toyohrpb.InitializeAttributesRequest{InitialCoop: &toyohrpb.InitializeAttributesRequest_InitialCoop{}})
+	if err != nil || r.GetAttributes().GetFields()["total_grade_point"] == nil {
+		t.Fatalf("%v %v", r, err)
+	}
+	if u.docs["services/GameRecord/users/u-me/CoopUserAttribute/Data"] == nil || r.GetDocument() != Tenant+"/documents/services/GameRecord/users/u-me/CoopUserAttribute/Data" {
+		t.Fatalf("document: %q", r.GetDocument())
+	}
 }
