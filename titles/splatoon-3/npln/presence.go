@@ -4,8 +4,8 @@ package npln
 //
 // Two streams, and the game's friend list depends on both:
 //
-//   - KeepAlive is bidirectional. The client pings, and PUBLISHES its own state on the same
-//     stream; we must answer every ping and keep what it publishes.
+//   - KeepAlive is bidirectional. We heartbeat, the client acks each heartbeat and PUBLISHES
+//     its own state on the same stream; we keep what it publishes.
 //   - SubscribePresences reports the caller's friends back, and must keep reporting as their
 //     state CHANGES rather than sending one snapshot.
 
@@ -267,9 +267,10 @@ func (p *presenceServer) SubscribePresences(req *friendspb.SubscribePresencesReq
 	}
 }
 
-// KeepAlive answers EVERY ping. Draining the client's pings and heartbeating on our own timer
-// instead kills the stream: the client gives up after two intervals with no answer to its own
-// ping, and the game reports a communication error although nothing was disconnected.
+// KeepAlive: we open with a heartbeat, heartbeat again on our own timer, and answer each
+// presence update. We never answer an ack: Splatoon 3 acks every heartbeat at once, so answering
+// acks is a heartbeat/ack loop, measured 2026-10-10 on a Harbor console at ~2,000 heartbeats a
+// minute for as long as the game ran (the same storm Stardew's server had on 2026-09-18).
 func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveServer) error {
 	ctx := stream.Context()
 	// The bearer names the player. Whether this stream always carries one is unmeasured; if a
@@ -281,6 +282,34 @@ func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveSer
 	goOnline(uid)
 	defer goOffline(uid)
 
+	var mu sync.Mutex // Send is not safe from two goroutines
+	beat := func() error {
+		mu.Lock()
+		defer mu.Unlock()
+		return stream.Send(&friendspb.KeepAliveResponse{Heartbeat: presenceHeartbeat()})
+	}
+	if beat() != nil {
+		return nil
+	}
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		t := time.NewTicker(keepAliveBeat)
+		defer t.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if beat() != nil {
+					return
+				}
+			}
+		}
+	}()
+
 	for {
 		req, err := stream.Recv()
 		if err != nil {
@@ -290,9 +319,12 @@ func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveSer
 			attrs := up.GetPresence().GetAttributes()
 			publish(uid, attrs)
 			log.Printf("[Presence] UpdatePresence from %s: %d attribute(s)", redact.Tag(uid), len(attrs))
-		}
-		if err := stream.Send(&friendspb.KeepAliveResponse{Heartbeat: presenceHeartbeat()}); err != nil {
-			return nil
+			if beat() != nil {
+				return nil
+			}
 		}
 	}
 }
+
+// keepAliveBeat is how often we heartbeat unprompted: well inside the announced deadline.
+var keepAliveBeat = 10 * time.Second
