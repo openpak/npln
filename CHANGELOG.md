@@ -3,6 +3,19 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.7.7 — 2026-10-10
+
+- Splatoon 3 boots online and reaches the Square on a Harbor console: the toyohr boot services
+  (cloud save, lobby messaging, user screening, locker, canola, maintenance), ugcstore and
+  FestService, with Nintendo-shaped NOT_FOUND (NError detail) for every absent resource.
+- Splatoon 3 presence KeepAlive heartbeats on a timer and never answers acks (it was a loop of
+  ~2,000 heartbeats a minute).
+- Splatoon 3 schedules the lobby accepts: ranked rules 1-4, no Challenge event, co-op shifts and
+  season with ids from the game's own tables. The lobby still raises a communication error after
+  its "maps and modes updated" notice; the cause is being traced.
+- Splatoon 3 rooms, matchmaking and gamesync are now Stardew Valley's service set
+  (`RegisterSessions`); untested for Splatoon 3.
+
 ## v0.7.6 — 2026-10-10
 
 - Logs carry no personal data, for any title: no account, user, session or pid id, nickname,
