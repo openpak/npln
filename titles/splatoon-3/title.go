@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	host "github.com/openpak/npln"
+	"github.com/openpak/npln/redact"
 	"github.com/openpak/npln/titles/splatoon-3/npln"
 	"github.com/openpak/npln/titles/splatoon-3/rotation"
 )
@@ -53,10 +54,10 @@ func run(creds credentials.TransportCredentials, lis net.Listener) error {
 	// The console dials the session/gamesync endpoint directly (22210), not through Traefik.
 	if sessionAddr := env("NPLN_SESSION_LISTEN", ":22210"); sessionAddr != "" && sessionAddr != lis.Addr().String() {
 		if sl, err := net.Listen("tcp", sessionAddr); err != nil {
-			log.Printf("session endpoint: cannot listen on %s: %v", sessionAddr, err)
+			log.Printf("session endpoint: cannot listen on %s: %s", sessionAddr, redact.Err(err))
 		} else {
 			log.Printf("session/gamesync endpoint on %s (gRPC/TLS)", sessionAddr)
-			go func() { log.Printf("session endpoint: %v", srv.Serve(sl)) }()
+			go func() { log.Printf("session endpoint: %s", redact.Err(srv.Serve(sl))) }()
 		}
 	}
 	return srv.Serve(lis)
@@ -68,9 +69,9 @@ func keepRotation(path string) (*rotation.File, error) {
 	rot, renewed, err := rotation.Keep(path, time.Now().UTC())
 	switch {
 	case rot == nil:
-		log.Printf("rotation %s: %v", path, err)
+		log.Printf("rotation %s: %s", path, redact.Err(err))
 	case renewed:
-		log.Printf("rotation %s renewed: %d vs to %s (%v)", path, len(rot.Vs), rot.VsEnd().Format(time.RFC3339), err)
+		log.Printf("rotation %s renewed: %d vs to %s (%s)", path, len(rot.Vs), rot.VsEnd().Format(time.RFC3339), redact.Err(err))
 	}
 	return rot, err
 }

@@ -23,6 +23,7 @@ import (
 
 	commonpb "github.com/openpak/npln/proto/common"
 	friendspb "github.com/openpak/npln/proto/friends/v1"
+	"github.com/openpak/npln/redact"
 )
 
 // The heartbeat contract the client times itself against: it pings on the interval and gives up
@@ -199,8 +200,8 @@ func (p *presenceServer) SubscribePresences(req *friendspb.SubscribePresencesReq
 		}
 		presences = filtered
 	}
-	log.Printf("[Presence] SubscribePresences user=%q asked=%d -> %d presence(s)",
-		short(req.GetUser()), len(req.GetPresences()), len(presences))
+	log.Printf("[Presence] SubscribePresences user=%s asked=%d -> %d presence(s)",
+		redact.Seg(req.GetUser()), len(req.GetPresences()), len(presences))
 
 	// An EMPTY presences message is not sent at all — it does not occur in observed traffic, and
 	// a fresh account goes straight from the heartbeat to enumeration_done.
@@ -288,7 +289,7 @@ func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveSer
 		if up := req.GetUpdatePresence(); up != nil {
 			attrs := up.GetPresence().GetAttributes()
 			publish(uid, attrs)
-			log.Printf("[Presence] UpdatePresence from %s: %d attribute(s)", uid, len(attrs))
+			log.Printf("[Presence] UpdatePresence from %s: %d attribute(s)", redact.Tag(uid), len(attrs))
 		}
 		if err := stream.Send(&friendspb.KeepAliveResponse{Heartbeat: presenceHeartbeat()}); err != nil {
 			return nil

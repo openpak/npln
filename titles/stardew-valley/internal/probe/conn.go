@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"golang.org/x/net/http2/hpack"
+
+	"github.com/openpak/npln/redact"
 )
 
 const clientPreface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
@@ -100,7 +102,7 @@ func HandleConn(id int, raw net.Conn, tlsConn *tls.Conn, logger *log.Logger) {
 	_ = tlsConn.SetDeadline(hsDeadline)
 	handshakeStart := time.Now()
 	if err := tlsConn.Handshake(); err != nil {
-		h.logf("handshake failed after %s: %v", time.Since(handshakeStart), err)
+		h.logf("handshake failed after %s: %s", time.Since(handshakeStart), redact.Err(err))
 		return
 	}
 	state := tlsConn.ConnectionState()
@@ -121,14 +123,14 @@ func HandleConn(id int, raw net.Conn, tlsConn *tls.Conn, logger *log.Logger) {
 	binary.BigEndian.PutUint16(settings[0:2], 0x5) // MAX_FRAME_SIZE
 	binary.BigEndian.PutUint32(settings[2:6], 16384)
 	if err := writeFrame(tlsConn, 0x4, 0, 0, settings); err != nil {
-		h.logf("write server preface failed: %v", err)
+		h.logf("write server preface failed: %s", redact.Err(err))
 		return
 	}
 
 	h.hdec = hpack.NewDecoder(4096, h.headerField)
 
 	if _, err := io.ReadFull(tlsConn, make([]byte, len(clientPreface))); err != nil {
-		h.logf("no client preface: %v", err)
+		h.logf("no client preface: %s", redact.Err(err))
 		return
 	}
 	h.logf("client preface ok (+%s)", time.Since(h.start).Round(time.Microsecond))
@@ -139,7 +141,7 @@ func HandleConn(id int, raw net.Conn, tlsConn *tls.Conn, logger *log.Logger) {
 			if err == io.EOF || isTimeout(err) {
 				h.logf("client closed (+%s, EOF on read)", time.Since(h.start).Round(time.Millisecond))
 			} else {
-				h.logf("read error after %+v: %v", time.Since(h.start).Round(time.Millisecond), err)
+				h.logf("read error after %+v: %s", time.Since(h.start).Round(time.Millisecond), redact.Err(err))
 			}
 			return
 		}
@@ -150,7 +152,7 @@ func HandleConn(id int, raw net.Conn, tlsConn *tls.Conn, logger *log.Logger) {
 		payload := make([]byte, length)
 		if length > 0 {
 			if _, err := io.ReadFull(tlsConn, payload); err != nil {
-				h.logf("read error (frame body) after %+v: %v", time.Since(h.start).Round(time.Millisecond), err)
+				h.logf("read error (frame body) after %+v: %s", time.Since(h.start).Round(time.Millisecond), redact.Err(err))
 				return
 			}
 		}
@@ -211,7 +213,7 @@ func (h *ConnHandler) frame(typ, flags byte, streamID uint32, payload []byte) bo
 			}
 			h.logf("settings ids=[%s]", strings.Join(ids, ", "))
 			if err := writeFrame(h.conn, 0x4, 0x1, 0, nil); err != nil {
-				h.logf("write SETTINGS ack failed: %v", err)
+				h.logf("write SETTINGS ack failed: %s", redact.Err(err))
 				return false
 			}
 		}
@@ -219,7 +221,7 @@ func (h *ConnHandler) frame(typ, flags byte, streamID uint32, payload []byte) bo
 		if flags&0x01 == 0 && len(payload) == 8 {
 			// Echo the opaque payload as ACK (spec requirement); never log it.
 			if err := writeFrame(h.conn, 0x6, 0x1, 0, payload); err != nil {
-				h.logf("write PING ack failed: %v", err)
+				h.logf("write PING ack failed: %s", redact.Err(err))
 				return false
 			}
 		}
@@ -265,7 +267,7 @@ func (h *ConnHandler) streamSeen(streamID uint32, ended bool) {
 		{"grpc-status", "12"},
 	})
 	if err := writeFrame(h.conn, 0x1, 0x04|0x01, streamID, block); err != nil { // END_HEADERS|END_STREAM
-		h.logf("write grpc response failed: %v", err)
+		h.logf("write grpc response failed: %s", redact.Err(err))
 		return
 	}
 	h.logf("responded stream=%d grpc-status=12 (trailers-only)", streamID)
@@ -305,7 +307,7 @@ func (h *ConnHandler) decodeHeaders(block []byte) {
 	if _, err := h.hdec.Write(block); err != nil {
 		// A decoding error can mean compression-state divergence; log the
 		// failure without dumping the block.
-		h.logf("hpack decode error: %v", err)
+		h.logf("hpack decode error: %s", redact.Err(err))
 	}
 }
 

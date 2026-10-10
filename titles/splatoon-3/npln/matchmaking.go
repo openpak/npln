@@ -38,6 +38,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	mmpb "github.com/openpak/npln/proto/matchmaking/v1"
+	"github.com/openpak/npln/redact"
 )
 
 func envInt(k string, d int) int {
@@ -164,7 +165,7 @@ func (s *gameSessionService) CreateGameSessionCreationTicket(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("[MM] CreateGameSessionCreationTicket -> session %s (host room)", lastSeg(gs.Name))
+	log.Printf("[MM] CreateGameSessionCreationTicket -> session %s (host room)", redact.Seg(gs.Name))
 	return &mmpb.GameSessionCreationTicket{
 		Name:                tenant + "/gameSessionCreationTickets/" + newID(),
 		State:               mmpb.GameSessionCreationTicket_SUCCEEDED,
@@ -177,7 +178,7 @@ func (s *gameSessionService) CreateGameSessionCreationTicket(ctx context.Context
 // already SUCCEEDED, so one message carries the session and the stream ends.
 func (s *gameSessionService) TrackGameSessionCreationTicket(req *mmpb.TrackGameSessionCreationTicketRequest, stream mmpb.GameSessionService_TrackGameSessionCreationTicketServer) error {
 	name := req.GetName()
-	log.Printf("[MM] TrackGameSessionCreationTicket %s", short(name))
+	log.Printf("[MM] TrackGameSessionCreationTicket %s", redact.Seg(name))
 	return stream.Send(&mmpb.GameSessionCreationTicket{Name: name, State: mmpb.GameSessionCreationTicket_SUCCEEDED})
 }
 
@@ -239,7 +240,7 @@ func (s *gameSessionService) JoinGameSession(ctx context.Context, req *mmpb.Join
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("[MM] JoinGameSession %s -> %d/%d", lastSeg(snap.Name), snap.CurrentParticipantCount, snap.MaxParticipantCount)
+	log.Printf("[MM] JoinGameSession %s -> %d/%d", redact.Seg(snap.Name), snap.CurrentParticipantCount, snap.MaxParticipantCount)
 	return &mmpb.JoinGameSessionResponse{GameSession: snap, MatchedUserSessions: []*mmpb.MatchedUserSession{matched}}, nil
 }
 
@@ -348,7 +349,7 @@ func (s *gameSessionService) CreateGameSessionShortAlias(_ context.Context, req 
 	store.Lock()
 	store.alias[code] = a.GetGameSession()
 	store.Unlock()
-	log.Printf("[MM] room code %s -> %s", code, lastSeg(a.GetGameSession()))
+	log.Printf("[MM] room code %s -> %s", redact.Tag(code), redact.Seg(a.GetGameSession()))
 	return alias, nil
 }
 
@@ -385,7 +386,7 @@ func (s *gameSessionService) AllocateIceServerSet(_ context.Context, req *mmpb.A
 	mac.Write([]byte(username))
 	password := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 
-	log.Printf("[MM] AllocateIceServerSet user=%q -> STUN %s:%d TURN %s:%d", short(req.GetUser()), stunHost, stunPort, turnHost, turnPort)
+	log.Printf("[MM] AllocateIceServerSet user=%s -> STUN %s:%d TURN %s:%d", redact.Seg(req.GetUser()), stunHost, stunPort, turnHost, turnPort)
 	return &mmpb.IceServerSet{
 		Name:       resolveTenant(req.GetTenant()) + "/iceServerSets/" + newID(),
 		StunServer: &mmpb.StunServer{Host: stunHost, Port: stunPort, Protocol: mmpb.StunServer_UDP},
@@ -437,7 +438,7 @@ func (m *matchmaker) CreateMatchmakingTicket(ctx context.Context, req *mmpb.Crea
 	tryFormMatch(tenant, cfg)
 	out := proto.Clone(t).(*mmpb.MatchmakingTicket)
 	store.Unlock()
-	log.Printf("[MM] CreateMatchmakingTicket %s cfg=%q state=%s", lastSeg(out.Name), short(cfg), out.State)
+	log.Printf("[MM] CreateMatchmakingTicket %s cfg=%s state=%s", redact.Seg(out.Name), redact.Tag(cfg), out.State)
 	return out, nil
 }
 
@@ -485,7 +486,7 @@ func tryFormMatch(tenant, cfg string) {
 		t.GameSession = snapshot(gs) // the ticket's copy, complete; the live one keeps changing
 	}
 	store.pending[cfg] = nil
-	log.Printf("[MM] match formed: %d players -> session %s", len(waiting), lastSeg(gs.Name))
+	log.Printf("[MM] match formed: %d players -> session %s", len(waiting), redact.Seg(gs.Name))
 }
 
 // TrackMatchmakingTicket streams the ticket's state until it reaches a terminal state. It pushes a
@@ -494,7 +495,7 @@ func tryFormMatch(tenant, cfg string) {
 func (m *matchmaker) TrackMatchmakingTicket(req *mmpb.TrackMatchmakingTicketRequest, stream mmpb.Matchmaker_TrackMatchmakingTicketServer) error {
 	ctx := stream.Context()
 	name := req.GetName()
-	log.Printf("[MM] TrackMatchmakingTicket %s", short(name))
+	log.Printf("[MM] TrackMatchmakingTicket %s", redact.Seg(name))
 	var lastState mmpb.MatchmakingTicket_State = -1
 	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()

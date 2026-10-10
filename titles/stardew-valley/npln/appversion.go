@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/openpak/npln/redact"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -88,7 +89,7 @@ func titleOutdated(ai, av string) (bool, string) {
 	req.Header.Set("X-Internal-Key", os.Getenv("NX_INTERNAL_KEY"))
 	resp, err := httpc.Do(req)
 	if err != nil {
-		log.Printf("[Auth] version check %s %s: %v (allowed)", ai, av, err)
+		log.Printf("[Auth] version check %s %s: %s (allowed)", ai, av, redact.Err(err))
 		return false, ""
 	}
 	defer resp.Body.Close()

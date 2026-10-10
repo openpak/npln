@@ -18,6 +18,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/openpak/npln/redact"
 	"github.com/openpak/npln/titles/stardew-valley/internal/probe"
 )
 
@@ -34,17 +35,17 @@ func main() {
 
 	cert, err := probe.GenerateCert()
 	if err != nil {
-		log.Fatalf("generate in-memory certificate: %v", err)
+		log.Fatalf("generate in-memory certificate: %s", redact.Err(err))
 	}
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatalf("listen %s: %v", addr, err)
+		log.Fatalf("listen %s: %s", addr, redact.Err(err))
 	}
 	log.Printf("NPLN probe listening on %s (SAN: %s + %s); metadata-only logging, no application responses", addr, probe.TenantWildcard, probe.TenantHostname)
 
 	srv := &probe.Server{TLSConfig: probe.BuildTLSConfig(cert, log.Default()), Logger: log.Default()}
 	if err := srv.Serve(ln); err != nil {
-		log.Fatalf("serve: %v", err)
+		log.Fatalf("serve: %s", redact.Err(err))
 	}
 }

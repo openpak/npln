@@ -8,6 +8,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	friendspb "github.com/openpak/npln/proto/friends/v1"
+	"github.com/openpak/npln/redact"
 )
 
 type friendsServer struct {
@@ -15,7 +16,7 @@ type friendsServer struct {
 }
 
 func (s *friendsServer) ActivateUser(ctx context.Context, req *friendspb.ActivateUserRequest) (*friendspb.ActivateUserResponse, error) {
-	log.Printf("[Friends] ActivateUser %q", req.GetName())
+	log.Printf("[Friends] ActivateUser %s", redact.Seg(req.GetName()))
 	return &friendspb.ActivateUserResponse{}, nil
 }
 
@@ -64,7 +65,7 @@ func (s *friendsServer) SubscribeFriendUsers(req *friendspb.SubscribeFriendUsers
 					Users: []*friendspb.FriendUser{friendUser(tenantFromCtx(ctx), me.UserID(), f)},
 				})
 			}
-			log.Printf("[Friends] Subscribe pid=%d -> %d friend(s)", pid, len(me.Friends))
+			log.Printf("[Friends] Subscribe pid=%s -> %d friend(s)", redact.Tag(pid), len(me.Friends))
 		}
 	}
 	if err := stream.Send(first); err != nil {

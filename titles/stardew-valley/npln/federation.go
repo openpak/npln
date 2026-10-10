@@ -11,6 +11,7 @@ package npln
 import (
 	"context"
 	"encoding/json"
+	"github.com/openpak/npln/redact"
 	"log"
 	"net"
 	"net/http"
@@ -56,7 +57,7 @@ func refreshRegions(url string) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	resp, err := httpc.Do(req)
 	if err != nil {
-		log.Printf("[Federation] regions: %v", err)
+		log.Printf("[Federation] regions: %s", redact.Err(err))
 		return
 	}
 	defer resp.Body.Close()
@@ -64,7 +65,7 @@ func refreshRegions(url string) {
 		Regions []Region `json:"regions"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || resp.StatusCode != 200 {
-		log.Printf("[Federation] regions: HTTP %d err=%v", resp.StatusCode, err)
+		log.Printf("[Federation] regions: HTTP %d err=%s", resp.StatusCode, redact.Err(err))
 		return
 	}
 	for i := range out.Regions {

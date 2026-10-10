@@ -34,6 +34,7 @@ import (
 
 	commonpb "github.com/openpak/npln/proto/common"
 	mmpb "github.com/openpak/npln/proto/matchmaking/v1"
+	"github.com/openpak/npln/redact"
 )
 
 type sessionServer struct {
@@ -75,7 +76,9 @@ func diag(what string, m proto.Message) {
 			gs.Password = ""
 		}
 	}
-	log.Printf("[MM][DIAG] %s =\n%s", what, prototext.Format(m))
+	if redact.TraceBodies() {
+		log.Printf("[MM][DIAG] %s =\n%s", what, prototext.Format(m))
+	}
 }
 
 // userDef is the caller's definition with its concrete resource name: the client identifies its
@@ -228,7 +231,7 @@ func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req
 			delete(g.sessions, gsid)
 			delete(g.versions, gsid)
 			delete(g.members, gsid)
-			log.Printf("[MM] evict stale farm session=%s (host %s re-hosted)", gsid, lastSeg(hostUser))
+			log.Printf("[MM] evict stale farm session=%s (host %s re-hosted)", redact.Tag(gsid), redact.Seg(hostUser))
 		}
 	}
 	g.tickets[lastSeg(ticketName)] = t
@@ -236,7 +239,7 @@ func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req
 	g.versions[lastSeg(gsName)] = callerVersion(ctx)
 	g.addMember(lastSeg(gsName), &mmpb.UserSession{Name: userSess, User: hostUD.GetUser(), State: mmpb.UserSession_ACTIVE, Attributes: hostUD.GetAttributes(), CreateTime: timestamppb.Now()})
 	g.mu.Unlock()
-	log.Printf("[MM] Create host=%s ticket=%s session=%s @ %s:%d", lastSeg(hostUD.GetUser()), lastSeg(ticketName), lastSeg(gsName), room.Host, room.Port)
+	log.Printf("[MM] Create host=%s ticket=%s session=%s @ %s:%d", redact.Seg(hostUD.GetUser()), redact.Seg(ticketName), redact.Seg(gsName), room.Host, room.Port)
 
 	// Returned PENDING; Track streams PENDING -> SUCCEEDED so the host's state machine sees the transition.
 	pending := &mmpb.GameSessionCreationTicket{Name: ticketName, MatchmakingConfig: t.MatchmakingConfig, UserDefinitions: t.UserDefinitions, State: mmpb.GameSessionCreationTicket_PENDING}
@@ -257,7 +260,7 @@ func (g *sessionServer) TrackGameSessionCreationTicket(req *mmpb.TrackGameSessio
 		return err
 	}
 	time.Sleep(300 * time.Millisecond)
-	log.Printf("[MM] Track %s -> SUCCEEDED session=%s (stream closes)", lastSeg(t.Name), lastSeg(t.GetGameSession().GetName()))
+	log.Printf("[MM] Track %s -> SUCCEEDED session=%s (stream closes)", redact.Seg(t.Name), redact.Seg(t.GetGameSession().GetName()))
 	return stream.Send(t) // the client treats the ticket as complete only when the stream closes OK
 }
 
@@ -271,7 +274,7 @@ func (g *sessionServer) CancelGameSessionCreationTicket(ctx context.Context, req
 		delete(g.members, gsid)
 	}
 	g.mu.Unlock()
-	log.Printf("[MM] Cancel ticket %s", lastSeg(req.GetName()))
+	log.Printf("[MM] Cancel ticket %s", redact.Seg(req.GetName()))
 	return &emptypb.Empty{}, nil
 }
 
@@ -342,7 +345,7 @@ func (g *sessionServer) QueryGameSessions(ctx context.Context, req *mmpb.QueryGa
 			continue
 		}
 		if !g.versionFits(id, mine) {
-			log.Printf("[MM] QueryGameSessions: %s hidden (version %s, caller %s)", id, g.versions[id], mine)
+			log.Printf("[MM] QueryGameSessions: %s hidden (version %s, caller %s)", redact.Tag(id), g.versions[id], mine)
 			continue
 		}
 		full := g.withMembers(id)
@@ -391,7 +394,7 @@ func friendSearchAllowed(ctx context.Context, users []string) error {
 	}
 	acct, err := lookupAccount(pid)
 	if err != nil {
-		log.Printf("[MM] FriendSearch: account lookup for pid=%d: %v", pid, err)
+		log.Printf("[MM] FriendSearch: account lookup for pid=%s: %s", redact.Tag(pid), redact.Err(err))
 		return status.Error(codes.Unavailable, "friend list unavailable")
 	}
 	allowed := map[string]bool{lastSeg(me): true}
@@ -437,7 +440,7 @@ func (g *sessionServer) JoinGameSession(ctx context.Context, req *mmpb.JoinGameS
 	}
 	if mine := callerVersion(ctx); !memberOf(g.members[gsid], ud.GetUser()) && !g.versionFits(gsid, mine) {
 		// Another version's session does not exist for this player.
-		log.Printf("[MM] Join %s refused for %s (version %s, theirs %s)", gsid, lastSeg(ud.GetUser()), g.versions[gsid], mine)
+		log.Printf("[MM] Join %s refused for %s (version %s, theirs %s)", redact.Tag(gsid), redact.Seg(ud.GetUser()), g.versions[gsid], mine)
 		return nil, status.Errorf(codes.NotFound, "game session %q not found", req.GetName())
 	}
 	if s.GetPassword() != "" && req.GetPassword() != s.GetPassword() {
@@ -448,7 +451,7 @@ func (g *sessionServer) JoinGameSession(ctx context.Context, req *mmpb.JoinGameS
 	}
 	userSess := s.GetName() + "/userSessions/" + uuid4()
 	n := g.addMember(gsid, &mmpb.UserSession{Name: userSess, User: ud.GetUser(), State: mmpb.UserSession_ACTIVE, Attributes: ud.GetAttributes(), CreateTime: timestamppb.Now()})
-	log.Printf("[MM] Join %s <- %s (%d/%d)", gsid, lastSeg(ud.GetUser()), n, s.GetMaxParticipantCount())
+	log.Printf("[MM] Join %s <- %s (%d/%d)", redact.Tag(gsid), redact.Seg(ud.GetUser()), n, s.GetMaxParticipantCount())
 	return &mmpb.JoinGameSessionResponse{
 		GameSession:         g.withMembers(gsid),
 		MatchedUserSessions: []*mmpb.MatchedUserSession{matched(ctx, ud, s.GetName(), userSess)},
@@ -470,7 +473,7 @@ func (g *sessionServer) dropMember(gsid, user string) {
 		delete(g.sessions, gsid)
 		delete(g.versions, gsid)
 		delete(g.members, gsid)
-		log.Printf("[MM] host %s left: farm %s closed", lastSeg(user), gsid)
+		log.Printf("[MM] host %s left: farm %s closed", redact.Seg(user), redact.Tag(gsid))
 		return
 	}
 	kept := list[:0]
@@ -488,10 +491,10 @@ func (g *sessionServer) dropMember(gsid, user string) {
 		delete(g.versions, gsid)
 		delete(g.members, gsid)
 		delete(g.pools, gsid)
-		log.Printf("[MM] pool session %s emptied and closed", gsid)
+		log.Printf("[MM] pool session %s emptied and closed", redact.Tag(gsid))
 		return
 	}
-	log.Printf("[MM] %s left farm %s (%d left)", lastSeg(user), gsid, len(kept))
+	log.Printf("[MM] %s left farm %s (%d left)", redact.Seg(user), redact.Tag(gsid), len(kept))
 }
 
 // friendPool: a Matchmaker session tied to a base room through FriendGameSessionId. It is
@@ -635,7 +638,7 @@ func (g *sessionServer) AllocateIceServerSet(ctx context.Context, req *mmpb.Allo
 		ClientCacheDuration: durationpb.New(90 * time.Second),
 		UpdateTime:          timestamppb.Now(),
 	}
-	log.Printf("[MM] AllocateIceServerSet user=%s -> STUN %s:%d TURN %s:%d", lastSeg(user), stunHost, set.StunServer.Port, turnHost, set.TurnServers[0].Port)
+	log.Printf("[MM] AllocateIceServerSet user=%s -> STUN %s:%d TURN %s:%d", redact.Seg(user), stunHost, set.StunServer.Port, turnHost, set.TurnServers[0].Port)
 	return set, nil
 }
 

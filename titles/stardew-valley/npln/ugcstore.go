@@ -36,6 +36,7 @@ import (
 
 	commonpb "github.com/openpak/npln/proto/common"
 	ugcpb "github.com/openpak/npln/proto/ugcstore/v1"
+	"github.com/openpak/npln/redact"
 )
 
 const (
@@ -100,7 +101,7 @@ func (u *ugcStore) load() {
 		err = json.Unmarshal(b, &data)
 	}
 	if err != nil {
-		log.Printf("[UGC] %s unreadable (%v): starting empty", u.file, err)
+		log.Printf("[UGC] %s unreadable (%s): starting empty", u.file, redact.Err(err))
 		return
 	}
 	for _, fd := range data.Docs {
@@ -139,7 +140,7 @@ func (u *ugcStore) save() {
 		}
 	}
 	if err != nil {
-		log.Printf("[UGC] saving %s: %v (changes live in memory only)", u.file, err)
+		log.Printf("[UGC] saving %s: %s (changes live in memory only)", u.file, redact.Err(err))
 	}
 }
 
@@ -374,7 +375,7 @@ func (u *ugcStore) CommitDocuments(ctx context.Context, req *ugcpb.CommitDocumen
 		}
 	}
 	u.save()
-	log.Printf("[UGC] commit by %s: %d write(s)", me, len(ops))
+	log.Printf("[UGC] commit by %s: %d write(s)", redact.Tag(me), len(ops))
 	return &ugcpb.CommitDocumentsResponse{WriteResults: results, CommitTime: now}, nil
 }
 
@@ -459,7 +460,7 @@ func (u *ugcStore) RunQuery(req *ugcpb.RunQueryRequest, stream grpc.ServerStream
 		return err
 	}
 	now := timestamppb.Now()
-	log.Printf("[UGC] RunQuery parent=%q -> %d document(s)", parent, len(docs))
+	log.Printf("[UGC] RunQuery parent=%s -> %d document(s)", redact.Tag(parent), len(docs))
 	if len(docs) == 0 { // Firestore's empty answer: read_time alone (observed shape)
 		return stream.Send(&ugcpb.RunQueryResponse{ReadTime: now, SkippedResults: skipped})
 	}
@@ -594,6 +595,6 @@ func (s *screening) CreateReport(ctx context.Context, req *ugcpb.CreateReportReq
 		s.reports = s.reports[len(s.reports)-maxReportsKept:]
 	}
 	s.mu.Unlock()
-	log.Printf("[UGC] REPORT by %s: target=%q type=%q category=%q reason=%q", lastSeg(user), r.GetScreeningTarget(), r.GetScreeningTargetType(), r.GetCategory(), r.GetReason())
+	log.Printf("[UGC] REPORT by %s: target=%s type=%s category=%s reason=%d chars", redact.Seg(user), redact.Tag(r.GetScreeningTarget()), redact.Tag(r.GetScreeningTargetType()), redact.Tag(r.GetCategory()), len(r.GetReason()))
 	return r, nil
 }

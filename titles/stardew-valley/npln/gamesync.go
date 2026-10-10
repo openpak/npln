@@ -37,6 +37,7 @@ import (
 
 	commonpb "github.com/openpak/npln/proto/common"
 	gspb "github.com/openpak/npln/proto/gamesync/v1"
+	"github.com/openpak/npln/redact"
 )
 
 type gsSession struct {
@@ -184,7 +185,7 @@ func (g *gamesyncServer) participants(gsid string) []*gsSession {
 func (g *gamesyncServer) IssueToken(ctx context.Context, req *gspb.IssueTokenRequest) (*gspb.IssueTokenResponse, error) {
 	uid, gsid, usid, tid, ok := sessionClaims(req.GetMatchmakingIdToken())
 	if !ok {
-		log.Printf("[GS] IssueToken user_session=%q: matchmaking id-token not ours -> refused", req.GetUserSession())
+		log.Printf("[GS] IssueToken user_session=%s: matchmaking id-token not ours -> refused", redact.Seg(req.GetUserSession()))
 		return nil, grpc.Errorf(16, "matchmaking id token not recognised") //nolint:staticcheck
 	}
 	uss := lastSeg(req.GetUserSession())
@@ -220,7 +221,7 @@ func (g *gamesyncServer) IssueToken(ctx context.Context, req *gspb.IssueTokenReq
 	}
 	g.sess[uss] = s
 	g.mu.Unlock()
-	log.Printf("[GS] IssueToken uss=%s uid=%s farm=%s rank=%d", uss, uid, gsid, s.rank)
+	log.Printf("[GS] IssueToken uss=%s uid=%s farm=%s rank=%d", redact.Tag(uss), redact.Tag(uid), redact.Tag(gsid), s.rank)
 	tok := mintSessionToken(uid, tenant, gsName, gsName+"/userSessions/"+uss, s.team, attrJSON(s.att), "{\"latencies\":{}}")
 	return &gspb.IssueTokenResponse{Token: &gspb.Token{UserSession: req.GetUserSession(), AccessToken: tok, RefreshToken: tok, Ttl: durationpb.New(tokenTTL)}}, nil
 }
@@ -468,7 +469,7 @@ func (g *gamesyncServer) collectionDocs(coll, streamUss string) []string {
 func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.KeepUserSessionRequest, gspb.KeepUserSessionResponse]) error {
 	ctx := stream.Context()
 	streamUss := callerUss(ctx)
-	log.Printf("[GS] KeepUserSession opened uss=%s", streamUss)
+	log.Printf("[GS] KeepUserSession opened uss=%s", redact.Tag(streamUss))
 	var sendMu sync.Mutex
 	send := func(r *gspb.KeepUserSessionResponse) error {
 		sendMu.Lock()
@@ -521,7 +522,7 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 			g.mm.dropMember(gone.gsid, gone.uid) // matchmaking membership follows the gamesync session
 		}
 		g.wakeFarm(w.gsid)
-		log.Printf("[GS] KeepUserSession closed uss=%s", streamUss)
+		log.Printf("[GS] KeepUserSession closed uss=%s", redact.Tag(streamUss))
 	}()
 
 	// re-push every watched document when the farm changes (a write, a join, a leave)
@@ -576,7 +577,7 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 			if c := tg.GetCollection(); c != nil {
 				t.coll = c.GetCollection()
 			}
-			log.Printf("[GS] update_target %s docs=%v collection=%q", tid, t.docs, t.coll)
+			log.Printf("[GS] update_target %s docs=%d collection=%s", redact.Tag(tid), len(t.docs), redact.Tag(t.coll))
 			_ = send(targetChange(tid, gspb.TargetChange_UPDATED))
 			names := t.docs
 			if t.coll != "" {
@@ -587,7 +588,7 @@ func (g *gamesyncServer) KeepUserSession(stream grpc.BidiStreamingServer[gspb.Ke
 					return err
 				}
 			}
-			log.Printf("[GS] target %s LISTED to=%s", tid, lastSeg(streamUss))
+			log.Printf("[GS] target %s LISTED to=%s", redact.Tag(tid), redact.Seg(streamUss))
 			if err := send(targetChange(tid, gspb.TargetChange_LISTED)); err != nil {
 				return err
 			}
@@ -616,14 +617,14 @@ func logPush(streamUss, tid, kind, name string, m *commonpb.MapValue) {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		log.Printf("[GS] push to=%s tid=%s %s %s fields=%s upcsid=%v", lastSeg(streamUss), tid, kind, lastSeg(name), strings.Join(keys, ","), m.GetFields()["upcsid"].GetIntegerValue())
+		log.Printf("[GS] push to=%s tid=%s %s %s fields=%s", redact.Seg(streamUss), redact.Tag(tid), kind, redact.Seg(name), strings.Join(keys, ","))
 		return
 	}
 	if !strings.Contains(name, "/__stu/") && kind != "DELETED" {
 		return
 	}
 	pl := m.GetFields()["pl"].GetBytesValue()
-	log.Printf("[GS] push to=%s tid=%s %s %s from=%s pl=%dB", streamUss, tid, kind, lastSeg(name), lastSeg(m.GetFields()["susid"].GetStringValue()), len(pl))
+	log.Printf("[GS] push to=%s tid=%s %s %s from=%s pl=%dB", redact.Tag(streamUss), redact.Tag(tid), kind, redact.Seg(name), redact.Seg(m.GetFields()["susid"].GetStringValue()), len(pl))
 }
 
 func (g *gamesyncServer) wakeFarm(gsid string) {
@@ -735,13 +736,13 @@ func (g *gamesyncServer) apply(ctx context.Context, ops []*gspb.WriteOperation) 
 		if op.GetDeleteDocument() != nil {
 			kind = "DELETED"
 		}
-		log.Printf("[GS] write farm=%s %s %s fields=%s", gsid, kind, opName(op), fieldKeys(g.store[k]))
+		log.Printf("[GS] write farm=%s %s %s fields=%s", redact.Tag(gsid), kind, redact.Tag(opName(op)), fieldKeys(g.store[k]))
 		doc := g.store[k]
 		if n := opName(op); doc != nil && (strings.Contains(n, "/__pus/") || strings.Contains(n, "/__us/")) {
 			doc = g.withStationLocked(gsid, ussFromDocPath(n), doc) // never deliver placeholder ids (upcsid=0)
 		}
 		g.deliver(gsid, opName(op), kind, doc)
-		if os.Getenv("NPLN_GS_DIAG") != "" {
+		if os.Getenv("NPLN_GS_DIAG") != "" && redact.TraceBodies() {
 			log.Printf("[GS][DIAG] %s = %s", opName(op), prototext.MarshalOptions{Multiline: false}.Format(g.store[k]))
 		}
 		g.mirrorProps(gsid, g.store[k])
@@ -768,7 +769,7 @@ func (g *gamesyncServer) mirrorProps(gsid string, doc *commonpb.MapValue) {
 	}
 	if prp != nil {
 		s.Properties = mergeFields(s.Properties, prp)
-		log.Printf("[GS] mirror prp -> farm %s properties=%s", gsid, fieldKeys(s.Properties))
+		log.Printf("[GS] mirror prp -> farm %s properties=%s", redact.Tag(gsid), fieldKeys(s.Properties))
 	}
 	if ip != nil {
 		s.IsPublic = ip.GetBooleanValue()
@@ -813,7 +814,7 @@ func (g *gamesyncServer) RollbackTransaction(ctx context.Context, req *gspb.Roll
 }
 
 func (g *gamesyncServer) GetDocument(ctx context.Context, req *gspb.GetDocumentRequest) (*gspb.Document, error) {
-	log.Printf("[GS] GetDocument %s", req.GetName())
+	log.Printf("[GS] GetDocument %s", redact.Tag(req.GetName()))
 	return doc(req.GetName(), g.fields(req.GetName(), callerUss(ctx)), timestamppb.Now()), nil
 }
 
@@ -823,7 +824,7 @@ func (g *gamesyncServer) ReadDocuments(ctx context.Context, req *gspb.ReadDocume
 	for _, n := range req.GetDocuments() {
 		out.Results = append(out.Results, &gspb.ReadResult{Result: &gspb.ReadResult_Found{Found: doc(n, g.fields(n, callerUss(ctx)), now)}})
 	}
-	log.Printf("[GS] ReadDocuments %v", req.GetDocuments())
+	log.Printf("[GS] ReadDocuments %d", len(req.GetDocuments()))
 	return out, nil
 }
 
@@ -834,7 +835,7 @@ func (g *gamesyncServer) ListDocuments(ctx context.Context, req *gspb.ListDocume
 	for _, n := range g.collectionDocs(req.GetParent(), uss) {
 		out.Documents = append(out.Documents, doc(n, g.fields(n, uss), now))
 	}
-	log.Printf("[GS] ListDocuments %s -> %d", req.GetParent(), len(out.Documents))
+	log.Printf("[GS] ListDocuments %s -> %d", redact.Tag(req.GetParent()), len(out.Documents))
 	return out, nil
 }
 

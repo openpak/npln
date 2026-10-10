@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"github.com/openpak/npln/redact"
 	"github.com/openpak/npln/rpclog"
 	"log"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc/status"
 
 	"github.com/openpak/npln/bans"
 	authpb "github.com/openpak/npln/proto/auth/v1"
@@ -106,10 +108,10 @@ func typeUnary(ctx context.Context, req any, info *grpc.UnaryServerInfo, h grpc.
 	_ = grpc.SetHeader(ctx, metadata.Pairs("npln-grpc-type", "Unary"))
 	provenByBearer(ctx)
 	auth := mdGet(ctx, "authorization")
-	log.Printf("[RPC] %s tenant=%q uid=%q auth=%q", info.FullMethod, mdGet(ctx, "npln-tenant-id"), uidFromCtx(ctx), short(auth))
+	log.Printf("[RPC] %s tenant=%s uid=%s auth=%s", info.FullMethod, redact.Seg(mdGet(ctx, "npln-tenant-id")), redact.Seg(uidFromCtx(ctx)), redact.Has(auth))
 	resp, err := h(ctx, req)
 	if err != nil {
-		log.Printf("[RPC] %s -> ERROR %v", info.FullMethod, err)
+		log.Printf("[RPC] %s -> ERROR code=%s", info.FullMethod, status.Code(err))
 	}
 	return resp, err
 }
@@ -124,10 +126,10 @@ func typeStream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, h gr
 	}
 	_ = ss.SetHeader(metadata.Pairs("npln-grpc-type", kind))
 	provenByBearer(ss.Context())
-	log.Printf("[RPC] %s (%s) uid=%q", info.FullMethod, kind, uidFromCtx(ss.Context()))
+	log.Printf("[RPC] %s (%s) uid=%s", info.FullMethod, kind, redact.Seg(uidFromCtx(ss.Context())))
 	err := h(srv, ss)
 	if err != nil {
-		log.Printf("[RPC] %s -> ERROR %v", info.FullMethod, err)
+		log.Printf("[RPC] %s -> ERROR code=%s", info.FullMethod, status.Code(err))
 	}
 	return err
 }
@@ -136,7 +138,7 @@ func typeStream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, h gr
 func unknownService(_ any, ss grpc.ServerStream) error {
 	rpclog.Unimplemented(ss)
 	m, _ := grpc.MethodFromServerStream(ss)
-	log.Printf("[RPC] UNIMPLEMENTED %s uid=%q — next handler to write", m, uidFromCtx(ss.Context()))
+	log.Printf("[RPC] UNIMPLEMENTED %s uid=%s — next handler to write", m, redact.Seg(uidFromCtx(ss.Context())))
 	return grpc.Errorf(12, "method %s not implemented", m) //nolint:staticcheck // codes.Unimplemented
 }
 

@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	host "github.com/openpak/npln"
+	"github.com/openpak/npln/redact"
 	"github.com/openpak/npln/titles/stardew-valley/npln"
 )
 
@@ -29,10 +30,10 @@ var Title = host.Title{
 		// it was written; Stardew never did. 22200 is its block in ports.md.
 		if addr := env("NPLN_SESSION_LISTEN", ":22200"); addr != "" && addr != lis.Addr().String() {
 			if sl, err := net.Listen("tcp", addr); err != nil {
-				log.Printf("session endpoint: cannot listen on %s: %v", addr, err)
+				log.Printf("session endpoint: cannot listen on %s: %s", addr, redact.Err(err))
 			} else {
 				log.Printf("session/gamesync endpoint on %s (gRPC/TLS)", addr)
-				go func() { log.Printf("session endpoint: %v", srv.Serve(sl)) }()
+				go func() { log.Printf("session endpoint: %s", redact.Err(srv.Serve(sl))) }()
 			}
 		}
 		return srv.Serve(lis)

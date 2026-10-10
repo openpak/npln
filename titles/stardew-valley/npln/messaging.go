@@ -31,6 +31,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	msgpb "github.com/openpak/npln/proto/messaging/v1"
+	"github.com/openpak/npln/redact"
 )
 
 const (
@@ -80,7 +81,7 @@ func callerFriends(ctx context.Context) (map[string]bool, error) {
 	}
 	acct, err := lookupAccount(pid)
 	if err != nil {
-		log.Printf("[Msg] account lookup for pid=%d: %v", pid, err)
+		log.Printf("[Msg] account lookup for pid=%s: %s", redact.Tag(pid), redact.Err(err))
 		return nil, status.Error(codes.Unavailable, "friend list unavailable")
 	}
 	out := map[string]bool{}
@@ -194,7 +195,7 @@ func (m *messaging) SendMessage(ctx context.Context, req *msgpb.SendMessageReque
 		m.enqueue(id, &queued{from: me, msg: &msgpb.RecvMessage{MessageBody: body, SenderUser: sender, SendTime: timestamppb.Now()}})
 	}
 	m.mu.Unlock()
-	log.Printf("[Msg] %s -> %d receiver(s) type=%q need_ack=%v", me, len(to), body.GetMessageType(), body.GetNeedAck())
+	log.Printf("[Msg] %s -> %d receiver(s) type=%s need_ack=%v", redact.Tag(me), len(to), redact.Tag(body.GetMessageType()), body.GetNeedAck())
 	return &msgpb.SendMessageResponse{}, nil
 }
 
@@ -284,7 +285,7 @@ func (m *messaging) RecvMessage(req *msgpb.RecvMessageRequest, stream grpc.Serve
 		delete(m.box(me).wake, wake)
 		m.mu.Unlock()
 	}()
-	log.Printf("[Msg] RecvMessage open for %s", me)
+	log.Printf("[Msg] RecvMessage open for %s", redact.Tag(me))
 
 	beat := time.NewTicker(msgBeat)
 	defer beat.Stop()
@@ -306,7 +307,7 @@ func (m *messaging) RecvMessage(req *msgpb.RecvMessageRequest, stream grpc.Serve
 		}
 		select {
 		case <-ctx.Done():
-			log.Printf("[Msg] RecvMessage closed for %s", me)
+			log.Printf("[Msg] RecvMessage closed for %s", redact.Tag(me))
 			return nil
 		case <-wake:
 		case <-beat.C:

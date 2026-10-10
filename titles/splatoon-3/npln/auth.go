@@ -11,6 +11,7 @@ import (
 
 	"github.com/openpak/npln/bans"
 	authpb "github.com/openpak/npln/proto/auth/v1"
+	"github.com/openpak/npln/redact"
 )
 
 // authServer answers nn.npln.auth.v1.Auth. Which of these RPCs Splatoon 3 actually calls, and in
@@ -23,7 +24,7 @@ func (s *authServer) IssuePrearrangedUserToken(_ context.Context, req *authpb.Is
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("[Auth] IssuePrearrangedUserToken pid=%d user=%s", pid, userPath)
+	log.Printf("[Auth] IssuePrearrangedUserToken pid=%s user=%s", redact.Tag(pid), redact.Seg(userPath))
 	return &authpb.IssuePrearrangedUserTokenResponse{
 		User:  &authpb.User{Name: userPath, ShortId: int64(req.GetUserIndex())},
 		Token: newToken(pid, userPath, resolveTenant(req.GetTenant())),
@@ -35,7 +36,7 @@ func (s *authServer) IssueToken(ctx context.Context, req *authpb.IssueTokenReque
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("[Auth] IssueToken pid=%d user=%s", pid, userPath)
+	log.Printf("[Auth] IssueToken pid=%s user=%s", redact.Tag(pid), redact.Seg(userPath))
 	return &authpb.IssueTokenResponse{Token: newToken(pid, userPath, tenantFromCtx(ctx))}, nil
 }
 
@@ -68,7 +69,7 @@ func (s *authServer) RefreshToken(ctx context.Context, req *authpb.RefreshTokenR
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("[Auth] RefreshToken pid=%d", pid)
+	log.Printf("[Auth] RefreshToken pid=%s", redact.Tag(pid))
 	return &authpb.RefreshTokenResponse{Token: newToken(pid, userPath, tenantFromCtx(ctx))}, nil
 }
 

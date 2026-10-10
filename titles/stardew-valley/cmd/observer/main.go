@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openpak/npln/redact"
 	"github.com/openpak/npln/titles/stardew-valley/internal/observer"
 )
 
@@ -20,7 +21,7 @@ func main() {
 
 	readTimeout, err := time.ParseDuration(env("STARDEW_OBSERVER_READ_TIMEOUT", "2s"))
 	if err != nil {
-		log.Fatalf("invalid STARDEW_OBSERVER_READ_TIMEOUT: %v", err)
+		log.Fatalf("invalid STARDEW_OBSERVER_READ_TIMEOUT: %s", redact.Err(err))
 	}
 	maxBytes, err := strconv.Atoi(env("STARDEW_OBSERVER_MAX_BYTES", "4096"))
 	if err != nil || maxBytes < 1 || maxBytes > 65535 {
@@ -34,7 +35,7 @@ func main() {
 	if addr := env("STARDEW_OBSERVER_TCP_ADDR", "127.0.0.1:18080"); addr != "" {
 		listener, err := net.Listen("tcp", addr)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal(redact.Err(err))
 		}
 		listeners++
 		log.Printf("TCP observer listening on %s", listener.Addr())
@@ -43,7 +44,7 @@ func main() {
 	if addr := env("STARDEW_OBSERVER_UDP_ADDR", "127.0.0.1:18080"); addr != "" {
 		conn, err := net.ListenPacket("udp", addr)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal(redact.Err(err))
 		}
 		listeners++
 		log.Printf("UDP observer listening on %s", conn.LocalAddr())
@@ -55,7 +56,7 @@ func main() {
 
 	for completed := 0; completed < listeners; completed++ {
 		if err := <-errCh; err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, redact.Err(err))
 			stop()
 		}
 	}

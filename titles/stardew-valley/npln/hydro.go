@@ -32,6 +32,7 @@ import (
 
 	commonpb "github.com/openpak/npln/proto/common"
 	hydropb "github.com/openpak/npln/proto/hydro/v1"
+	"github.com/openpak/npln/redact"
 )
 
 const (
@@ -104,7 +105,7 @@ func (h *hydro) create(ctx context.Context, parent string, in *hydropb.Content) 
 	}
 	h.contents[c.Name] = c
 	h.changed(c.Name)
-	log.Printf("[Hydro] create %s by %s (%d bytes)", c.Name, lastSeg(user), len(c.GetPayload()))
+	log.Printf("[Hydro] create %s by %s (%d bytes)", redact.Tag(c.Name), redact.Seg(user), len(c.GetPayload()))
 	return proto.Clone(c).(*hydropb.Content), nil
 }
 

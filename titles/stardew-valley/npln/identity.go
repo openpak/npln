@@ -40,6 +40,7 @@ import (
 
 	"github.com/openpak/npln/bans"
 	authpb "github.com/openpak/npln/proto/auth/v1"
+	"github.com/openpak/npln/redact"
 )
 
 const tokenTTL = 8 * time.Hour // Nintendo's exp-iat = 28800s
@@ -137,11 +138,11 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 	}
 	acc, err := accountFromOpenPak(ext.GetNsaIdToken())
 	if errors.Is(err, bans.ErrBanned) {
-		log.Printf("[Auth] account banned (%v) -> REFUSED", err)
+		log.Printf("[Auth] account banned (%s) -> REFUSED", redact.Err(err))
 		return 0, "", bans.Refused()
 	}
 	if err != nil {
-		log.Printf("[Auth] identity not provable (%v) -> REFUSED", err)
+		log.Printf("[Auth] identity not provable (%s) -> REFUSED", redact.Err(err))
 		return 0, "", status.Error(codes.PermissionDenied, "OpenPak account not recognised — link your OpenPak account to play online")
 	}
 	if acc.Country != "" {
@@ -150,7 +151,7 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 	// Latest version only (appversion.go): the same table aauth refuses with.
 	ai, av := appClaims(ext.GetNsaIdToken())
 	if old, latest := titleOutdated(ai, av); old {
-		log.Printf("[Auth] pid=%d title %s version %s is older than %s -> FAILED_PRECONDITION", acc.PID, ai, av, latest)
+		log.Printf("[Auth] pid=%s title %s version %s is older than %s -> FAILED_PRECONDITION", redact.Tag(acc.PID), ai, av, latest)
 		return 0, "", errOutdated()
 	}
 	rememberAppVersion(acc.UserID(), av)
@@ -180,13 +181,13 @@ func signingKey() *ecdsa.PrivateKey {
 		}
 		k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
-			log.Printf("[Auth] ecdsa key: %v", err)
+			log.Printf("[Auth] ecdsa key: %s", redact.Err(err))
 			return
 		}
 		signKey = k
 		if der, err := x509.MarshalECPrivateKey(k); err == nil {
 			if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}), 0o600); err != nil {
-				log.Printf("[Auth] key not persisted (%v): tokens die with this process", err)
+				log.Printf("[Auth] key not persisted (%s): tokens die with this process", redact.Err(err))
 			}
 		}
 	})
@@ -201,7 +202,7 @@ func signJWT(header, payload map[string]any) string {
 	sum := sha256.Sum256([]byte(signing))
 	r, s, err := ecdsa.Sign(rand.Reader, k, sum[:])
 	if err != nil {
-		log.Printf("[Auth] sign: %v", err)
+		log.Printf("[Auth] sign: %s", redact.Err(err))
 		return ""
 	}
 	sig := make([]byte, 64) // JWS: r||s left-padded, not DER

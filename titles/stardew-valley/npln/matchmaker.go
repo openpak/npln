@@ -28,6 +28,7 @@ import (
 
 	commonpb "github.com/openpak/npln/proto/common"
 	mmpb "github.com/openpak/npln/proto/matchmaking/v1"
+	"github.com/openpak/npln/redact"
 )
 
 // placeDelay is the pause between the SEARCHING and PLACING updates of a ticket and the result.
@@ -94,7 +95,7 @@ func (m *matchmaker) CreateMatchmakingTicket(ctx context.Context, req *mmpb.Crea
 	m.mu.Lock()
 	m.tickets[lastSeg(t.Name)] = &mmTicket{t: t, owner: lastSeg(user)}
 	m.mu.Unlock()
-	log.Printf("[MM] Matchmaker ticket %s config=%s key=%q by %s", lastSeg(t.Name), cfg, strAttr(ud, "MatchingKey"), lastSeg(user))
+	log.Printf("[MM] Matchmaker ticket %s config=%s key=%s by %s", redact.Seg(t.Name), redact.Tag(cfg), redact.Tag(strAttr(ud, "MatchingKey")), redact.Seg(user))
 	return proto.Clone(t).(*mmpb.MatchmakingTicket), nil
 }
 
@@ -200,7 +201,7 @@ func (m *matchmaker) newPool(ctx context.Context, t *mmpb.MatchmakingTicket, key
 	m.rooms.sessions[gsid] = s
 	m.rooms.pools[gsid] = key
 	m.rooms.versions[gsid] = callerVersion(ctx)
-	log.Printf("[MM] pool session %s opened: config=%s capacity=%d friend room=%q", gsid, cfg, capacity, room)
+	log.Printf("[MM] pool session %s opened: config=%s capacity=%d friend room=%s", redact.Tag(gsid), redact.Tag(cfg), capacity, redact.Tag(room))
 	return gsid
 }
 
@@ -261,7 +262,7 @@ func (m *matchmaker) TrackMatchmakingTicket(req *mmpb.TrackMatchmakingTicketRequ
 		}
 		done.MatchedUserSessions = append(done.MatchedUserSessions, ms)
 	}
-	log.Printf("[MM] Matchmaker ticket %s -> SUCCEEDED session=%s (%d/%d)", lastSeg(tk.t.Name), gsid, len(members), done.GameSession.GetMaxParticipantCount())
+	log.Printf("[MM] Matchmaker ticket %s -> SUCCEEDED session=%s (%d/%d)", redact.Seg(tk.t.Name), redact.Tag(gsid), len(members), done.GameSession.GetMaxParticipantCount())
 	return stream.Send(done)
 }
 

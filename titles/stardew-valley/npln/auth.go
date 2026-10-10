@@ -12,6 +12,7 @@ import (
 
 	"github.com/openpak/npln/bans"
 	authpb "github.com/openpak/npln/proto/auth/v1"
+	"github.com/openpak/npln/redact"
 )
 
 // authServer issues tokens for one title: appID goes into every access token's npln.app_id,
@@ -29,7 +30,7 @@ func (s *authServer) IssuePrearrangedUserToken(ctx context.Context, req *authpb.
 		return nil, err
 	}
 	proven(ctx, pid, userPath)
-	log.Printf("[Auth] IssuePrearrangedUserToken pid=%d user=%s", pid, userPath)
+	log.Printf("[Auth] IssuePrearrangedUserToken pid=%s user=%s", redact.Tag(pid), redact.Seg(userPath))
 	return &authpb.IssuePrearrangedUserTokenResponse{
 		User:  &authpb.User{Name: userPath, ShortId: int64(req.GetUserIndex())},
 		Token: newToken(pid, userPath, req.GetTenant(), s.appID),
@@ -53,7 +54,7 @@ func (s *authServer) IssueToken(ctx context.Context, req *authpb.IssueTokenReque
 		log.Printf("[Auth] IssueToken: token not provable, user already proven on this connection -> re-issued")
 	}
 	proven(ctx, pid, userPath)
-	log.Printf("[Auth] IssueToken pid=%d user=%s", pid, userPath)
+	log.Printf("[Auth] IssueToken pid=%s user=%s", redact.Tag(pid), redact.Seg(userPath))
 	return &authpb.IssueTokenResponse{Token: newToken(pid, userPath, tenantFromCtx(ctx), s.appID)}, nil
 }
 
@@ -85,7 +86,7 @@ func (s *authServer) RefreshToken(ctx context.Context, req *authpb.RefreshTokenR
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("[Auth] RefreshToken pid=%d", pid)
+	log.Printf("[Auth] RefreshToken pid=%s", redact.Tag(pid))
 	return &authpb.RefreshTokenResponse{Token: newToken(pid, userPath, tenantFromCtx(ctx), s.appID)}, nil
 }
 

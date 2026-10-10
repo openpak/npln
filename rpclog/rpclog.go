@@ -1,9 +1,12 @@
 // Package rpclog puts the content of every gRPC call in the log, for every NPLN title, so a
 // console session answers "what did it send?" without a redeploy.
 //
-// Fields whose name contains "token" are logged as their length and shape (JWT or not), never
-// their value: those are bearer credentials. Fields the proto does not know are logged as hex,
-// which is where a message-shape mismatch shows up.
+// By default a message is logged as its outline: which fields are set, enum and bool values, the
+// length of every string and bytes field, and nothing else -- a request carries names, ids, tokens
+// and addresses, and a log keeps none of them. With NPLN_TRACE_BODIES=1 (never set in production)
+// the whole message is logged: fields whose name contains "token" as their length and shape (JWT or
+// not), never their value, and fields the proto does not know as hex, which is where a
+// message-shape mismatch shows up.
 //
 // ponytail: every message of every stream is logged, both ways, gamesync included; a busy session is a
 // busy log. Lines are capped at maxLine. Add a per-method filter if a title's traffic drowns it.
@@ -20,9 +23,12 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	"github.com/openpak/npln/redact"
 )
 
 const maxLine = 4096
@@ -39,10 +45,13 @@ func Body(m any) (out string) {
 			out = fmt.Sprintf("%T (unrenderable: %v)", m, r)
 		}
 	}()
+	if !redact.TraceBodies() {
+		return outline(pm)
+	}
 	c := proto.Clone(pm)
 	var secrets []string
 	u := unknown(c.ProtoReflect())
-	redact(c.ProtoReflect(), "", &secrets) // also strips unknown bytes: prototext panics on malformed ones
+	scrub(c.ProtoReflect(), "", &secrets) // also strips unknown bytes: prototext panics on malformed ones
 	s := prototext.MarshalOptions{}.Format(c)
 	if u != "" {
 		s += " unknown=" + u
@@ -59,9 +68,105 @@ func Body(m any) (out string) {
 	return s
 }
 
-// redact clears token fields (recording their shape in secrets) and unknown bytes, and recurses
+// outline renders m without any value a person could be read from.
+func outline(pm proto.Message) string {
+	var b strings.Builder
+	outlineMsg(&b, pm.ProtoReflect())
+	if n := len(pm.ProtoReflect().GetUnknown()); n > 0 {
+		fmt.Fprintf(&b, " unknown=<%d bytes>", n)
+	}
+	s := b.String()
+	if len(s) > maxLine {
+		s = s[:maxLine] + fmt.Sprintf("…(%d bytes)", len(s))
+	}
+	return s
+}
+
+func outlineMsg(b *strings.Builder, m protoreflect.Message) {
+	b.WriteByte('{')
+	fields := m.Descriptor().Fields()
+	first := true
+	for i := 0; i < fields.Len(); i++ {
+		fd := fields.Get(i)
+		if !m.Has(fd) {
+			continue
+		}
+		if !first {
+			b.WriteByte(' ')
+		}
+		first = false
+		b.WriteString(string(fd.Name()) + "=")
+		v := m.Get(fd)
+		switch {
+		case fd.IsMap():
+			fmt.Fprintf(b, "map(%d)", v.Map().Len())
+		case fd.IsList():
+			fmt.Fprintf(b, "[%d]", v.List().Len())
+		default:
+			outlineValue(b, fd, v)
+		}
+	}
+	b.WriteByte('}')
+}
+
+func outlineValue(b *strings.Builder, fd protoreflect.FieldDescriptor, v protoreflect.Value) {
+	switch fd.Kind() {
+	case protoreflect.MessageKind, protoreflect.GroupKind:
+		outlineMsg(b, v.Message())
+	case protoreflect.StringKind:
+		fmt.Fprintf(b, "<%d chars>", len(v.String()))
+	case protoreflect.BytesKind:
+		fmt.Fprintf(b, "<%d bytes>", len(v.Bytes()))
+	case protoreflect.BoolKind:
+		fmt.Fprint(b, v.Bool())
+	case protoreflect.EnumKind:
+		if ev := fd.Enum().Values().ByNumber(v.Enum()); ev != nil {
+			b.WriteString(string(ev.Name()))
+		} else {
+			b.WriteString("<enum>")
+		}
+	default:
+		b.WriteByte('#')
+	}
+}
+
+// rawOutline lists the fields of an undecoded message as number and wire type, with the length of
+// the length-delimited ones.
+func rawOutline(raw []byte) string {
+	var parts []string
+	for len(raw) > 0 {
+		num, typ, n := protowire.ConsumeTag(raw)
+		if n < 0 {
+			parts = append(parts, "<malformed>")
+			break
+		}
+		raw = raw[n:]
+		n = protowire.ConsumeFieldValue(num, typ, raw)
+		if n < 0 {
+			parts = append(parts, fmt.Sprintf("%d:<malformed>", num))
+			break
+		}
+		switch typ {
+		case protowire.BytesType:
+			_, vn := protowire.ConsumeVarint(raw)
+			parts = append(parts, fmt.Sprintf("%d:len%d", num, n-vn))
+		case protowire.VarintType:
+			parts = append(parts, fmt.Sprintf("%d:varint", num))
+		default:
+			parts = append(parts, fmt.Sprintf("%d:%d", num, typ))
+		}
+		raw = raw[n:]
+	}
+	s := strings.Join(parts, " ")
+	if len(s) > maxLine {
+		s = s[:maxLine] + "…"
+	}
+	return "fields=" + s
+}
+
+// scrub clears token fields (recording their shape in secrets) and unknown bytes, and recurses
 // into messages.
-func redact(m protoreflect.Message, path string, secrets *[]string) {
+func scrub(m protoreflect.Message, path string, secrets *[]string) {
 	m.SetUnknown(nil)
 	m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
 		name := path + string(fd.Name())
@@ -71,10 +176,10 @@ func redact(m protoreflect.Message, path string, secrets *[]string) {
 			*secrets = append(*secrets, fmt.Sprintf("%s=<%s>", name, shape(v.String())))
 			m.Clear(fd)
 		case fd.Kind() == protoreflect.MessageKind && !fd.IsList() && !fd.IsMap():
-			redact(v.Message(), name+".", secrets)
+			scrub(v.Message(), name+".", secrets)
 		case fd.Kind() == protoreflect.MessageKind && fd.IsList():
 			for i := 0; i < v.List().Len(); i++ {
-				redact(v.List().Get(i).Message(), fmt.Sprintf("%s[%d].", name, i), secrets)
+				scrub(v.List().Get(i).Message(), fmt.Sprintf("%s[%d].", name, i), secrets)
 			}
 		}
 		return true
@@ -158,10 +263,14 @@ func Unimplemented(ss grpc.ServerStream) {
 	go func() {
 		var e emptypb.Empty // every field lands in unknown bytes
 		if err := ss.RecvMsg(&e); err != nil {
-			got <- "(no message: " + err.Error() + ")"
+			got <- "(no message: " + redact.Err(err) + ")"
 			return
 		}
-		got <- "raw=" + hex.EncodeToString(e.ProtoReflect().GetUnknown())
+		if redact.TraceBodies() {
+			got <- "raw=" + hex.EncodeToString(e.ProtoReflect().GetUnknown())
+		} else {
+			got <- rawOutline(e.ProtoReflect().GetUnknown())
+		}
 	}()
 	select {
 	case b := <-got:

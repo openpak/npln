@@ -17,6 +17,7 @@ import (
 	"context"
 
 	friendspb "github.com/openpak/npln/proto/friends/v1"
+	"github.com/openpak/npln/redact"
 )
 
 // friendKeepAlive is the interval we announce on the friends stream, and we send well inside it.
@@ -40,7 +41,7 @@ type friendsServer struct {
 // ActivateUser is the client announcing itself. Nothing to do but say yes; the identity was
 // already proven at auth.
 func (s *friendsServer) ActivateUser(_ context.Context, req *friendspb.ActivateUserRequest) (*friendspb.ActivateUserResponse, error) {
-	log.Printf("[Friends] ActivateUser %q", req.GetName())
+	log.Printf("[Friends] ActivateUser %s", redact.Seg(req.GetName()))
 	return &friendspb.ActivateUserResponse{}, nil
 }
 
@@ -69,7 +70,7 @@ func callerAccount(ctx context.Context) (*Account, bool) {
 	}
 	acc, err := lookupAccount(pid)
 	if err != nil {
-		log.Printf("[Friends] account lookup for pid=%d: %v", pid, err)
+		log.Printf("[Friends] account lookup for pid=%s: %s", redact.Tag(pid), redact.Err(err))
 		return nil, false
 	}
 	return acc, true
@@ -130,7 +131,7 @@ func (s *friendsServer) SubscribeFriendUsers(_ *friendspb.SubscribeFriendUsersRe
 	var accounts []*friendspb.SubscribeFriendUsersResponse_FriendAccount
 	if me, ok := callerAccount(ctx); ok {
 		accounts = friendAccounts(ctx, me)
-		log.Printf("[Friends] Subscribe uid=%s -> %d friend(s)", me.UserID(), len(accounts))
+		log.Printf("[Friends] Subscribe uid=%s -> %d friend(s)", redact.Tag(me.UserID()), len(accounts))
 	}
 	if len(accounts) == 0 {
 		// A friendless response is a known risk, not a known-good answer: an empty

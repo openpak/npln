@@ -33,6 +33,7 @@ import (
 
 	commonpb "github.com/openpak/npln/proto/common"
 	gspb "github.com/openpak/npln/proto/gamesync/v1"
+	"github.com/openpak/npln/redact"
 )
 
 // concrete typed Values. Every field of a pushed document must be one of these — never a bare,
@@ -161,9 +162,9 @@ func (g *gamesync) IssueToken(_ context.Context, req *gspb.IssueTokenRequest) (*
 			}},
 		}
 		putDoc(doc)
-		log.Printf("[gamesync] IssueToken user_session=%s -> seeded %s (%d fields)", short(us), doc.Name, len(doc.Fields.Fields))
+		log.Printf("[gamesync] IssueToken user_session=%s -> seeded %s (%d fields)", redact.Tag(us), redact.Tag(doc.Name), len(doc.Fields.Fields))
 	} else {
-		log.Printf("[gamesync] IssueToken user_session=%s: no session for id-token (mmtoken=%.12s…)", short(us), req.GetMatchmakingIdToken())
+		log.Printf("[gamesync] IssueToken user_session=%s: no session for id-token (mmtoken %d bytes)", redact.Tag(us), len(req.GetMatchmakingIdToken()))
 	}
 	return &gspb.IssueTokenResponse{Token: &gspb.Token{
 		UserSession:  us,
@@ -186,7 +187,7 @@ func (g *gamesync) GetDocument(_ context.Context, req *gspb.GetDocumentRequest) 
 	doc := mail.docs[req.GetName()]
 	mail.Unlock()
 	if doc == nil {
-		log.Printf("[gamesync] GetDocument %q -> NotFound", short(req.GetName()))
+		log.Printf("[gamesync] GetDocument %s -> NotFound", redact.Tag(req.GetName()))
 		return nil, status.Errorf(codes.NotFound, "document %q", req.GetName())
 	}
 	return doc, nil
@@ -405,5 +406,5 @@ func enumerateTarget(w *watcher, t *gspb.Target) {
 	trySend(w, &gspb.KeepUserSessionResponse{ResponseType: &gspb.KeepUserSessionResponse_TargetChange{
 		TargetChange: &gspb.TargetChange{TargetId: t.GetName(), TargetChangeType: gspb.TargetChange_LISTED},
 	}})
-	log.Printf("[gamesync] watch target %q -> %d existing document(s)", short(t.GetName()), len(existing))
+	log.Printf("[gamesync] watch target %s -> %d existing document(s)", redact.Tag(t.GetName()), len(existing))
 }

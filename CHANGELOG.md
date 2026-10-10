@@ -3,6 +3,17 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.7.6 — 2026-10-10
+
+- Logs carry no personal data, for any title: no account, user, session or pid id, nickname,
+  token, ticket, name, friend code or client address. An id is logged as a short per-process tag
+  (`~` and six hex digits, a keyed hash), so lines about one player still match up within a run.
+  Error text drops the addresses and URLs that net and url errors spell out.
+- rpclog logs each message as its outline by default: the fields set, enum and bool values, the
+  length of every string and bytes field. The full body, token shapes and unknown fields in hex
+  need `NPLN_TRACE_BODIES=1` (and `NPLN_GS_DIAG=1` for gamesync's store dump); never set in
+  production.
+
 ## v0.7.5 — 2026-10-09
 
 - Latest version only. A login whose NSA id token names a version below the latest (nx-baas's

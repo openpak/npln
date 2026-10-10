@@ -22,6 +22,7 @@ import (
 
 	commonpb "github.com/openpak/npln/proto/common"
 	friendspb "github.com/openpak/npln/proto/friends/v1"
+	"github.com/openpak/npln/redact"
 )
 
 // The interval/deadline the real service announces; the client pings on one and gives up after
@@ -148,7 +149,7 @@ func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveSer
 		if up := req.GetUpdatePresence(); up != nil {
 			attrs := up.GetPresence().GetAttributes()
 			publish(uid, attrs)
-			log.Printf("[Presence] UpdatePresence from %s: %d attribute(s)", uid, len(attrs))
+			log.Printf("[Presence] UpdatePresence from %s: %d attribute(s)", redact.Tag(uid), len(attrs))
 			if beat() != nil {
 				return nil
 			}
@@ -167,7 +168,7 @@ func presencesFor(ctx context.Context) []*friendspb.Presence {
 	}
 	me, err := lookupAccount(pid)
 	if err != nil {
-		log.Printf("[Presence] account lookup for pid=%d: %v", pid, err)
+		log.Printf("[Presence] account lookup for pid=%s: %s", redact.Tag(pid), redact.Err(err))
 		return nil
 	}
 	tenant := tenantFromCtx(ctx)

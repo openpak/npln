@@ -13,6 +13,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
+	"github.com/openpak/npln/redact"
 	"github.com/openpak/npln/titles"
 )
 
@@ -33,7 +34,7 @@ func main() {
 
 	cert, err := tls.LoadX509KeyPair(env("CERT_FILE", "npln.pem"), env("KEY_FILE", "npln.key"))
 	if err != nil {
-		log.Fatalf("load TLS cert: %v", err)
+		log.Fatalf("load TLS cert: %s", redact.Err(err))
 	}
 	creds := credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{cert},
@@ -53,7 +54,7 @@ func main() {
 	})
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatalf("listen %s: %v", addr, err)
+		log.Fatalf("listen %s: %s", addr, redact.Err(err))
 	}
 	if os.Getenv("NPLN_TURN_SECRET") == "" {
 		log.Fatal("NPLN_TURN_SECRET is required: it must match coturn's --static-auth-secret")
@@ -74,11 +75,11 @@ func serveHealth(addr, service string) {
 	})
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Printf("health: cannot listen on %s: %v", addr, err)
+		log.Printf("health: cannot listen on %s: %s", addr, redact.Err(err))
 		return
 	}
 	log.Printf("health endpoint on %s (/health)", addr)
-	go func() { log.Printf("health: %v", http.Serve(ln, mux)) }()
+	go func() { log.Printf("health: %s", redact.Err(http.Serve(ln, mux))) }()
 }
 
 func names() []string {

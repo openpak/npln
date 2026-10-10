@@ -23,6 +23,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/openpak/npln/redact"
 	"github.com/openpak/npln/rpclog"
 	"log"
 	"math/big"
@@ -218,11 +219,11 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 	}
 	acc, err := accountFromOpenPak(ext.GetNsaIdToken())
 	if errors.Is(err, bans.ErrBanned) {
-		log.Printf("[Auth] account banned (%v) -> REFUSED", err)
+		log.Printf("[Auth] account banned (%s) -> REFUSED", redact.Err(err))
 		return 0, "", bans.Refused()
 	}
 	if err != nil {
-		log.Printf("[Auth] identity not provable (%v) -> REFUSED", err)
+		log.Printf("[Auth] identity not provable (%s) -> REFUSED", redact.Err(err))
 		return 0, "", status.Error(codes.PermissionDenied, "OpenPak account not recognised — link your OpenPak account to play online")
 	}
 	return acc.PID, tenant + "/users/" + acc.UserID(), nil
@@ -249,13 +250,13 @@ func signingKey() *ecdsa.PrivateKey {
 		}
 		k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
-			log.Printf("[Auth] ecdsa key: %v", err)
+			log.Printf("[Auth] ecdsa key: %s", redact.Err(err))
 			return
 		}
 		signKey = k
 		if der, err := x509.MarshalECPrivateKey(k); err == nil {
 			if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}), 0o600); err != nil {
-				log.Printf("[Auth] key not persisted (%v): tokens die with this process", err)
+				log.Printf("[Auth] key not persisted (%s): tokens die with this process", redact.Err(err))
 			}
 		}
 	})
@@ -269,7 +270,7 @@ func signJWT(header, payload map[string]any) string {
 	sum := sha256.Sum256([]byte(signing))
 	r, s, err := ecdsa.Sign(rand.Reader, signingKey(), sum[:])
 	if err != nil {
-		log.Printf("[Auth] sign: %v", err)
+		log.Printf("[Auth] sign: %s", redact.Err(err))
 		return ""
 	}
 	sig := make([]byte, 64) // JWS: r||s left-padded, not DER
@@ -439,11 +440,11 @@ func userPathForPID(ctx context.Context, pid uint64) (string, error) {
 // Nintendo's gateway stamps npln-grpc-type on every response; the client is used to reading it.
 func typeUnary(ctx context.Context, req any, info *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
 	_ = grpc.SetHeader(ctx, metadata.Pairs("npln-grpc-type", "Unary"))
-	log.Printf("[RPC] %s tenant=%q uid=%q auth=%q", info.FullMethod, mdGet(ctx, "npln-tenant-id"),
-		mdGet(ctx, "uid"), short(mdGet(ctx, "authorization")))
+	log.Printf("[RPC] %s tenant=%s uid=%s auth=%s", info.FullMethod, redact.Seg(mdGet(ctx, "npln-tenant-id")),
+		redact.Seg(mdGet(ctx, "uid")), redact.Has(mdGet(ctx, "authorization")))
 	resp, err := h(ctx, req)
 	if err != nil {
-		log.Printf("[RPC] %s -> ERROR %v", info.FullMethod, err)
+		log.Printf("[RPC] %s -> ERROR code=%s", info.FullMethod, status.Code(err))
 	}
 	return resp, err
 }
@@ -460,7 +461,7 @@ func typeStream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, h gr
 	log.Printf("[RPC] %s (%s)", info.FullMethod, kind)
 	err := h(srv, ss)
 	if err != nil {
-		log.Printf("[RPC] %s -> ERROR %v", info.FullMethod, err)
+		log.Printf("[RPC] %s -> ERROR code=%s", info.FullMethod, status.Code(err))
 	}
 	return err
 }
