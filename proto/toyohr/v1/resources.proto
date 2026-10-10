@@ -205,3 +205,123 @@ message SaveRecord {
 
   google.protobuf.Timestamp update_time = 4;
 }
+
+message FestDecryptionKey {
+  string name = 1;
+
+  string notice_key = 2;
+
+  string start_key = 3;
+
+  string result_winning_team_key = 4;
+
+  string team_alpha_key = 5;
+
+  string team_bravo_key = 6;
+
+  string team_charlie_key = 7;
+
+  string winning_team = 8;
+}
+
+message FestEntry {
+  string name = 1;
+
+  string fest_team = 2;
+
+  string fest_region = 3;
+}
+
+message FestPublishment {
+  google.protobuf.Timestamp start_time = 1;
+
+  google.protobuf.Timestamp end_time = 2;
+}
+
+message FestTeamPoint {
+  string fest_team = 1;
+
+  int64 points = 2;
+}
+
+message FestTeamRatio {
+  string fest_team = 1;
+
+  double ratio = 2;
+}
+
+message YobisaiResult {
+  bool is_valid = 1;
+
+  repeated FestTeamRatio team_ratios = 2;
+}
+
+message HonsaiMidtermResult {
+  bool is_valid = 1;
+
+  repeated FestTeamRatio team_ratios = 2;
+}
+
+message HonsaiFinalResult {
+  bool is_valid = 1;
+
+  repeated FestTeamRatio team_ratios1 = 2;
+
+  repeated FestTeamRatio team_ratios2 = 3;
+
+  repeated FestTeamRatio team_ratios3 = 4;
+}
+
+message OverallResult {
+  bool is_valid = 1;
+
+  repeated FestTeamPoint points = 2;
+
+  nn.npln.common.MapValue weights = 3;
+}
+
+message FestResult {
+  string name = 1;
+
+  YobisaiResult yobisai = 2;
+
+  HonsaiMidtermResult honsai_midterm = 3;
+
+  HonsaiFinalResult honsai_final = 4;
+
+  OverallResult overall = 5;
+
+  int32 unk = 6;
+}
+
+message FestTimetable {
+  google.protobuf.Timestamp open_time = 1;
+
+  google.protobuf.Timestamp start_time = 2;
+
+  google.protobuf.Timestamp mid_time = 3;
+
+  google.protobuf.Timestamp end_time = 4;
+
+  google.protobuf.Timestamp close_time = 5;
+}
+
+message FestSchedule {
+  string name = 1;
+
+  string fest = 2;
+
+  repeated string fest_regions = 3;
+
+  string target = 4;
+
+  string fest_game_data = 5;
+
+  string fest_game_data_revision = 6;
+
+  FestTimetable timetable = 7;
+
+  map<string, FestPublishment> fest_publishments = 8;
+
+  nn.npln.common.MapValue attributes = 9;
+}

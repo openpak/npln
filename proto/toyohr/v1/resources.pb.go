@@ -1104,6 +1104,822 @@ func (x *SaveRecord) GetUpdateTime() *timestamppb.Timestamp {
 	return nil
 }
 
+type FestDecryptionKey struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Name                 string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	NoticeKey            string                 `protobuf:"bytes,2,opt,name=notice_key,json=noticeKey,proto3" json:"notice_key,omitempty"`
+	StartKey             string                 `protobuf:"bytes,3,opt,name=start_key,json=startKey,proto3" json:"start_key,omitempty"`
+	ResultWinningTeamKey string                 `protobuf:"bytes,4,opt,name=result_winning_team_key,json=resultWinningTeamKey,proto3" json:"result_winning_team_key,omitempty"`
+	TeamAlphaKey         string                 `protobuf:"bytes,5,opt,name=team_alpha_key,json=teamAlphaKey,proto3" json:"team_alpha_key,omitempty"`
+	TeamBravoKey         string                 `protobuf:"bytes,6,opt,name=team_bravo_key,json=teamBravoKey,proto3" json:"team_bravo_key,omitempty"`
+	TeamCharlieKey       string                 `protobuf:"bytes,7,opt,name=team_charlie_key,json=teamCharlieKey,proto3" json:"team_charlie_key,omitempty"`
+	WinningTeam          string                 `protobuf:"bytes,8,opt,name=winning_team,json=winningTeam,proto3" json:"winning_team,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *FestDecryptionKey) Reset() {
+	*x = FestDecryptionKey{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FestDecryptionKey) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FestDecryptionKey) ProtoMessage() {}
+
+func (x *FestDecryptionKey) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FestDecryptionKey.ProtoReflect.Descriptor instead.
+func (*FestDecryptionKey) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *FestDecryptionKey) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *FestDecryptionKey) GetNoticeKey() string {
+	if x != nil {
+		return x.NoticeKey
+	}
+	return ""
+}
+
+func (x *FestDecryptionKey) GetStartKey() string {
+	if x != nil {
+		return x.StartKey
+	}
+	return ""
+}
+
+func (x *FestDecryptionKey) GetResultWinningTeamKey() string {
+	if x != nil {
+		return x.ResultWinningTeamKey
+	}
+	return ""
+}
+
+func (x *FestDecryptionKey) GetTeamAlphaKey() string {
+	if x != nil {
+		return x.TeamAlphaKey
+	}
+	return ""
+}
+
+func (x *FestDecryptionKey) GetTeamBravoKey() string {
+	if x != nil {
+		return x.TeamBravoKey
+	}
+	return ""
+}
+
+func (x *FestDecryptionKey) GetTeamCharlieKey() string {
+	if x != nil {
+		return x.TeamCharlieKey
+	}
+	return ""
+}
+
+func (x *FestDecryptionKey) GetWinningTeam() string {
+	if x != nil {
+		return x.WinningTeam
+	}
+	return ""
+}
+
+type FestEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	FestTeam      string                 `protobuf:"bytes,2,opt,name=fest_team,json=festTeam,proto3" json:"fest_team,omitempty"`
+	FestRegion    string                 `protobuf:"bytes,3,opt,name=fest_region,json=festRegion,proto3" json:"fest_region,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FestEntry) Reset() {
+	*x = FestEntry{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FestEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FestEntry) ProtoMessage() {}
+
+func (x *FestEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FestEntry.ProtoReflect.Descriptor instead.
+func (*FestEntry) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *FestEntry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *FestEntry) GetFestTeam() string {
+	if x != nil {
+		return x.FestTeam
+	}
+	return ""
+}
+
+func (x *FestEntry) GetFestRegion() string {
+	if x != nil {
+		return x.FestRegion
+	}
+	return ""
+}
+
+type FestPublishment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StartTime     *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`
+	EndTime       *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=end_time,json=endTime,proto3" json:"end_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FestPublishment) Reset() {
+	*x = FestPublishment{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FestPublishment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FestPublishment) ProtoMessage() {}
+
+func (x *FestPublishment) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FestPublishment.ProtoReflect.Descriptor instead.
+func (*FestPublishment) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *FestPublishment) GetStartTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartTime
+	}
+	return nil
+}
+
+func (x *FestPublishment) GetEndTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndTime
+	}
+	return nil
+}
+
+type FestTeamPoint struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FestTeam      string                 `protobuf:"bytes,1,opt,name=fest_team,json=festTeam,proto3" json:"fest_team,omitempty"`
+	Points        int64                  `protobuf:"varint,2,opt,name=points,proto3" json:"points,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FestTeamPoint) Reset() {
+	*x = FestTeamPoint{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FestTeamPoint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FestTeamPoint) ProtoMessage() {}
+
+func (x *FestTeamPoint) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FestTeamPoint.ProtoReflect.Descriptor instead.
+func (*FestTeamPoint) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *FestTeamPoint) GetFestTeam() string {
+	if x != nil {
+		return x.FestTeam
+	}
+	return ""
+}
+
+func (x *FestTeamPoint) GetPoints() int64 {
+	if x != nil {
+		return x.Points
+	}
+	return 0
+}
+
+type FestTeamRatio struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FestTeam      string                 `protobuf:"bytes,1,opt,name=fest_team,json=festTeam,proto3" json:"fest_team,omitempty"`
+	Ratio         float64                `protobuf:"fixed64,2,opt,name=ratio,proto3" json:"ratio,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FestTeamRatio) Reset() {
+	*x = FestTeamRatio{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FestTeamRatio) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FestTeamRatio) ProtoMessage() {}
+
+func (x *FestTeamRatio) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FestTeamRatio.ProtoReflect.Descriptor instead.
+func (*FestTeamRatio) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *FestTeamRatio) GetFestTeam() string {
+	if x != nil {
+		return x.FestTeam
+	}
+	return ""
+}
+
+func (x *FestTeamRatio) GetRatio() float64 {
+	if x != nil {
+		return x.Ratio
+	}
+	return 0
+}
+
+type YobisaiResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IsValid       bool                   `protobuf:"varint,1,opt,name=is_valid,json=isValid,proto3" json:"is_valid,omitempty"`
+	TeamRatios    []*FestTeamRatio       `protobuf:"bytes,2,rep,name=team_ratios,json=teamRatios,proto3" json:"team_ratios,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *YobisaiResult) Reset() {
+	*x = YobisaiResult{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *YobisaiResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*YobisaiResult) ProtoMessage() {}
+
+func (x *YobisaiResult) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use YobisaiResult.ProtoReflect.Descriptor instead.
+func (*YobisaiResult) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *YobisaiResult) GetIsValid() bool {
+	if x != nil {
+		return x.IsValid
+	}
+	return false
+}
+
+func (x *YobisaiResult) GetTeamRatios() []*FestTeamRatio {
+	if x != nil {
+		return x.TeamRatios
+	}
+	return nil
+}
+
+type HonsaiMidtermResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IsValid       bool                   `protobuf:"varint,1,opt,name=is_valid,json=isValid,proto3" json:"is_valid,omitempty"`
+	TeamRatios    []*FestTeamRatio       `protobuf:"bytes,2,rep,name=team_ratios,json=teamRatios,proto3" json:"team_ratios,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HonsaiMidtermResult) Reset() {
+	*x = HonsaiMidtermResult{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HonsaiMidtermResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HonsaiMidtermResult) ProtoMessage() {}
+
+func (x *HonsaiMidtermResult) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HonsaiMidtermResult.ProtoReflect.Descriptor instead.
+func (*HonsaiMidtermResult) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *HonsaiMidtermResult) GetIsValid() bool {
+	if x != nil {
+		return x.IsValid
+	}
+	return false
+}
+
+func (x *HonsaiMidtermResult) GetTeamRatios() []*FestTeamRatio {
+	if x != nil {
+		return x.TeamRatios
+	}
+	return nil
+}
+
+type HonsaiFinalResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IsValid       bool                   `protobuf:"varint,1,opt,name=is_valid,json=isValid,proto3" json:"is_valid,omitempty"`
+	TeamRatios1   []*FestTeamRatio       `protobuf:"bytes,2,rep,name=team_ratios1,json=teamRatios1,proto3" json:"team_ratios1,omitempty"`
+	TeamRatios2   []*FestTeamRatio       `protobuf:"bytes,3,rep,name=team_ratios2,json=teamRatios2,proto3" json:"team_ratios2,omitempty"`
+	TeamRatios3   []*FestTeamRatio       `protobuf:"bytes,4,rep,name=team_ratios3,json=teamRatios3,proto3" json:"team_ratios3,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HonsaiFinalResult) Reset() {
+	*x = HonsaiFinalResult{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HonsaiFinalResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HonsaiFinalResult) ProtoMessage() {}
+
+func (x *HonsaiFinalResult) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HonsaiFinalResult.ProtoReflect.Descriptor instead.
+func (*HonsaiFinalResult) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *HonsaiFinalResult) GetIsValid() bool {
+	if x != nil {
+		return x.IsValid
+	}
+	return false
+}
+
+func (x *HonsaiFinalResult) GetTeamRatios1() []*FestTeamRatio {
+	if x != nil {
+		return x.TeamRatios1
+	}
+	return nil
+}
+
+func (x *HonsaiFinalResult) GetTeamRatios2() []*FestTeamRatio {
+	if x != nil {
+		return x.TeamRatios2
+	}
+	return nil
+}
+
+func (x *HonsaiFinalResult) GetTeamRatios3() []*FestTeamRatio {
+	if x != nil {
+		return x.TeamRatios3
+	}
+	return nil
+}
+
+type OverallResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IsValid       bool                   `protobuf:"varint,1,opt,name=is_valid,json=isValid,proto3" json:"is_valid,omitempty"`
+	Points        []*FestTeamPoint       `protobuf:"bytes,2,rep,name=points,proto3" json:"points,omitempty"`
+	Weights       *common.MapValue       `protobuf:"bytes,3,opt,name=weights,proto3" json:"weights,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OverallResult) Reset() {
+	*x = OverallResult{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OverallResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OverallResult) ProtoMessage() {}
+
+func (x *OverallResult) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OverallResult.ProtoReflect.Descriptor instead.
+func (*OverallResult) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *OverallResult) GetIsValid() bool {
+	if x != nil {
+		return x.IsValid
+	}
+	return false
+}
+
+func (x *OverallResult) GetPoints() []*FestTeamPoint {
+	if x != nil {
+		return x.Points
+	}
+	return nil
+}
+
+func (x *OverallResult) GetWeights() *common.MapValue {
+	if x != nil {
+		return x.Weights
+	}
+	return nil
+}
+
+type FestResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Yobisai       *YobisaiResult         `protobuf:"bytes,2,opt,name=yobisai,proto3" json:"yobisai,omitempty"`
+	HonsaiMidterm *HonsaiMidtermResult   `protobuf:"bytes,3,opt,name=honsai_midterm,json=honsaiMidterm,proto3" json:"honsai_midterm,omitempty"`
+	HonsaiFinal   *HonsaiFinalResult     `protobuf:"bytes,4,opt,name=honsai_final,json=honsaiFinal,proto3" json:"honsai_final,omitempty"`
+	Overall       *OverallResult         `protobuf:"bytes,5,opt,name=overall,proto3" json:"overall,omitempty"`
+	Unk           int32                  `protobuf:"varint,6,opt,name=unk,proto3" json:"unk,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FestResult) Reset() {
+	*x = FestResult{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FestResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FestResult) ProtoMessage() {}
+
+func (x *FestResult) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FestResult.ProtoReflect.Descriptor instead.
+func (*FestResult) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *FestResult) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *FestResult) GetYobisai() *YobisaiResult {
+	if x != nil {
+		return x.Yobisai
+	}
+	return nil
+}
+
+func (x *FestResult) GetHonsaiMidterm() *HonsaiMidtermResult {
+	if x != nil {
+		return x.HonsaiMidterm
+	}
+	return nil
+}
+
+func (x *FestResult) GetHonsaiFinal() *HonsaiFinalResult {
+	if x != nil {
+		return x.HonsaiFinal
+	}
+	return nil
+}
+
+func (x *FestResult) GetOverall() *OverallResult {
+	if x != nil {
+		return x.Overall
+	}
+	return nil
+}
+
+func (x *FestResult) GetUnk() int32 {
+	if x != nil {
+		return x.Unk
+	}
+	return 0
+}
+
+type FestTimetable struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OpenTime      *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=open_time,json=openTime,proto3" json:"open_time,omitempty"`
+	StartTime     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`
+	MidTime       *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=mid_time,json=midTime,proto3" json:"mid_time,omitempty"`
+	EndTime       *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=end_time,json=endTime,proto3" json:"end_time,omitempty"`
+	CloseTime     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=close_time,json=closeTime,proto3" json:"close_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FestTimetable) Reset() {
+	*x = FestTimetable{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FestTimetable) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FestTimetable) ProtoMessage() {}
+
+func (x *FestTimetable) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FestTimetable.ProtoReflect.Descriptor instead.
+func (*FestTimetable) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *FestTimetable) GetOpenTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.OpenTime
+	}
+	return nil
+}
+
+func (x *FestTimetable) GetStartTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartTime
+	}
+	return nil
+}
+
+func (x *FestTimetable) GetMidTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.MidTime
+	}
+	return nil
+}
+
+func (x *FestTimetable) GetEndTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndTime
+	}
+	return nil
+}
+
+func (x *FestTimetable) GetCloseTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CloseTime
+	}
+	return nil
+}
+
+type FestSchedule struct {
+	state                protoimpl.MessageState      `protogen:"open.v1"`
+	Name                 string                      `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Fest                 string                      `protobuf:"bytes,2,opt,name=fest,proto3" json:"fest,omitempty"`
+	FestRegions          []string                    `protobuf:"bytes,3,rep,name=fest_regions,json=festRegions,proto3" json:"fest_regions,omitempty"`
+	Target               string                      `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`
+	FestGameData         string                      `protobuf:"bytes,5,opt,name=fest_game_data,json=festGameData,proto3" json:"fest_game_data,omitempty"`
+	FestGameDataRevision string                      `protobuf:"bytes,6,opt,name=fest_game_data_revision,json=festGameDataRevision,proto3" json:"fest_game_data_revision,omitempty"`
+	Timetable            *FestTimetable              `protobuf:"bytes,7,opt,name=timetable,proto3" json:"timetable,omitempty"`
+	FestPublishments     map[string]*FestPublishment `protobuf:"bytes,8,rep,name=fest_publishments,json=festPublishments,proto3" json:"fest_publishments,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Attributes           *common.MapValue            `protobuf:"bytes,9,opt,name=attributes,proto3" json:"attributes,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *FestSchedule) Reset() {
+	*x = FestSchedule{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FestSchedule) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FestSchedule) ProtoMessage() {}
+
+func (x *FestSchedule) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FestSchedule.ProtoReflect.Descriptor instead.
+func (*FestSchedule) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *FestSchedule) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *FestSchedule) GetFest() string {
+	if x != nil {
+		return x.Fest
+	}
+	return ""
+}
+
+func (x *FestSchedule) GetFestRegions() []string {
+	if x != nil {
+		return x.FestRegions
+	}
+	return nil
+}
+
+func (x *FestSchedule) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *FestSchedule) GetFestGameData() string {
+	if x != nil {
+		return x.FestGameData
+	}
+	return ""
+}
+
+func (x *FestSchedule) GetFestGameDataRevision() string {
+	if x != nil {
+		return x.FestGameDataRevision
+	}
+	return ""
+}
+
+func (x *FestSchedule) GetTimetable() *FestTimetable {
+	if x != nil {
+		return x.Timetable
+	}
+	return nil
+}
+
+func (x *FestSchedule) GetFestPublishments() map[string]*FestPublishment {
+	if x != nil {
+		return x.FestPublishments
+	}
+	return nil
+}
+
+func (x *FestSchedule) GetAttributes() *common.MapValue {
+	if x != nil {
+		return x.Attributes
+	}
+	return nil
+}
+
 type CoopSchedule_Normal struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Stage         int32                  `protobuf:"varint,1,opt,name=stage,proto3" json:"stage,omitempty"`
@@ -1119,7 +1935,7 @@ type CoopSchedule_Normal struct {
 
 func (x *CoopSchedule_Normal) Reset() {
 	*x = CoopSchedule_Normal{}
-	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[14]
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1131,7 +1947,7 @@ func (x *CoopSchedule_Normal) String() string {
 func (*CoopSchedule_Normal) ProtoMessage() {}
 
 func (x *CoopSchedule_Normal) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[14]
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1207,7 +2023,7 @@ type LeagueSchedule_Slot struct {
 
 func (x *LeagueSchedule_Slot) Reset() {
 	*x = LeagueSchedule_Slot{}
-	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[15]
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1219,7 +2035,7 @@ func (x *LeagueSchedule_Slot) String() string {
 func (*LeagueSchedule_Slot) ProtoMessage() {}
 
 func (x *LeagueSchedule_Slot) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[15]
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1389,7 +2205,80 @@ const file_proto_toyohr_v1_resources_proto_rawDesc = "" +
 	"\vcreate_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"createTime\x12;\n" +
 	"\vupdate_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"updateTimeB0Z.github.com/openpak/npln/proto/toyohr/v1;toyohrb\x06proto3"
+	"updateTime\"\xb3\x02\n" +
+	"\x11FestDecryptionKey\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"notice_key\x18\x02 \x01(\tR\tnoticeKey\x12\x1b\n" +
+	"\tstart_key\x18\x03 \x01(\tR\bstartKey\x125\n" +
+	"\x17result_winning_team_key\x18\x04 \x01(\tR\x14resultWinningTeamKey\x12$\n" +
+	"\x0eteam_alpha_key\x18\x05 \x01(\tR\fteamAlphaKey\x12$\n" +
+	"\x0eteam_bravo_key\x18\x06 \x01(\tR\fteamBravoKey\x12(\n" +
+	"\x10team_charlie_key\x18\a \x01(\tR\x0eteamCharlieKey\x12!\n" +
+	"\fwinning_team\x18\b \x01(\tR\vwinningTeam\"]\n" +
+	"\tFestEntry\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
+	"\tfest_team\x18\x02 \x01(\tR\bfestTeam\x12\x1f\n" +
+	"\vfest_region\x18\x03 \x01(\tR\n" +
+	"festRegion\"\x83\x01\n" +
+	"\x0fFestPublishment\x129\n" +
+	"\n" +
+	"start_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\tstartTime\x125\n" +
+	"\bend_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\aendTime\"D\n" +
+	"\rFestTeamPoint\x12\x1b\n" +
+	"\tfest_team\x18\x01 \x01(\tR\bfestTeam\x12\x16\n" +
+	"\x06points\x18\x02 \x01(\x03R\x06points\"B\n" +
+	"\rFestTeamRatio\x12\x1b\n" +
+	"\tfest_team\x18\x01 \x01(\tR\bfestTeam\x12\x14\n" +
+	"\x05ratio\x18\x02 \x01(\x01R\x05ratio\"m\n" +
+	"\rYobisaiResult\x12\x19\n" +
+	"\bis_valid\x18\x01 \x01(\bR\aisValid\x12A\n" +
+	"\vteam_ratios\x18\x02 \x03(\v2 .nn.npln.toyohr.v1.FestTeamRatioR\n" +
+	"teamRatios\"s\n" +
+	"\x13HonsaiMidtermResult\x12\x19\n" +
+	"\bis_valid\x18\x01 \x01(\bR\aisValid\x12A\n" +
+	"\vteam_ratios\x18\x02 \x03(\v2 .nn.npln.toyohr.v1.FestTeamRatioR\n" +
+	"teamRatios\"\xfd\x01\n" +
+	"\x11HonsaiFinalResult\x12\x19\n" +
+	"\bis_valid\x18\x01 \x01(\bR\aisValid\x12C\n" +
+	"\fteam_ratios1\x18\x02 \x03(\v2 .nn.npln.toyohr.v1.FestTeamRatioR\vteamRatios1\x12C\n" +
+	"\fteam_ratios2\x18\x03 \x03(\v2 .nn.npln.toyohr.v1.FestTeamRatioR\vteamRatios2\x12C\n" +
+	"\fteam_ratios3\x18\x04 \x03(\v2 .nn.npln.toyohr.v1.FestTeamRatioR\vteamRatios3\"\x98\x01\n" +
+	"\rOverallResult\x12\x19\n" +
+	"\bis_valid\x18\x01 \x01(\bR\aisValid\x128\n" +
+	"\x06points\x18\x02 \x03(\v2 .nn.npln.toyohr.v1.FestTeamPointR\x06points\x122\n" +
+	"\aweights\x18\x03 \x01(\v2\x18.nn.npln.common.MapValueR\aweights\"\xc2\x02\n" +
+	"\n" +
+	"FestResult\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12:\n" +
+	"\ayobisai\x18\x02 \x01(\v2 .nn.npln.toyohr.v1.YobisaiResultR\ayobisai\x12M\n" +
+	"\x0ehonsai_midterm\x18\x03 \x01(\v2&.nn.npln.toyohr.v1.HonsaiMidtermResultR\rhonsaiMidterm\x12G\n" +
+	"\fhonsai_final\x18\x04 \x01(\v2$.nn.npln.toyohr.v1.HonsaiFinalResultR\vhonsaiFinal\x12:\n" +
+	"\aoverall\x18\x05 \x01(\v2 .nn.npln.toyohr.v1.OverallResultR\aoverall\x12\x10\n" +
+	"\x03unk\x18\x06 \x01(\x05R\x03unk\"\xac\x02\n" +
+	"\rFestTimetable\x127\n" +
+	"\topen_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\bopenTime\x129\n" +
+	"\n" +
+	"start_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tstartTime\x125\n" +
+	"\bmid_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\amidTime\x125\n" +
+	"\bend_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\aendTime\x129\n" +
+	"\n" +
+	"close_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcloseTime\"\x95\x04\n" +
+	"\fFestSchedule\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04fest\x18\x02 \x01(\tR\x04fest\x12!\n" +
+	"\ffest_regions\x18\x03 \x03(\tR\vfestRegions\x12\x16\n" +
+	"\x06target\x18\x04 \x01(\tR\x06target\x12$\n" +
+	"\x0efest_game_data\x18\x05 \x01(\tR\ffestGameData\x125\n" +
+	"\x17fest_game_data_revision\x18\x06 \x01(\tR\x14festGameDataRevision\x12>\n" +
+	"\ttimetable\x18\a \x01(\v2 .nn.npln.toyohr.v1.FestTimetableR\ttimetable\x12b\n" +
+	"\x11fest_publishments\x18\b \x03(\v25.nn.npln.toyohr.v1.FestSchedule.FestPublishmentsEntryR\x10festPublishments\x128\n" +
+	"\n" +
+	"attributes\x18\t \x01(\v2\x18.nn.npln.common.MapValueR\n" +
+	"attributes\x1ag\n" +
+	"\x15FestPublishmentsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x128\n" +
+	"\x05value\x18\x02 \x01(\v2\".nn.npln.toyohr.v1.FestPublishmentR\x05value:\x028\x01B0Z.github.com/openpak/npln/proto/toyohr/v1;toyohrb\x06proto3"
 
 var (
 	file_proto_toyohr_v1_resources_proto_rawDescOnce sync.Once
@@ -1403,7 +2292,7 @@ func file_proto_toyohr_v1_resources_proto_rawDescGZIP() []byte {
 	return file_proto_toyohr_v1_resources_proto_rawDescData
 }
 
-var file_proto_toyohr_v1_resources_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_proto_toyohr_v1_resources_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_proto_toyohr_v1_resources_proto_goTypes = []any{
 	(*RegularSettings)(nil),       // 0: nn.npln.toyohr.v1.RegularSettings
 	(*BankaraSettings)(nil),       // 1: nn.npln.toyohr.v1.BankaraSettings
@@ -1419,56 +2308,91 @@ var file_proto_toyohr_v1_resources_proto_goTypes = []any{
 	(*KeepAlive)(nil),             // 11: nn.npln.toyohr.v1.KeepAlive
 	(*Report)(nil),                // 12: nn.npln.toyohr.v1.Report
 	(*SaveRecord)(nil),            // 13: nn.npln.toyohr.v1.SaveRecord
-	(*CoopSchedule_Normal)(nil),   // 14: nn.npln.toyohr.v1.CoopSchedule.Normal
-	(*LeagueSchedule_Slot)(nil),   // 15: nn.npln.toyohr.v1.LeagueSchedule.Slot
-	(*common.MapValue)(nil),       // 16: nn.npln.common.MapValue
-	(*timestamppb.Timestamp)(nil), // 17: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 18: google.protobuf.Duration
+	(*FestDecryptionKey)(nil),     // 14: nn.npln.toyohr.v1.FestDecryptionKey
+	(*FestEntry)(nil),             // 15: nn.npln.toyohr.v1.FestEntry
+	(*FestPublishment)(nil),       // 16: nn.npln.toyohr.v1.FestPublishment
+	(*FestTeamPoint)(nil),         // 17: nn.npln.toyohr.v1.FestTeamPoint
+	(*FestTeamRatio)(nil),         // 18: nn.npln.toyohr.v1.FestTeamRatio
+	(*YobisaiResult)(nil),         // 19: nn.npln.toyohr.v1.YobisaiResult
+	(*HonsaiMidtermResult)(nil),   // 20: nn.npln.toyohr.v1.HonsaiMidtermResult
+	(*HonsaiFinalResult)(nil),     // 21: nn.npln.toyohr.v1.HonsaiFinalResult
+	(*OverallResult)(nil),         // 22: nn.npln.toyohr.v1.OverallResult
+	(*FestResult)(nil),            // 23: nn.npln.toyohr.v1.FestResult
+	(*FestTimetable)(nil),         // 24: nn.npln.toyohr.v1.FestTimetable
+	(*FestSchedule)(nil),          // 25: nn.npln.toyohr.v1.FestSchedule
+	(*CoopSchedule_Normal)(nil),   // 26: nn.npln.toyohr.v1.CoopSchedule.Normal
+	(*LeagueSchedule_Slot)(nil),   // 27: nn.npln.toyohr.v1.LeagueSchedule.Slot
+	nil,                           // 28: nn.npln.toyohr.v1.FestSchedule.FestPublishmentsEntry
+	(*common.MapValue)(nil),       // 29: nn.npln.common.MapValue
+	(*timestamppb.Timestamp)(nil), // 30: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 31: google.protobuf.Duration
 }
 var file_proto_toyohr_v1_resources_proto_depIdxs = []int32{
-	16, // 0: nn.npln.toyohr.v1.RegularSettings.attributes:type_name -> nn.npln.common.MapValue
-	16, // 1: nn.npln.toyohr.v1.BankaraSettings.attributes:type_name -> nn.npln.common.MapValue
-	16, // 2: nn.npln.toyohr.v1.XSettings.attributes:type_name -> nn.npln.common.MapValue
-	16, // 3: nn.npln.toyohr.v1.LeagueSettings.field_4:type_name -> nn.npln.common.MapValue
-	16, // 4: nn.npln.toyohr.v1.LeagueSettings.field_5:type_name -> nn.npln.common.MapValue
-	17, // 5: nn.npln.toyohr.v1.VsSchedule.start_time:type_name -> google.protobuf.Timestamp
-	17, // 6: nn.npln.toyohr.v1.VsSchedule.end_time:type_name -> google.protobuf.Timestamp
+	29, // 0: nn.npln.toyohr.v1.RegularSettings.attributes:type_name -> nn.npln.common.MapValue
+	29, // 1: nn.npln.toyohr.v1.BankaraSettings.attributes:type_name -> nn.npln.common.MapValue
+	29, // 2: nn.npln.toyohr.v1.XSettings.attributes:type_name -> nn.npln.common.MapValue
+	29, // 3: nn.npln.toyohr.v1.LeagueSettings.field_4:type_name -> nn.npln.common.MapValue
+	29, // 4: nn.npln.toyohr.v1.LeagueSettings.field_5:type_name -> nn.npln.common.MapValue
+	30, // 5: nn.npln.toyohr.v1.VsSchedule.start_time:type_name -> google.protobuf.Timestamp
+	30, // 6: nn.npln.toyohr.v1.VsSchedule.end_time:type_name -> google.protobuf.Timestamp
 	0,  // 7: nn.npln.toyohr.v1.VsSchedule.regular_settings:type_name -> nn.npln.toyohr.v1.RegularSettings
 	1,  // 8: nn.npln.toyohr.v1.VsSchedule.bankara_settings:type_name -> nn.npln.toyohr.v1.BankaraSettings
 	2,  // 9: nn.npln.toyohr.v1.VsSchedule.x_settings:type_name -> nn.npln.toyohr.v1.XSettings
 	3,  // 10: nn.npln.toyohr.v1.VsSchedule.league_settings:type_name -> nn.npln.toyohr.v1.LeagueSettings
-	17, // 11: nn.npln.toyohr.v1.CoopSchedule.start_time:type_name -> google.protobuf.Timestamp
-	17, // 12: nn.npln.toyohr.v1.CoopSchedule.end_time:type_name -> google.protobuf.Timestamp
-	14, // 13: nn.npln.toyohr.v1.CoopSchedule.normal:type_name -> nn.npln.toyohr.v1.CoopSchedule.Normal
-	17, // 14: nn.npln.toyohr.v1.CoopSchedule.timestamp:type_name -> google.protobuf.Timestamp
-	17, // 15: nn.npln.toyohr.v1.SeasonSchedule.start_time:type_name -> google.protobuf.Timestamp
-	17, // 16: nn.npln.toyohr.v1.SeasonSchedule.end_time:type_name -> google.protobuf.Timestamp
-	16, // 17: nn.npln.toyohr.v1.SeasonSchedule.attributes:type_name -> nn.npln.common.MapValue
-	16, // 18: nn.npln.toyohr.v1.LeagueSchedule.attributes:type_name -> nn.npln.common.MapValue
-	17, // 19: nn.npln.toyohr.v1.LeagueSchedule.timestamp:type_name -> google.protobuf.Timestamp
-	15, // 20: nn.npln.toyohr.v1.LeagueSchedule.slots:type_name -> nn.npln.toyohr.v1.LeagueSchedule.Slot
-	17, // 21: nn.npln.toyohr.v1.LeagueSchedule.start_time:type_name -> google.protobuf.Timestamp
-	17, // 22: nn.npln.toyohr.v1.LeagueSchedule.end_time:type_name -> google.protobuf.Timestamp
-	17, // 23: nn.npln.toyohr.v1.VsParams.timestamp_1:type_name -> google.protobuf.Timestamp
-	17, // 24: nn.npln.toyohr.v1.VsParams.timestamp_2:type_name -> google.protobuf.Timestamp
-	16, // 25: nn.npln.toyohr.v1.VsParams.attributes:type_name -> nn.npln.common.MapValue
-	16, // 26: nn.npln.toyohr.v1.MessageBody.fields:type_name -> nn.npln.common.MapValue
+	30, // 11: nn.npln.toyohr.v1.CoopSchedule.start_time:type_name -> google.protobuf.Timestamp
+	30, // 12: nn.npln.toyohr.v1.CoopSchedule.end_time:type_name -> google.protobuf.Timestamp
+	26, // 13: nn.npln.toyohr.v1.CoopSchedule.normal:type_name -> nn.npln.toyohr.v1.CoopSchedule.Normal
+	30, // 14: nn.npln.toyohr.v1.CoopSchedule.timestamp:type_name -> google.protobuf.Timestamp
+	30, // 15: nn.npln.toyohr.v1.SeasonSchedule.start_time:type_name -> google.protobuf.Timestamp
+	30, // 16: nn.npln.toyohr.v1.SeasonSchedule.end_time:type_name -> google.protobuf.Timestamp
+	29, // 17: nn.npln.toyohr.v1.SeasonSchedule.attributes:type_name -> nn.npln.common.MapValue
+	29, // 18: nn.npln.toyohr.v1.LeagueSchedule.attributes:type_name -> nn.npln.common.MapValue
+	30, // 19: nn.npln.toyohr.v1.LeagueSchedule.timestamp:type_name -> google.protobuf.Timestamp
+	27, // 20: nn.npln.toyohr.v1.LeagueSchedule.slots:type_name -> nn.npln.toyohr.v1.LeagueSchedule.Slot
+	30, // 21: nn.npln.toyohr.v1.LeagueSchedule.start_time:type_name -> google.protobuf.Timestamp
+	30, // 22: nn.npln.toyohr.v1.LeagueSchedule.end_time:type_name -> google.protobuf.Timestamp
+	30, // 23: nn.npln.toyohr.v1.VsParams.timestamp_1:type_name -> google.protobuf.Timestamp
+	30, // 24: nn.npln.toyohr.v1.VsParams.timestamp_2:type_name -> google.protobuf.Timestamp
+	29, // 25: nn.npln.toyohr.v1.VsParams.attributes:type_name -> nn.npln.common.MapValue
+	29, // 26: nn.npln.toyohr.v1.MessageBody.fields:type_name -> nn.npln.common.MapValue
 	9,  // 27: nn.npln.toyohr.v1.ReceivedMessage.message_body:type_name -> nn.npln.toyohr.v1.MessageBody
-	17, // 28: nn.npln.toyohr.v1.ReceivedMessage.send_time:type_name -> google.protobuf.Timestamp
-	18, // 29: nn.npln.toyohr.v1.KeepAlive.idle_timeout:type_name -> google.protobuf.Duration
-	17, // 30: nn.npln.toyohr.v1.Report.create_time:type_name -> google.protobuf.Timestamp
-	16, // 31: nn.npln.toyohr.v1.Report.context:type_name -> nn.npln.common.MapValue
-	16, // 32: nn.npln.toyohr.v1.SaveRecord.save_data:type_name -> nn.npln.common.MapValue
-	17, // 33: nn.npln.toyohr.v1.SaveRecord.create_time:type_name -> google.protobuf.Timestamp
-	17, // 34: nn.npln.toyohr.v1.SaveRecord.update_time:type_name -> google.protobuf.Timestamp
-	16, // 35: nn.npln.toyohr.v1.CoopSchedule.Normal.attributes:type_name -> nn.npln.common.MapValue
-	17, // 36: nn.npln.toyohr.v1.LeagueSchedule.Slot.start_time:type_name -> google.protobuf.Timestamp
-	17, // 37: nn.npln.toyohr.v1.LeagueSchedule.Slot.end_time:type_name -> google.protobuf.Timestamp
-	38, // [38:38] is the sub-list for method output_type
-	38, // [38:38] is the sub-list for method input_type
-	38, // [38:38] is the sub-list for extension type_name
-	38, // [38:38] is the sub-list for extension extendee
-	0,  // [0:38] is the sub-list for field type_name
+	30, // 28: nn.npln.toyohr.v1.ReceivedMessage.send_time:type_name -> google.protobuf.Timestamp
+	31, // 29: nn.npln.toyohr.v1.KeepAlive.idle_timeout:type_name -> google.protobuf.Duration
+	30, // 30: nn.npln.toyohr.v1.Report.create_time:type_name -> google.protobuf.Timestamp
+	29, // 31: nn.npln.toyohr.v1.Report.context:type_name -> nn.npln.common.MapValue
+	29, // 32: nn.npln.toyohr.v1.SaveRecord.save_data:type_name -> nn.npln.common.MapValue
+	30, // 33: nn.npln.toyohr.v1.SaveRecord.create_time:type_name -> google.protobuf.Timestamp
+	30, // 34: nn.npln.toyohr.v1.SaveRecord.update_time:type_name -> google.protobuf.Timestamp
+	30, // 35: nn.npln.toyohr.v1.FestPublishment.start_time:type_name -> google.protobuf.Timestamp
+	30, // 36: nn.npln.toyohr.v1.FestPublishment.end_time:type_name -> google.protobuf.Timestamp
+	18, // 37: nn.npln.toyohr.v1.YobisaiResult.team_ratios:type_name -> nn.npln.toyohr.v1.FestTeamRatio
+	18, // 38: nn.npln.toyohr.v1.HonsaiMidtermResult.team_ratios:type_name -> nn.npln.toyohr.v1.FestTeamRatio
+	18, // 39: nn.npln.toyohr.v1.HonsaiFinalResult.team_ratios1:type_name -> nn.npln.toyohr.v1.FestTeamRatio
+	18, // 40: nn.npln.toyohr.v1.HonsaiFinalResult.team_ratios2:type_name -> nn.npln.toyohr.v1.FestTeamRatio
+	18, // 41: nn.npln.toyohr.v1.HonsaiFinalResult.team_ratios3:type_name -> nn.npln.toyohr.v1.FestTeamRatio
+	17, // 42: nn.npln.toyohr.v1.OverallResult.points:type_name -> nn.npln.toyohr.v1.FestTeamPoint
+	29, // 43: nn.npln.toyohr.v1.OverallResult.weights:type_name -> nn.npln.common.MapValue
+	19, // 44: nn.npln.toyohr.v1.FestResult.yobisai:type_name -> nn.npln.toyohr.v1.YobisaiResult
+	20, // 45: nn.npln.toyohr.v1.FestResult.honsai_midterm:type_name -> nn.npln.toyohr.v1.HonsaiMidtermResult
+	21, // 46: nn.npln.toyohr.v1.FestResult.honsai_final:type_name -> nn.npln.toyohr.v1.HonsaiFinalResult
+	22, // 47: nn.npln.toyohr.v1.FestResult.overall:type_name -> nn.npln.toyohr.v1.OverallResult
+	30, // 48: nn.npln.toyohr.v1.FestTimetable.open_time:type_name -> google.protobuf.Timestamp
+	30, // 49: nn.npln.toyohr.v1.FestTimetable.start_time:type_name -> google.protobuf.Timestamp
+	30, // 50: nn.npln.toyohr.v1.FestTimetable.mid_time:type_name -> google.protobuf.Timestamp
+	30, // 51: nn.npln.toyohr.v1.FestTimetable.end_time:type_name -> google.protobuf.Timestamp
+	30, // 52: nn.npln.toyohr.v1.FestTimetable.close_time:type_name -> google.protobuf.Timestamp
+	24, // 53: nn.npln.toyohr.v1.FestSchedule.timetable:type_name -> nn.npln.toyohr.v1.FestTimetable
+	28, // 54: nn.npln.toyohr.v1.FestSchedule.fest_publishments:type_name -> nn.npln.toyohr.v1.FestSchedule.FestPublishmentsEntry
+	29, // 55: nn.npln.toyohr.v1.FestSchedule.attributes:type_name -> nn.npln.common.MapValue
+	29, // 56: nn.npln.toyohr.v1.CoopSchedule.Normal.attributes:type_name -> nn.npln.common.MapValue
+	30, // 57: nn.npln.toyohr.v1.LeagueSchedule.Slot.start_time:type_name -> google.protobuf.Timestamp
+	30, // 58: nn.npln.toyohr.v1.LeagueSchedule.Slot.end_time:type_name -> google.protobuf.Timestamp
+	16, // 59: nn.npln.toyohr.v1.FestSchedule.FestPublishmentsEntry.value:type_name -> nn.npln.toyohr.v1.FestPublishment
+	60, // [60:60] is the sub-list for method output_type
+	60, // [60:60] is the sub-list for method input_type
+	60, // [60:60] is the sub-list for extension type_name
+	60, // [60:60] is the sub-list for extension extendee
+	0,  // [0:60] is the sub-list for field type_name
 }
 
 func init() { file_proto_toyohr_v1_resources_proto_init() }
@@ -1482,7 +2406,7 @@ func file_proto_toyohr_v1_resources_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_toyohr_v1_resources_proto_rawDesc), len(file_proto_toyohr_v1_resources_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
