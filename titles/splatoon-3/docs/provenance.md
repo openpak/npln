@@ -304,6 +304,17 @@ PresenceService/SubscribePresences, then Locker/SelectDocuments every 8 s once t
 | LobbyMessaging | RecvMessage opens with a KeepAlive carrying a `{"v":1,"t":"<ms>-<n>"}` resume token; the game sends `NplnLogin` to itself and expects it back; `sender_user` is the resolved `tenants/t-dce9377b-lp1/users/<id>` | N (field names, the self-echo), M (the request: one receiver, the sender) |
 | CloudSave write rules | partial `save_data`, maps merge recursively, other values replace, empty arrays are stored as null, the response timestamp is the next request's `update_time` | N (replayed captured writes) |
 | Locker and Canola SelectDocuments | polled every 8 s while unanswered; an empty list is accepted | M |
+| An absent resource (ugcstore document, fest entry/result/key, violation, save record) | NOT_FOUND after a headers frame, message `NotFound. reason: "<Kind>:"<name>" Not Found"`, details one `nn.npln.errdetails.NError` with a fresh 32-hex trace id (field 1), a fresh 16-hex id (field 19) and the generic not-found code (field 6 = 0). A bare NOT_FOUND made the game retry a missing GameRecord document without end | N (capture notes of a real console against Nintendo's service, `ugcstore_erreur_absente.go`) |
+| FestService between Splatfests | SelectFestSchedule with an empty response is accepted at boot and on lobby entry | M |
+| PresenceService/KeepAlive | the game acks every heartbeat at once; answering acks loops (~2,000 heartbeats a minute measured 2026-10-10). Heartbeat on a timer and on presence updates only, as Stardew's server does | M; O (`titles/stardew-valley/npln/presence.go`) |
+| The schedule set the lobby accepts | the game stores at most 12 VS schedules and needs at least 5; every Bankara and X entry needs rule 1-4 and exactly 2 stages, regular exactly 2 stages; an empty League list passes, an empty Season list fails; any one kind failing fails the set | G (`main+0x32a28d0` schedule manager, `0x32a2e60`-`0x32a2fb4`, `0x32a48d8`, `0x32a5e8c`) |
+| Ranked rules | four different ranked rules per slot, all from 1-4, never turf war; the list starts one slot before the present | N (`rotation_generee.go`, `rotation_avance_test.go`) |
+| Challenge (League) schedules | an empty list when no event runs, and the game accepts it. Measured together with the ranked-rule change above: before both, the lobby showed a communication error with no update banner; after both it shows "Multiplayer maps and modes have been updated!" first | N (`toyohr.go`, `challenge_schedules.go`) + G + M |
+| Co-op `shift_id` | the shift's start as `YYYYMMDDhhmmss` | N (`coop_carte_points.go`) |
+| What the lobby checks before it opens (snapshot at `main+0x35340b0`, "now" = network clock seconds) | VS: the window covering now and the next two exist, the current one's stages exist in the VS stage table. Co-op: the shift covering now and the next two exist; the current one's stage exists in the co-op stage table, each main weapon exists or is -1 (random), the Grizzco weapon exists or is negative. Season: the last entry covers now and its field 2 is a season-table id (field 2 itself when <= 8, else `((n-1)&3)+5`). League: at most one event | G (`0x35340b0`, `0x352ec90`, `0x353703c`) |
+| Table ids (v11.3.0 RSDB, looked up by `Id`) | VS stages 1-26; co-op stages 1, 2, 4, 6, 7, 8, 9 (Big Run 100, 102-107); seasons 0-9; weapons are not rows for -1 and -2 | G (romfs `VersusSceneInfo`, `CoopSceneInfo`, `SeasonInfo`, `WeaponInfoMain`) |
+| Hammer `UserAttribute/Data` | read at login; any non-OK status is taken as `total_participants` = 0, no error raised | G (`0x32b4f20`, handler `0x32acd88`) |
+| SelectVsParams | the SDK keeps only the name (parsed), the two timestamps and the attributes; `params_set_id` and both responses' `schedule_set_id` are dropped and never compared; the game reads only the attributes map, every key optional | G (`main+0x7b8620`, `0x7bbee0`, `0x32a4968`-`0x32a4dac`) |
 
 ## Proto provenance
 
@@ -315,7 +326,7 @@ of Nintendo's shared NPLN schema, not a second read of the Shield-licensed tree 
 names/numbers/types were checked against N's descriptors (the tables above) and match. The
 duplication is deliberate debt: see `design.md`, "Lift the shared NPLN layer".
 
-The toyohr `cloud_save`, `lobby_messaging`, `userscreening`, `common`, `locker` and `canola` schemas and
+The toyohr `cloud_save`, `lobby_messaging`, `userscreening`, `common`, `locker`, `canola` and `fest` schemas and
 `maintenance/v1` (2026-10-10) take their field names, numbers and types from N's compiled descriptors
 (facts: wire layout), written out as fresh `.proto` text in this repository's style. The game binary
 carries no descriptors, only the method paths, which match (G).

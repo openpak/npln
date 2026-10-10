@@ -81,21 +81,28 @@ func (s *scheduleServer) SelectVsSchedules(_ context.Context, req *toyohrpb.Sele
 	rot := s.cur.Load()
 	from, to := window(req.GetCurrentTime(), req.GetSelectDuration().AsDuration())
 	out := &toyohrpb.SelectVsSchedulesResponse{}
+	// One window before the present too: Nintendo's list starts with the slot already running
+	// and the one before it (docs/provenance.md).
 	for i, w := range rot.Vs {
-		if !overlaps(from, to, w.Start, w.End) {
+		if !overlaps(from.Add(-2*time.Hour), to, w.Start, w.End) {
 			continue
 		}
+		r := rotation.RankedRules(w.Start)
 		sc := &toyohrpb.VsSchedule{
 			Name:            fmt.Sprintf("%s/vsSchedules/%d", targetName(req.GetTarget()), i),
 			StartTime:       ts(w.Start),
 			EndTime:         ts(w.End),
 			RegularSettings: &toyohrpb.RegularSettings{Stages: w.Regular},
-			XSettings:       &toyohrpb.XSettings{Rule: w.X.Rule, Stages: w.X.Stages},
-			LeagueSettings:  &toyohrpb.LeagueSettings{Rule: w.League.Rule, Stages: w.League.Stages},
+			XSettings:       &toyohrpb.XSettings{Rule: r[2], Stages: w.X.Stages},
+			LeagueSettings:  &toyohrpb.LeagueSettings{Rule: r[3], Stages: w.League.Stages},
 			ScheduleSetId:   setID(rot),
 		}
-		for _, b := range w.Bankara {
-			sc.BankaraSettings = append(sc.BankaraSettings, &toyohrpb.BankaraSettings{Rule: b.Rule, Stages: b.Stages})
+		for j, b := range w.Bankara {
+			rule := b.Rule
+			if j < 2 {
+				rule = r[j]
+			}
+			sc.BankaraSettings = append(sc.BankaraSettings, &toyohrpb.BankaraSettings{Rule: rule, Stages: b.Stages})
 		}
 		out.Schedules = append(out.Schedules, sc)
 	}
@@ -106,7 +113,8 @@ func (s *scheduleServer) SelectVsSchedules(_ context.Context, req *toyohrpb.Sele
 
 func (s *scheduleServer) SelectCoopSchedules(_ context.Context, req *toyohrpb.SelectCoopSchedulesRequest) (*toyohrpb.SelectCoopSchedulesResponse, error) {
 	rot := s.cur.Load()
-	from, to := window(req.GetCurrentTime(), 0)
+	// The game needs the current shift and the two after it; ask three days of the rotation.
+	from, to := window(req.GetCurrentTime(), 3*24*time.Hour)
 	out := &toyohrpb.SelectCoopSchedulesResponse{}
 	for i, w := range rot.Coop {
 		if !overlaps(from, to, w.Start, w.End) {
@@ -117,10 +125,13 @@ func (s *scheduleServer) SelectCoopSchedules(_ context.Context, req *toyohrpb.Se
 			ScheduleSetId: setID(rot),
 			StartTime:     ts(w.Start),
 			EndTime:       ts(w.End),
-			ShiftId:       fmt.Sprintf("shift-%d", i),
+			ShiftId:       w.Start.UTC().Format("20060102150405"), // the shift's start, as Nintendo names shifts
 			Timestamp:     ts(w.Start),
+			// The current shift is checked against the game's own tables: the stage must exist,
+			// each weapon too unless it is -1 (random), the Grizzco weapon unless negative. A
+			// rotation file written before these rules carries made-up ids, so they are set here.
 			Normal: &toyohrpb.CoopSchedule_Normal{
-				Stage: w.Stage, Boss: w.Boss, MainWeapons: w.MainWeapons, KumaWeapon: w.KumaWeapon,
+				Stage: coopStage(w.Start), Boss: "SakelienGiant", MainWeapons: []int64{-1, -1, -1, -1}, KumaWeapon: -1,
 			},
 		})
 	}
@@ -139,6 +150,7 @@ func (s *scheduleServer) SelectSeasonSchedules(_ context.Context, req *toyohrpb.
 		}
 		out.Schedules = append(out.Schedules, &toyohrpb.SeasonSchedule{
 			Name:          fmt.Sprintf("%s/seasonSchedules/%d", Tenant, i),
+			Field_2:       1, // the season id the game looks up in its season table; 0 is not in it
 			StartTime:     ts(w.Start),
 			EndTime:       ts(w.End),
 			ScheduleSetId: setID(rot),
@@ -149,34 +161,26 @@ func (s *scheduleServer) SelectSeasonSchedules(_ context.Context, req *toyohrpb.
 	return out, nil
 }
 
-func (s *scheduleServer) SelectLeagueSchedules(_ context.Context, req *toyohrpb.SelectLeagueSchedulesRequest) (*toyohrpb.SelectLeagueSchedulesResponse, error) {
-	rot := s.cur.Load()
-	from, to := window(req.GetCurrentTime(), 0)
-	out := &toyohrpb.SelectLeagueSchedulesResponse{}
-	for i, w := range rot.League {
-		if !overlaps(from, to, w.Start, w.End) {
-			continue
-		}
-		sc := &toyohrpb.LeagueSchedule{
-			Name:          fmt.Sprintf("%s/leagueSchedules/%d", targetName(req.GetTarget()), i),
-			Rule:          w.Rule,
-			Stages:        w.Stages,
-			ScheduleSetId: setID(rot),
-			Timestamp:     ts(w.Start),
-			StartTime:     ts(w.Start),
-			EndTime:       ts(w.End),
-		}
-		for j, sl := range w.Slots {
-			sc.Slots = append(sc.Slots, &toyohrpb.LeagueSchedule_Slot{
-				Name:      fmt.Sprintf("%s/leagueSchedules/%d/slots/%d", targetName(req.GetTarget()), i, j),
-				StartTime: ts(sl.Start),
-				EndTime:   ts(sl.End),
-			})
-		}
-		out.Schedules = append(out.Schedules, sc)
+// coopStages are the Salmon Run stage ids the shift check accepts; each shift takes the next.
+var coopStages = []int32{1, 2, 4, 6, 7, 8, 9}
+
+func coopStage(start time.Time) int32 {
+	n := start.Unix() / 86400
+	if n < 0 {
+		n = -n
 	}
-	log.Printf("[Schedule] SelectLeagueSchedules -> %d", len(out.Schedules))
-	return out, nil
+	return coopStages[n%int64(len(coopStages))]
+}
+
+// SelectLeagueSchedules answers no Challenge events. That is what the game is served when no
+// event is on, and it accepts it; the generated event (one spanning the whole rotation, a slot per
+// versus window) was the prime suspect for the lobby discarding the set (docs/provenance.md).
+//
+// ponytail: operator-defined Challenge events are a later feature; rotation.League stays in the
+// file and is validated, only not served.
+func (s *scheduleServer) SelectLeagueSchedules(context.Context, *toyohrpb.SelectLeagueSchedulesRequest) (*toyohrpb.SelectLeagueSchedulesResponse, error) {
+	log.Printf("[Schedule] SelectLeagueSchedules -> 0 (no Challenge event)")
+	return &toyohrpb.SelectLeagueSchedulesResponse{}, nil
 }
 
 // SelectVsParams carries timestamps of its own and must sit on the same time base as the

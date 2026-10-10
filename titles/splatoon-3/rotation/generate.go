@@ -48,13 +48,12 @@ func Generate(at time.Time, hours, stages int, seed int64) *File {
 		f.Vs = append(f.Vs, VsWindow{
 			Window:  Window{Start: s, End: s.Add(vsPeriod)},
 			Regular: pick(rng, stages, 2),
-			Bankara: []Mode{
-				{Rule: rule(rng), Stages: pick(rng, stages, 2)},
-				{Rule: rule(rng), Stages: pick(rng, stages, 2)},
-			},
-			X:      Mode{Rule: rule(rng), Stages: pick(rng, stages, 2)},
-			League: Mode{Rule: rule(rng), Stages: pick(rng, stages, 2)},
 		})
+		r := RankedRules(s)
+		w := &f.Vs[len(f.Vs)-1]
+		w.Bankara = []Mode{{Rule: r[0], Stages: pick(rng, stages, 2)}, {Rule: r[1], Stages: pick(rng, stages, 2)}}
+		w.X = Mode{Rule: r[2], Stages: pick(rng, stages, 2)}
+		w.League = Mode{Rule: r[3], Stages: pick(rng, stages, 2)}
 	}
 
 	// Co-op: same treatment, longer period.
@@ -137,6 +136,37 @@ func Keep(path string, now time.Time) (f *File, renewed bool, err error) {
 // rules) is the public SplatNet 3 ordering; see docs/provenance.md for what is and is not
 // verified about these ids.
 func rule(rng *rand.Rand) int32 { return int32(rng.Intn(5)) }
+
+// RankedRules is the rule of each ranked mode in the versus window starting at s: Anarchy Series,
+// Anarchy Open, X, then League. Ranked modes never play turf war (rule 0) and the four never share
+// a rule (docs/provenance.md). Derived from the window's start, so the server can apply it to a
+// rotation file written before this rule existed.
+func RankedRules(s time.Time) [4]int32 {
+	n := s.Unix() / int64(vsPeriod/time.Second)
+	if n < 0 {
+		n = -n
+	}
+	p := perms4[n%int64(len(perms4))]
+	return [4]int32{p[0] + 1, p[1] + 1, p[2] + 1, p[3] + 1}
+}
+
+// perms4 is every ordering of four items, so consecutive windows cycle through all of them.
+var perms4 = func() (out [][4]int32) {
+	var walk func(cur []int32, used int)
+	walk = func(cur []int32, used int) {
+		if len(cur) == 4 {
+			out = append(out, [4]int32{cur[0], cur[1], cur[2], cur[3]})
+			return
+		}
+		for v := int32(0); v < 4; v++ {
+			if used&(1<<v) == 0 {
+				walk(append(cur, v), used|1<<v)
+			}
+		}
+	}
+	walk(nil, 0)
+	return out
+}()
 
 // pick chooses n distinct stage ids in 1..stages.
 func pick(rng *rand.Rand, stages, n int) []int32 {
