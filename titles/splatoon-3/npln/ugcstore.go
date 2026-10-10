@@ -209,7 +209,17 @@ func (u *ugcStore) BulkGetDocuments(req *ugcpb.BulkGetDocumentsRequest, stream g
 // RunQuery: ponytail — no query is evaluated yet; every query answers "nothing", one response
 // carrying only read_time, which is how an empty result looks on the wire.
 func (u *ugcStore) RunQuery(req *ugcpb.RunQueryRequest, stream grpc.ServerStreamingServer[ugcpb.RunQueryResponse]) error {
-	log.Printf("[Ugc] RunQuery -> empty")
+	parent := req.GetParent()
+	if i := strings.Index(parent, ugcDocsPart); i >= 0 {
+		parent = parent[i+len(ugcDocsPart):]
+	} else {
+		parent = ""
+	}
+	var colls []string
+	for _, f := range req.GetStructuredQuery().GetFrom() {
+		colls = append(colls, f.GetCollectionId())
+	}
+	log.Printf("[Ugc] RunQuery %s %v -> empty", docKind(parent), colls)
 	return stream.Send(&ugcpb.RunQueryResponse{ReadTime: timestamppb.Now()})
 }
 
@@ -433,3 +443,4 @@ func transform(m *commonpb.MapValue, t *ugcpb.FieldTransform, now *timestamppb.T
 	}
 	return out
 }
+
