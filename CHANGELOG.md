@@ -3,6 +3,12 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.7.9 — 2026-10-10
+
+- Splatoon 3 match referee: a verdict document answers each `@@RefereeRequest` (status 0) and
+  `@@RefereeReport` (status 1) on gamesync (`Options.Referee`, Splatoon 3 only). Private battle
+  rooms hold 10. Both untested on consoles yet.
+
 ## v0.7.8 — 2026-10-10
 
 - Splatoon 3 enters the lobby on a Harbor console and the Stages tab lists the rotation. Co-op
