@@ -216,7 +216,7 @@ func getViolation(_ any, ss grpc.ServerStream) error {
 	if err := sendEmptyHeaders(ss); err != nil {
 		return err
 	}
-	return status.Error(codes.NotFound, "no violation")
+	return notFound("Violation", req.GetName())
 }
 
 // ---- maintenance ----

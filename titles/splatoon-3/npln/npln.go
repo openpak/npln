@@ -50,6 +50,7 @@ import (
 	mtpb "github.com/openpak/npln/proto/maintenance/v1"
 	mmpb "github.com/openpak/npln/proto/matchmaking/v1"
 	toyohrpb "github.com/openpak/npln/proto/toyohr/v1"
+	ugcpb "github.com/openpak/npln/proto/ugcstore/v1"
 
 	"github.com/openpak/npln/bans"
 	"github.com/openpak/npln/titles/splatoon-3/rotation"
@@ -532,6 +533,9 @@ func NewServer(creds credentials.TransportCredentials, rot *atomic.Pointer[rotat
 	mtpb.RegisterMaintenanceScheduleServiceServer(s, &maintenance{})
 	toyohrpb.RegisterLockerServer(s, &locker{})
 	toyohrpb.RegisterCanolaServer(s, &canola{})
+	s.RegisterService(withRawUnary(toyohrpb.FestService_ServiceDesc, festRawHandlers()), &fest{})
+	ugc := newUGCStore(ugcFile())
+	s.RegisterService(withRawUnary(ugcpb.Ugcstore_ServiceDesc, map[string]rawHandler{"GetDocument": ugc.getDocument}), ugc)
 	if rot != nil && rot.Load() != nil {
 		toyohrpb.RegisterScheduleServer(s, &scheduleServer{cur: rot})
 	} else {

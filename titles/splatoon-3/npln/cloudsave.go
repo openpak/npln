@@ -204,7 +204,7 @@ func getSaveRecord(_ any, ss grpc.ServerStream) error {
 		if err := sendEmptyHeaders(ss); err != nil {
 			return err
 		}
-		return status.Error(codes.NotFound, "save record not found")
+		return notFound("SaveRecord", req.GetName())
 	}
 	log.Printf("[CloudSave] get: %d keys", len(rec.GetSaveData().GetFields()))
 	return ss.SendMsg(rec)

@@ -12,7 +12,10 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"google.golang.org/protobuf/proto"
+
 	commonpb "github.com/openpak/npln/proto/common"
+	errpb "github.com/openpak/npln/proto/errdetails"
 	toyohrpb "github.com/openpak/npln/proto/toyohr/v1"
 )
 
@@ -42,7 +45,7 @@ func TestBootServices(t *testing.T) {
 	ctx, cancel := context.WithTimeout(metadata.AppendToOutgoingContext(context.Background(), "authorization", "Bearer "+tok), 10*time.Second)
 	defer cancel()
 
-	// GetViolation: OK, zero messages.
+	// GetViolation: NOT_FOUND after the headers.
 	st, err := cc.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, "/nn.npln.toyohr.v1.UserScreening/GetViolation")
 	if err != nil {
 		t.Fatal(err)
@@ -74,8 +77,8 @@ func TestBootServices(t *testing.T) {
 		t.Fatalf("created record: %v", created)
 	}
 	delta := &commonpb.MapValue{Fields: map[string]*commonpb.Value{
-		"Money": iv(500),
-		"Gear":  {ValueType: &commonpb.Value_MapValue{MapValue: &commonpb.MapValue{Fields: map[string]*commonpb.Value{"b": iv(3)}}}},
+		"Money":  iv(500),
+		"Gear":   {ValueType: &commonpb.Value_MapValue{MapValue: &commonpb.MapValue{Fields: map[string]*commonpb.Value{"b": iv(3)}}}},
 		"Skills": {ValueType: &commonpb.Value_ArrayValue{ArrayValue: &commonpb.ArrayValue{}}},
 	}}
 	w, err := cs.WriteSaveRecord(ctx, &toyohrpb.WriteSaveRecordRequest{Name: "tenants/current/saveRecords/current",
@@ -112,5 +115,18 @@ func TestBootServices(t *testing.T) {
 		m.GetMessage().GetSenderUser() != Tenant+"/users/u-player" ||
 		m.GetMessage().GetMessageResumeToken() <= first.GetKeepAlive().GetMessageResumeToken() {
 		t.Fatalf("echo: %v %v", m, err)
+	}
+}
+
+// The NOT_FOUND detail is an NError carrying a trace id and the generic not-found code.
+func TestNotFoundDetail(t *testing.T) {
+	st := status.Convert(notFound("Document", "services/x"))
+	if st.Code() != codes.NotFound || len(st.Proto().GetDetails()) != 1 {
+		t.Fatalf("status: %v", st)
+	}
+	var ne errpb.NError
+	if err := proto.Unmarshal(st.Proto().GetDetails()[0].GetValue(), &ne); err != nil || len(ne.GetTraceId()) != 32 ||
+		ne.GetDetailCodeType() == nil || len(ne.ProtoReflect().GetUnknown()) == 0 {
+		t.Fatalf("detail: %v %v", &ne, err)
 	}
 }
