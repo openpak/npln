@@ -3,6 +3,14 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.7.10 — 2026-10-10
+
+- Splatoon 3 Private Battle: two Harbor consoles (each in its own network household) create and
+  join a room and set teams; the match start still fails (GamesyncRefereeIdTable1: the consoles'
+  P2P station data for the joiner is not valid when the referee request is written).
+- gamesync: a referee verdict is re-pushed from its room's store (it was overwritten by an empty
+  document); the referee follows the game's -1/0/1 handshake.
+
 ## v0.7.9 — 2026-10-10
 
 - Splatoon 3 match referee: a verdict document answers each `@@RefereeRequest` (status 0) and
