@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package nn.npln.toyohr.v1;
+
+import "proto/toyohr/v1/common.proto";
+
+option go_package = "github.com/openpak/npln/proto/toyohr/v1;toyohr";
+
+message CanolaRegisterDocumentRequest {
+  string name = 1;
+
+  string tweet_id = 2;
+}
+
+message CanolaRegisterDocumentResponse {
+}
+
+service Canola {
+  rpc IkasuDocument ( IkasuDocumentRequest ) returns ( IkasuDocumentResponse );
+
+  rpc SelectDocuments ( SelectDocumentsRequest ) returns ( SelectDocumentsResponse );
+
+  rpc RegisterDocument ( CanolaRegisterDocumentRequest ) returns ( CanolaRegisterDocumentResponse );
+}

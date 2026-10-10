@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package nn.npln.toyohr.v1;
 
+import "google/protobuf/duration.proto";
+
 import "google/protobuf/timestamp.proto";
 
 import "proto/common/value.proto";
@@ -148,4 +150,58 @@ message VsParams {
   nn.npln.common.MapValue attributes = 4;
 
   string params_set_id = 5;
+}
+
+message MessageBody {
+  string message_request_id = 1;
+
+  nn.npln.common.MapValue fields = 2;
+
+  string message_type = 3;
+}
+
+message ReceivedMessage {
+  MessageBody message_body = 1;
+
+  string sender_user = 2;
+
+  string message_resume_token = 4;
+
+  google.protobuf.Timestamp send_time = 5;
+}
+
+message KeepAlive {
+  google.protobuf.Duration idle_timeout = 1;
+
+  string message_resume_token = 2;
+}
+
+message Report {
+  string name = 1;
+
+  string category = 2;
+
+  string reason = 3;
+
+  string language_code = 4;
+
+  google.protobuf.Timestamp create_time = 5;
+
+  string screening_target = 6;
+
+  double weight = 7;
+
+  nn.npln.common.MapValue context = 8;
+
+  string screening_target_type = 9;
+}
+
+message SaveRecord {
+  string name = 1;
+
+  nn.npln.common.MapValue save_data = 2;
+
+  google.protobuf.Timestamp create_time = 3;
+
+  google.protobuf.Timestamp update_time = 4;
 }

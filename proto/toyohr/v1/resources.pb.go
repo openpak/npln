@@ -10,6 +10,7 @@ import (
 	common "github.com/openpak/npln/proto/common"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -747,6 +748,362 @@ func (x *VsParams) GetParamsSetId() string {
 	return ""
 }
 
+type MessageBody struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	MessageRequestId string                 `protobuf:"bytes,1,opt,name=message_request_id,json=messageRequestId,proto3" json:"message_request_id,omitempty"`
+	Fields           *common.MapValue       `protobuf:"bytes,2,opt,name=fields,proto3" json:"fields,omitempty"`
+	MessageType      string                 `protobuf:"bytes,3,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *MessageBody) Reset() {
+	*x = MessageBody{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageBody) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageBody) ProtoMessage() {}
+
+func (x *MessageBody) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageBody.ProtoReflect.Descriptor instead.
+func (*MessageBody) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *MessageBody) GetMessageRequestId() string {
+	if x != nil {
+		return x.MessageRequestId
+	}
+	return ""
+}
+
+func (x *MessageBody) GetFields() *common.MapValue {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+func (x *MessageBody) GetMessageType() string {
+	if x != nil {
+		return x.MessageType
+	}
+	return ""
+}
+
+type ReceivedMessage struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	MessageBody        *MessageBody           `protobuf:"bytes,1,opt,name=message_body,json=messageBody,proto3" json:"message_body,omitempty"`
+	SenderUser         string                 `protobuf:"bytes,2,opt,name=sender_user,json=senderUser,proto3" json:"sender_user,omitempty"`
+	MessageResumeToken string                 `protobuf:"bytes,4,opt,name=message_resume_token,json=messageResumeToken,proto3" json:"message_resume_token,omitempty"`
+	SendTime           *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=send_time,json=sendTime,proto3" json:"send_time,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *ReceivedMessage) Reset() {
+	*x = ReceivedMessage{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReceivedMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReceivedMessage) ProtoMessage() {}
+
+func (x *ReceivedMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReceivedMessage.ProtoReflect.Descriptor instead.
+func (*ReceivedMessage) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ReceivedMessage) GetMessageBody() *MessageBody {
+	if x != nil {
+		return x.MessageBody
+	}
+	return nil
+}
+
+func (x *ReceivedMessage) GetSenderUser() string {
+	if x != nil {
+		return x.SenderUser
+	}
+	return ""
+}
+
+func (x *ReceivedMessage) GetMessageResumeToken() string {
+	if x != nil {
+		return x.MessageResumeToken
+	}
+	return ""
+}
+
+func (x *ReceivedMessage) GetSendTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SendTime
+	}
+	return nil
+}
+
+type KeepAlive struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	IdleTimeout        *durationpb.Duration   `protobuf:"bytes,1,opt,name=idle_timeout,json=idleTimeout,proto3" json:"idle_timeout,omitempty"`
+	MessageResumeToken string                 `protobuf:"bytes,2,opt,name=message_resume_token,json=messageResumeToken,proto3" json:"message_resume_token,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *KeepAlive) Reset() {
+	*x = KeepAlive{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KeepAlive) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KeepAlive) ProtoMessage() {}
+
+func (x *KeepAlive) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KeepAlive.ProtoReflect.Descriptor instead.
+func (*KeepAlive) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *KeepAlive) GetIdleTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.IdleTimeout
+	}
+	return nil
+}
+
+func (x *KeepAlive) GetMessageResumeToken() string {
+	if x != nil {
+		return x.MessageResumeToken
+	}
+	return ""
+}
+
+type Report struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Name                string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Category            string                 `protobuf:"bytes,2,opt,name=category,proto3" json:"category,omitempty"`
+	Reason              string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	LanguageCode        string                 `protobuf:"bytes,4,opt,name=language_code,json=languageCode,proto3" json:"language_code,omitempty"`
+	CreateTime          *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
+	ScreeningTarget     string                 `protobuf:"bytes,6,opt,name=screening_target,json=screeningTarget,proto3" json:"screening_target,omitempty"`
+	Weight              float64                `protobuf:"fixed64,7,opt,name=weight,proto3" json:"weight,omitempty"`
+	Context             *common.MapValue       `protobuf:"bytes,8,opt,name=context,proto3" json:"context,omitempty"`
+	ScreeningTargetType string                 `protobuf:"bytes,9,opt,name=screening_target_type,json=screeningTargetType,proto3" json:"screening_target_type,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *Report) Reset() {
+	*x = Report{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Report) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Report) ProtoMessage() {}
+
+func (x *Report) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Report.ProtoReflect.Descriptor instead.
+func (*Report) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *Report) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Report) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
+func (x *Report) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *Report) GetLanguageCode() string {
+	if x != nil {
+		return x.LanguageCode
+	}
+	return ""
+}
+
+func (x *Report) GetCreateTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreateTime
+	}
+	return nil
+}
+
+func (x *Report) GetScreeningTarget() string {
+	if x != nil {
+		return x.ScreeningTarget
+	}
+	return ""
+}
+
+func (x *Report) GetWeight() float64 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
+}
+
+func (x *Report) GetContext() *common.MapValue {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *Report) GetScreeningTargetType() string {
+	if x != nil {
+		return x.ScreeningTargetType
+	}
+	return ""
+}
+
+type SaveRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	SaveData      *common.MapValue       `protobuf:"bytes,2,opt,name=save_data,json=saveData,proto3" json:"save_data,omitempty"`
+	CreateTime    *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
+	UpdateTime    *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=update_time,json=updateTime,proto3" json:"update_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveRecord) Reset() {
+	*x = SaveRecord{}
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveRecord) ProtoMessage() {}
+
+func (x *SaveRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveRecord.ProtoReflect.Descriptor instead.
+func (*SaveRecord) Descriptor() ([]byte, []int) {
+	return file_proto_toyohr_v1_resources_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *SaveRecord) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SaveRecord) GetSaveData() *common.MapValue {
+	if x != nil {
+		return x.SaveData
+	}
+	return nil
+}
+
+func (x *SaveRecord) GetCreateTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreateTime
+	}
+	return nil
+}
+
+func (x *SaveRecord) GetUpdateTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdateTime
+	}
+	return nil
+}
+
 type CoopSchedule_Normal struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Stage         int32                  `protobuf:"varint,1,opt,name=stage,proto3" json:"stage,omitempty"`
@@ -762,7 +1119,7 @@ type CoopSchedule_Normal struct {
 
 func (x *CoopSchedule_Normal) Reset() {
 	*x = CoopSchedule_Normal{}
-	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[9]
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -774,7 +1131,7 @@ func (x *CoopSchedule_Normal) String() string {
 func (*CoopSchedule_Normal) ProtoMessage() {}
 
 func (x *CoopSchedule_Normal) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[9]
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -850,7 +1207,7 @@ type LeagueSchedule_Slot struct {
 
 func (x *LeagueSchedule_Slot) Reset() {
 	*x = LeagueSchedule_Slot{}
-	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[10]
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -862,7 +1219,7 @@ func (x *LeagueSchedule_Slot) String() string {
 func (*LeagueSchedule_Slot) ProtoMessage() {}
 
 func (x *LeagueSchedule_Slot) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[10]
+	mi := &file_proto_toyohr_v1_resources_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -903,7 +1260,7 @@ var File_proto_toyohr_v1_resources_proto protoreflect.FileDescriptor
 
 const file_proto_toyohr_v1_resources_proto_rawDesc = "" +
 	"\n" +
-	"\x1fproto/toyohr/v1/resources.proto\x12\x11nn.npln.toyohr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x18proto/common/value.proto\"g\n" +
+	"\x1fproto/toyohr/v1/resources.proto\x12\x11nn.npln.toyohr.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x18proto/common/value.proto\"g\n" +
 	"\x0fRegularSettings\x12\x1a\n" +
 	"\x06stages\x18\x01 \x03(\x05B\x02\x10\x01R\x06stages\x128\n" +
 	"\n" +
@@ -1000,7 +1357,39 @@ const file_proto_toyohr_v1_resources_proto_rawDesc = "" +
 	"\n" +
 	"attributes\x18\x04 \x01(\v2\x18.nn.npln.common.MapValueR\n" +
 	"attributes\x12\"\n" +
-	"\rparams_set_id\x18\x05 \x01(\tR\vparamsSetIdB0Z.github.com/openpak/npln/proto/toyohr/v1;toyohrb\x06proto3"
+	"\rparams_set_id\x18\x05 \x01(\tR\vparamsSetId\"\x90\x01\n" +
+	"\vMessageBody\x12,\n" +
+	"\x12message_request_id\x18\x01 \x01(\tR\x10messageRequestId\x120\n" +
+	"\x06fields\x18\x02 \x01(\v2\x18.nn.npln.common.MapValueR\x06fields\x12!\n" +
+	"\fmessage_type\x18\x03 \x01(\tR\vmessageType\"\xe0\x01\n" +
+	"\x0fReceivedMessage\x12A\n" +
+	"\fmessage_body\x18\x01 \x01(\v2\x1e.nn.npln.toyohr.v1.MessageBodyR\vmessageBody\x12\x1f\n" +
+	"\vsender_user\x18\x02 \x01(\tR\n" +
+	"senderUser\x120\n" +
+	"\x14message_resume_token\x18\x04 \x01(\tR\x12messageResumeToken\x127\n" +
+	"\tsend_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\bsendTime\"{\n" +
+	"\tKeepAlive\x12<\n" +
+	"\fidle_timeout\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\vidleTimeout\x120\n" +
+	"\x14message_resume_token\x18\x02 \x01(\tR\x12messageResumeToken\"\xdd\x02\n" +
+	"\x06Report\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
+	"\bcategory\x18\x02 \x01(\tR\bcategory\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12#\n" +
+	"\rlanguage_code\x18\x04 \x01(\tR\flanguageCode\x12;\n" +
+	"\vcreate_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"createTime\x12)\n" +
+	"\x10screening_target\x18\x06 \x01(\tR\x0fscreeningTarget\x12\x16\n" +
+	"\x06weight\x18\a \x01(\x01R\x06weight\x122\n" +
+	"\acontext\x18\b \x01(\v2\x18.nn.npln.common.MapValueR\acontext\x122\n" +
+	"\x15screening_target_type\x18\t \x01(\tR\x13screeningTargetType\"\xd1\x01\n" +
+	"\n" +
+	"SaveRecord\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x125\n" +
+	"\tsave_data\x18\x02 \x01(\v2\x18.nn.npln.common.MapValueR\bsaveData\x12;\n" +
+	"\vcreate_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"createTime\x12;\n" +
+	"\vupdate_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"updateTimeB0Z.github.com/openpak/npln/proto/toyohr/v1;toyohrb\x06proto3"
 
 var (
 	file_proto_toyohr_v1_resources_proto_rawDescOnce sync.Once
@@ -1014,7 +1403,7 @@ func file_proto_toyohr_v1_resources_proto_rawDescGZIP() []byte {
 	return file_proto_toyohr_v1_resources_proto_rawDescData
 }
 
-var file_proto_toyohr_v1_resources_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_proto_toyohr_v1_resources_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_proto_toyohr_v1_resources_proto_goTypes = []any{
 	(*RegularSettings)(nil),       // 0: nn.npln.toyohr.v1.RegularSettings
 	(*BankaraSettings)(nil),       // 1: nn.npln.toyohr.v1.BankaraSettings
@@ -1025,46 +1414,61 @@ var file_proto_toyohr_v1_resources_proto_goTypes = []any{
 	(*SeasonSchedule)(nil),        // 6: nn.npln.toyohr.v1.SeasonSchedule
 	(*LeagueSchedule)(nil),        // 7: nn.npln.toyohr.v1.LeagueSchedule
 	(*VsParams)(nil),              // 8: nn.npln.toyohr.v1.VsParams
-	(*CoopSchedule_Normal)(nil),   // 9: nn.npln.toyohr.v1.CoopSchedule.Normal
-	(*LeagueSchedule_Slot)(nil),   // 10: nn.npln.toyohr.v1.LeagueSchedule.Slot
-	(*common.MapValue)(nil),       // 11: nn.npln.common.MapValue
-	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
+	(*MessageBody)(nil),           // 9: nn.npln.toyohr.v1.MessageBody
+	(*ReceivedMessage)(nil),       // 10: nn.npln.toyohr.v1.ReceivedMessage
+	(*KeepAlive)(nil),             // 11: nn.npln.toyohr.v1.KeepAlive
+	(*Report)(nil),                // 12: nn.npln.toyohr.v1.Report
+	(*SaveRecord)(nil),            // 13: nn.npln.toyohr.v1.SaveRecord
+	(*CoopSchedule_Normal)(nil),   // 14: nn.npln.toyohr.v1.CoopSchedule.Normal
+	(*LeagueSchedule_Slot)(nil),   // 15: nn.npln.toyohr.v1.LeagueSchedule.Slot
+	(*common.MapValue)(nil),       // 16: nn.npln.common.MapValue
+	(*timestamppb.Timestamp)(nil), // 17: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 18: google.protobuf.Duration
 }
 var file_proto_toyohr_v1_resources_proto_depIdxs = []int32{
-	11, // 0: nn.npln.toyohr.v1.RegularSettings.attributes:type_name -> nn.npln.common.MapValue
-	11, // 1: nn.npln.toyohr.v1.BankaraSettings.attributes:type_name -> nn.npln.common.MapValue
-	11, // 2: nn.npln.toyohr.v1.XSettings.attributes:type_name -> nn.npln.common.MapValue
-	11, // 3: nn.npln.toyohr.v1.LeagueSettings.field_4:type_name -> nn.npln.common.MapValue
-	11, // 4: nn.npln.toyohr.v1.LeagueSettings.field_5:type_name -> nn.npln.common.MapValue
-	12, // 5: nn.npln.toyohr.v1.VsSchedule.start_time:type_name -> google.protobuf.Timestamp
-	12, // 6: nn.npln.toyohr.v1.VsSchedule.end_time:type_name -> google.protobuf.Timestamp
+	16, // 0: nn.npln.toyohr.v1.RegularSettings.attributes:type_name -> nn.npln.common.MapValue
+	16, // 1: nn.npln.toyohr.v1.BankaraSettings.attributes:type_name -> nn.npln.common.MapValue
+	16, // 2: nn.npln.toyohr.v1.XSettings.attributes:type_name -> nn.npln.common.MapValue
+	16, // 3: nn.npln.toyohr.v1.LeagueSettings.field_4:type_name -> nn.npln.common.MapValue
+	16, // 4: nn.npln.toyohr.v1.LeagueSettings.field_5:type_name -> nn.npln.common.MapValue
+	17, // 5: nn.npln.toyohr.v1.VsSchedule.start_time:type_name -> google.protobuf.Timestamp
+	17, // 6: nn.npln.toyohr.v1.VsSchedule.end_time:type_name -> google.protobuf.Timestamp
 	0,  // 7: nn.npln.toyohr.v1.VsSchedule.regular_settings:type_name -> nn.npln.toyohr.v1.RegularSettings
 	1,  // 8: nn.npln.toyohr.v1.VsSchedule.bankara_settings:type_name -> nn.npln.toyohr.v1.BankaraSettings
 	2,  // 9: nn.npln.toyohr.v1.VsSchedule.x_settings:type_name -> nn.npln.toyohr.v1.XSettings
 	3,  // 10: nn.npln.toyohr.v1.VsSchedule.league_settings:type_name -> nn.npln.toyohr.v1.LeagueSettings
-	12, // 11: nn.npln.toyohr.v1.CoopSchedule.start_time:type_name -> google.protobuf.Timestamp
-	12, // 12: nn.npln.toyohr.v1.CoopSchedule.end_time:type_name -> google.protobuf.Timestamp
-	9,  // 13: nn.npln.toyohr.v1.CoopSchedule.normal:type_name -> nn.npln.toyohr.v1.CoopSchedule.Normal
-	12, // 14: nn.npln.toyohr.v1.CoopSchedule.timestamp:type_name -> google.protobuf.Timestamp
-	12, // 15: nn.npln.toyohr.v1.SeasonSchedule.start_time:type_name -> google.protobuf.Timestamp
-	12, // 16: nn.npln.toyohr.v1.SeasonSchedule.end_time:type_name -> google.protobuf.Timestamp
-	11, // 17: nn.npln.toyohr.v1.SeasonSchedule.attributes:type_name -> nn.npln.common.MapValue
-	11, // 18: nn.npln.toyohr.v1.LeagueSchedule.attributes:type_name -> nn.npln.common.MapValue
-	12, // 19: nn.npln.toyohr.v1.LeagueSchedule.timestamp:type_name -> google.protobuf.Timestamp
-	10, // 20: nn.npln.toyohr.v1.LeagueSchedule.slots:type_name -> nn.npln.toyohr.v1.LeagueSchedule.Slot
-	12, // 21: nn.npln.toyohr.v1.LeagueSchedule.start_time:type_name -> google.protobuf.Timestamp
-	12, // 22: nn.npln.toyohr.v1.LeagueSchedule.end_time:type_name -> google.protobuf.Timestamp
-	12, // 23: nn.npln.toyohr.v1.VsParams.timestamp_1:type_name -> google.protobuf.Timestamp
-	12, // 24: nn.npln.toyohr.v1.VsParams.timestamp_2:type_name -> google.protobuf.Timestamp
-	11, // 25: nn.npln.toyohr.v1.VsParams.attributes:type_name -> nn.npln.common.MapValue
-	11, // 26: nn.npln.toyohr.v1.CoopSchedule.Normal.attributes:type_name -> nn.npln.common.MapValue
-	12, // 27: nn.npln.toyohr.v1.LeagueSchedule.Slot.start_time:type_name -> google.protobuf.Timestamp
-	12, // 28: nn.npln.toyohr.v1.LeagueSchedule.Slot.end_time:type_name -> google.protobuf.Timestamp
-	29, // [29:29] is the sub-list for method output_type
-	29, // [29:29] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	17, // 11: nn.npln.toyohr.v1.CoopSchedule.start_time:type_name -> google.protobuf.Timestamp
+	17, // 12: nn.npln.toyohr.v1.CoopSchedule.end_time:type_name -> google.protobuf.Timestamp
+	14, // 13: nn.npln.toyohr.v1.CoopSchedule.normal:type_name -> nn.npln.toyohr.v1.CoopSchedule.Normal
+	17, // 14: nn.npln.toyohr.v1.CoopSchedule.timestamp:type_name -> google.protobuf.Timestamp
+	17, // 15: nn.npln.toyohr.v1.SeasonSchedule.start_time:type_name -> google.protobuf.Timestamp
+	17, // 16: nn.npln.toyohr.v1.SeasonSchedule.end_time:type_name -> google.protobuf.Timestamp
+	16, // 17: nn.npln.toyohr.v1.SeasonSchedule.attributes:type_name -> nn.npln.common.MapValue
+	16, // 18: nn.npln.toyohr.v1.LeagueSchedule.attributes:type_name -> nn.npln.common.MapValue
+	17, // 19: nn.npln.toyohr.v1.LeagueSchedule.timestamp:type_name -> google.protobuf.Timestamp
+	15, // 20: nn.npln.toyohr.v1.LeagueSchedule.slots:type_name -> nn.npln.toyohr.v1.LeagueSchedule.Slot
+	17, // 21: nn.npln.toyohr.v1.LeagueSchedule.start_time:type_name -> google.protobuf.Timestamp
+	17, // 22: nn.npln.toyohr.v1.LeagueSchedule.end_time:type_name -> google.protobuf.Timestamp
+	17, // 23: nn.npln.toyohr.v1.VsParams.timestamp_1:type_name -> google.protobuf.Timestamp
+	17, // 24: nn.npln.toyohr.v1.VsParams.timestamp_2:type_name -> google.protobuf.Timestamp
+	16, // 25: nn.npln.toyohr.v1.VsParams.attributes:type_name -> nn.npln.common.MapValue
+	16, // 26: nn.npln.toyohr.v1.MessageBody.fields:type_name -> nn.npln.common.MapValue
+	9,  // 27: nn.npln.toyohr.v1.ReceivedMessage.message_body:type_name -> nn.npln.toyohr.v1.MessageBody
+	17, // 28: nn.npln.toyohr.v1.ReceivedMessage.send_time:type_name -> google.protobuf.Timestamp
+	18, // 29: nn.npln.toyohr.v1.KeepAlive.idle_timeout:type_name -> google.protobuf.Duration
+	17, // 30: nn.npln.toyohr.v1.Report.create_time:type_name -> google.protobuf.Timestamp
+	16, // 31: nn.npln.toyohr.v1.Report.context:type_name -> nn.npln.common.MapValue
+	16, // 32: nn.npln.toyohr.v1.SaveRecord.save_data:type_name -> nn.npln.common.MapValue
+	17, // 33: nn.npln.toyohr.v1.SaveRecord.create_time:type_name -> google.protobuf.Timestamp
+	17, // 34: nn.npln.toyohr.v1.SaveRecord.update_time:type_name -> google.protobuf.Timestamp
+	16, // 35: nn.npln.toyohr.v1.CoopSchedule.Normal.attributes:type_name -> nn.npln.common.MapValue
+	17, // 36: nn.npln.toyohr.v1.LeagueSchedule.Slot.start_time:type_name -> google.protobuf.Timestamp
+	17, // 37: nn.npln.toyohr.v1.LeagueSchedule.Slot.end_time:type_name -> google.protobuf.Timestamp
+	38, // [38:38] is the sub-list for method output_type
+	38, // [38:38] is the sub-list for method input_type
+	38, // [38:38] is the sub-list for extension type_name
+	38, // [38:38] is the sub-list for extension extendee
+	0,  // [0:38] is the sub-list for field type_name
 }
 
 func init() { file_proto_toyohr_v1_resources_proto_init() }
@@ -1078,7 +1482,7 @@ func file_proto_toyohr_v1_resources_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_toyohr_v1_resources_proto_rawDesc), len(file_proto_toyohr_v1_resources_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
