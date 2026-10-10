@@ -742,6 +742,9 @@ func (g *gamesyncServer) apply(ctx context.Context, ops []*gspb.WriteOperation) 
 			doc = g.withStationLocked(gsid, ussFromDocPath(n), doc) // never deliver placeholder ids (upcsid=0)
 		}
 		g.deliver(gsid, opName(op), kind, doc)
+		if op.GetDeleteDocument() == nil {
+			g.publishVerdict(gsid, opName(op), g.store[k])
+		}
 		if os.Getenv("NPLN_GS_DIAG") != "" && redact.TraceBodies() {
 			log.Printf("[GS][DIAG] %s = %s", opName(op), prototext.MarshalOptions{Multiline: false}.Format(g.store[k]))
 		}

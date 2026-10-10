@@ -285,6 +285,8 @@ in its generated bindings); the schema is Nintendo's and shared across NPLN tena
 | coturn ephemeral credentials | TURN `username = "<unix-expiry>:<user>"`, `password = base64(HMAC-SHA1(static-auth-secret, username))`, STUN/TURN on `3478`. The reference points `AllocateIceServerSet` at a stock coturn using this scheme | N; P — coturn's published REST-auth (TURN REST API / RFC 7635 §2.2) |
 | A partial ICE object | the client rejects the whole set and emits no STUN probe. So every field must be filled — measured the same day as the relay captures | N |
 | A created room's properties | the client's own properties plus `_BaseConfigName` (the matchmaking config's last segment) and `_AliasSuffix` (the room code); the config is echoed under the concrete tenant | N (`matchmaking.go`) |
+| Room capacity | a private battle room holds 10 (eight players, two spectators); the friend party that waits for matchmaking (`join_room_4_no_referee_config`) holds 4 | N (`matchmaking.go`) |
+| The match referee | at the start each console writes `…/@@RefereeRequest/<time>_<game session>` and watches `@@RefereeResult`; without a verdict the "getting ready" countdown ends in a communication error. At the end it writes `…/@@RefereeReport/<time>_<game session>/User/<user session>`. The verdict is one document `…/@@RefereeResult/<time>_<game session>` (first segment only), `request_id` = that suffix, `status` 0 at the start and 1 when decided, carrying the request's context and the report's `team_result`/`personal_result`; field inventory of a Turf War verdict: 25 keys | N (`gamesync.go`, notes on captures of real matches) |
 
 ## Boot-time toyohr services (2026-10-10)
 

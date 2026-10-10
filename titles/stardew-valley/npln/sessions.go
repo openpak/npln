@@ -292,6 +292,14 @@ func capacityFromConfig(cfg string) int32 {
 	if strings.HasPrefix(name, "CourseMatch") {
 		return 4
 	}
+	// Splatoon 3: a private battle room holds 10 (eight players, two spectators); the friend
+	// party that waits for public matchmaking, 4 (titles/splatoon-3/docs/provenance.md).
+	if strings.Contains(name, "private_match") {
+		return 10
+	}
+	if name == "join_room_4_no_referee_config" {
+		return 4
+	}
 	if !strings.HasPrefix(name, "Mmc_") {
 		return 0
 	}

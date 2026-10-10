@@ -443,4 +443,3 @@ func transform(m *commonpb.MapValue, t *ugcpb.FieldTransform, now *timestamppb.T
 	}
 	return out
 }
-

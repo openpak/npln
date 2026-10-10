@@ -175,6 +175,9 @@ type Options struct {
 	Messaging  bool // messaging.v1 Messaging (messaging.go)
 	UGC        bool // ugcstore.v1 Ugcstore and Screening (ugcstore.go)
 	Hydro      bool // hydro.v1 Datastore (hydro.go)
+
+	// Referee publishes Splatoon 3's match verdicts on gamesync (referee.go).
+	Referee bool
 }
 
 // titleOptions are the hosted title's Options; a package variable for the same reason as Tenant.
