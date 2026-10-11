@@ -651,8 +651,13 @@ func (g *sessionServer) AllocateIceServerSet(ctx context.Context, req *mmpb.Allo
 }
 
 func (g *sessionServer) ListLatencyMeasurementServers(ctx context.Context, req *mmpb.ListLatencyMeasurementServersRequest) (*mmpb.ListLatencyMeasurementServersResponse, error) {
-	host := envOr("NPLN_LATENCY_HOST", "127.0.0.1")
+	// The console pings each server with a STUN Binding Request and accepts any reply from that
+	// exact address that echoes its transaction id, so the STUN server is the latency server. A
+	// default of 127.0.0.1 sent a real Switch's probes to its own loopback: Splatoon 3 then gave
+	// up online about 6 s later, while Harbor carried on (titles/splatoon-3/docs/provenance.md).
+	host := envOr("NPLN_LATENCY_HOST", envOr("NPLN_STUN_HOST", "127.0.0.1"))
+	port := envInt("NPLN_LATENCY_PORT", envInt("NPLN_STUN_PORT", 3478))
 	return &mmpb.ListLatencyMeasurementServersResponse{LatencyMeasurementServers: []*mmpb.LatencyMeasurementServer{
-		{Name: tenantFromCtx(ctx) + "/latencyMeasurementServers/eu-01-udp", Region: "europe-west2", Host: host, Port: envInt("NPLN_LATENCY_PORT", 18504), Protocol: mmpb.LatencyMeasurementServer_UDP},
+		{Name: tenantFromCtx(ctx) + "/latencyMeasurementServers/eu-01-udp", Region: "europe-west2", Host: host, Port: port, Protocol: mmpb.LatencyMeasurementServer_UDP},
 	}}, nil
 }

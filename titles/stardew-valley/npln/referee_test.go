@@ -1,6 +1,7 @@
 package npln
 
 import (
+	"context"
 	"testing"
 
 	commonpb "github.com/openpak/npln/proto/common"
@@ -54,5 +55,19 @@ func TestRefereeVerdict(t *testing.T) {
 	g.mu.Unlock()
 	if f := g.fields("p/docs/@@RefereeResult/1791000000_0e3c1b2a-aaaa-bbbb-cccc-0123456789ab", "uss1"); f.GetFields()["request_id"] == nil {
 		t.Fatalf("re-push lost the verdict: %v", f)
+	}
+}
+
+// The latency server is the STUN server unless NPLN_LATENCY_HOST names another: never loopback
+// when the STUN host is configured.
+func TestLatencyServerIsStun(t *testing.T) {
+	t.Setenv("NPLN_STUN_HOST", "203.0.113.7")
+	t.Setenv("NPLN_LATENCY_HOST", "")
+	r, err := newSessionServer().ListLatencyMeasurementServers(context.Background(), nil)
+	if err != nil || len(r.GetLatencyMeasurementServers()) != 1 {
+		t.Fatal(r, err)
+	}
+	if s := r.GetLatencyMeasurementServers()[0]; s.GetHost() != "203.0.113.7" || s.GetPort() != 3478 {
+		t.Fatalf("latency server %s:%d", s.GetHost(), s.GetPort())
 	}
 }
