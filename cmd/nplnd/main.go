@@ -36,7 +36,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("load TLS cert: %s", redact.Err(err))
 	}
-	creds := credentials.NewTLS(&tls.Config{
+	var creds credentials.TransportCredentials = credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{cert},
 		// The console lists "grpc-exp" FIRST and "h2" second. Advertising only
 		// h2 meant every console connection negotiated plain HTTP/2, created a
@@ -52,6 +52,7 @@ func main() {
 			return nil, nil
 		},
 	})
+	creds = traceCreds{creds} // HTTP/2 frame accounting per connection (h2trace.go)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("listen %s: %s", addr, redact.Err(err))
