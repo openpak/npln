@@ -11,6 +11,12 @@ of truth; this file is the readable summary.
   The handlers read those attributes again; auth attributes still have to come before
   MESSAGE-INTEGRITY. The coturn commit is pinned. Deployed to the box by hand; not in the npln image.
 
+## v0.7.11 — 2026-10-11
+
+- nplnd logs each connection's HTTP/2 frame counts per side, GOAWAY/RST_STREAM codes and who
+  closed it ([H2] lines), to find why a real Switch running Splatoon 3 hangs up after
+  ListLatencyMeasurementServers.
+
 ## v0.7.10 — 2026-10-10
 
 - Splatoon 3 Private Battle: two Harbor consoles (each in its own network household) create and
