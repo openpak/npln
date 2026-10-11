@@ -21,8 +21,11 @@ Files: `deploy/oci/`. Nothing here needs the local podman stack.
    `gamesync.npln.nintendo.net`. Point it straight at this box's public IP and the same port; no
    router rule, no conflict with Splatoon 3 using the same SNI.
 3. **STUN/TURN.** Addresses handed out by this server (`NPLN_STUN_HOST` / `NPLN_TURN_HOST`); the
-   consoles talk to coturn directly. Pia omits REQUESTED-TRANSPORT in ALLOCATE, so use the
-   patched build in `deploy/oci/Dockerfile.coturn`.
+   consoles talk to coturn directly. Pia puts its method attributes (REQUESTED-TRANSPORT,
+   CHANNEL-NUMBER, XOR-PEER-ADDRESS) after MESSAGE-INTEGRITY, which stock coturn ignores, so
+   every channel bind fails with 400: use the patched build in `deploy/oci/Dockerfile.coturn`
+   (box image `localhost/oci_turn:latest`, quadlet `openpak-turn`). Check it with
+   `deploy/oci/piaturn.py`, a Pia-shaped client.
 4. **NAT check (nncs2-*), account, BAAS, friends.** Shared production services; nothing to deploy.
 
 ## Server-to-server

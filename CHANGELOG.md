@@ -3,6 +3,14 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## Unreleased — 2026-10-11
+
+- TURN (coturn, `deploy/oci/Dockerfile.coturn`): Pia writes CHANNEL-NUMBER and XOR-PEER-ADDRESS
+  after MESSAGE-INTEGRITY and coturn ignored them, so every Pia CHANNEL-BIND got 400 and no relay
+  ever formed (captured on the box 2026-10-11, Terraria Switch <-> Harbor across two networks).
+  The handlers read those attributes again; auth attributes still have to come before
+  MESSAGE-INTEGRITY. The coturn commit is pinned. Deployed to the box by hand; not in the npln image.
+
 ## v0.7.10 — 2026-10-10
 
 - Splatoon 3 Private Battle: two Harbor consoles (each in its own network household) create and
