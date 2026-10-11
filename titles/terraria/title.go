@@ -17,6 +17,17 @@
 // The Pia relay host it resolves (g2122d301.lp1.p.srv.nintendo.net) is never dialled — ICE
 // through our own TURN is enough. The JP (010024B00F9D0000) and KR (0100E990104DC000) releases
 // are untested; they are expected to share this tenant.
+//
+// Friends' worlds in the Join list (read from the 1.4.5.6 IL2CPP build, confirmed on hardware
+// 2026-10-11): the list comes from nn.npln.friends.v1.PresenceService only, never from
+// nn::friends presence. Each player publishes two attributes, type="Terraria" and
+// session=base64(MPSession_Switch.WriteGameProperties); a friend's world is listed when the
+// presence is ONLINE, type is "Terraria" and session is non-empty and parses. A world hosted
+// with the Host screen's "Invite Only" toggle on (GUIMultiplayerHost.InviteOnly, label key
+// Mobile.OpenInviteOnlyTitle, off at each game launch) carries InviteOnly=1 in that blob and
+// Switch_FriendUserPresence.UpdateSessions drops it, so it never shows in a friend's Join
+// list; invitations still work. "A Switch's world is missing from the list but invites work"
+// is that toggle, not the server.
 package terraria
 
 import "github.com/openpak/npln/titles/stardewset"
