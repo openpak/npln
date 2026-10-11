@@ -3,6 +3,12 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.7.12 — 2026-10-11
+
+- ListLatencyMeasurementServers names the STUN server (NPLN_STUN_HOST:NPLN_STUN_PORT) instead of
+  an unset 127.0.0.1:18504, for every title on Stardew's service set. A real Switch probed its own
+  loopback and Splatoon 3 gave up online ~6 s later with a communication error; Harbor carried on.
+
 ## v0.7.11 — 2026-10-11
 
 - nplnd logs each connection's HTTP/2 frame counts per side, GOAWAY/RST_STREAM codes and who
