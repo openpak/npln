@@ -1,17 +1,19 @@
 # Switch lobby investigation — 2026-10-12
 
-> **RESOLVED 2026-10-14: this was the console's network clock, not the server.** The game calls
-> `nn::time::StandardNetworkSystemClock::GetCurrentTime` (returns 0) and then `IsAccuracySufficient`, which
+> **RESOLVED 2026-10-14: the console's network clock, not the server.** The game calls
+> `nn::time::StandardNetworkSystemClock::GetCurrentTime` (returned 0) and then `IsAccuracySufficient`, which
 > returned **false** on the Switch (read with a debugger at `main+0x3b08b4c`/`+0x3b08b54`); it then raises a
 > kind-only error through `main+0x14f44cc` and closes the NPLN connection itself. Harbor's emulated time service
-> always answers "sufficient", so Harbor never hit it. The console never recalibrates its network clock here (no NTP
-> or time lookup appears in dns.mitm's debug log, and no UDP 123 reached the box).
-> **Fix (console setting, no game patch, nothing on the server):** `/atmosphere/config/system_settings.ini` gets
-> `[time]` / `standard_network_clock_sufficient_accuracy_minutes = u32!0x2819a0` (about 5 years), then reboot.
-> After that the Switch made every post-latency call (lobby messaging, schedules, cloud save record, game record)
-> and reached the lobby. Every hypothesis below (TLS, peer name, SaltyNX, latency regions, UDP replies, account) was
-> rejected and none of them was the cause; the Splatoon 3 certificate/peer-name patches from a third-party tool were
-> tested on hardware and changed nothing. See `servers/` docs repo `switch/prelude-patch-tracking.md`.
+> always answers "sufficient", so Harbor never hit it.
+> **Root causes (both fixed, no game patch, no `[time]` stopgap needed):** (1) the community sysmodule `sys-patch`
+> on the SD (`[nim] blankcal0crashfix_17.0.0+`) nulled nim's SSL-context callback (`mov x2,xzr` at nim VA 0x19ecd4),
+> so nim's HTTPS wrapper failed with curl code 94 before any ClientHello and the clock was never recalibrated;
+> disabled with `=0` (emuMMC serves the real CAL0). (2) nim 23.0.x accepts only `{"unixtime":"<ms>"}` from
+> `api.hac.lp1.ctest.srv.nintendo.net/v1/time`; nx-baas now answers that (commit 34d7a07, deployed). With both in
+> place nim calibrated (no retry burst) and the Switch reached the lobby with no overrides. Every hypothesis below
+> (TLS, peer name, SaltyNX, latency regions, UDP replies, account) was rejected; the third-party Splatoon 3
+> certificate/peer-name patches were tested on hardware and changed nothing. See the docs repo
+> `switch/sys-patch-notes.md` and `switch/prelude-patch-tracking.md`.
 
 
 The retail Switch reports “A communication error has occurred”; Harbor reaches the lobby.
