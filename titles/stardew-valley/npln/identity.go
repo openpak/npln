@@ -112,8 +112,8 @@ func adapterIdentity(q map[string]any) (*Account, error) {
 
 func lookupAccount(pid uint64) (*Account, error) { return adapterIdentity(map[string]any{"pid": pid}) }
 
-// accountFromOpenPak pulls the openpak claim out of the id_token and has the adapter prove it.
-func accountFromOpenPak(idToken string) (*Account, error) {
+// accountFromOpenPakToken pulls the openpak claim out of the id_token and has the adapter prove it.
+func accountFromOpenPakToken(idToken string) (*Account, error) {
 	seg := strings.Split(idToken, ".")
 	if len(seg) < 2 {
 		return nil, fmt.Errorf("not a jwt")
@@ -136,7 +136,7 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 	if tenant == "" {
 		tenant = Tenant
 	}
-	acc, err := accountFromOpenPak(ext.GetNsaIdToken())
+	acc, err := accountFromOpenPakToken(ext.GetNsaIdToken())
 	if errors.Is(err, bans.ErrBanned) {
 		log.Printf("[Auth] account banned (%s) -> REFUSED", redact.Err(err))
 		return 0, "", bans.Refused()

@@ -23,7 +23,7 @@ func TestAuthRoundTrip(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			OpenPak string
-			PID  uint64
+			PID     uint64
 		}
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		if r.URL.Path != "/internal/switch/identity" || r.Header.Get("X-Internal-Key") != "k" ||

@@ -192,10 +192,10 @@ func adapterIdentity(q map[string]any) (*Account, error) {
 
 func lookupAccount(pid uint64) (*Account, error) { return adapterIdentity(map[string]any{"pid": pid}) }
 
-// accountFromOpenPak pulls the openpak claim out of the id_token and has the adapter prove it. The
+// accountFromOpenPakToken pulls the openpak claim out of the id_token and has the adapter prove it. The
 // id_token's own signature is not checked here on purpose: the openpak claim inside it is what the
 // adapter signed, and only the adapter can verify it.
-func accountFromOpenPak(idToken string) (*Account, error) {
+func accountFromOpenPakToken(idToken string) (*Account, error) {
 	seg := strings.Split(idToken, ".")
 	if len(seg) < 2 {
 		return nil, fmt.Errorf("not a jwt")
@@ -218,7 +218,7 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 	if tenant == "" {
 		tenant = Tenant
 	}
-	acc, err := accountFromOpenPak(ext.GetNsaIdToken())
+	acc, err := accountFromOpenPakToken(ext.GetNsaIdToken())
 	if errors.Is(err, bans.ErrBanned) {
 		log.Printf("[Auth] account banned (%s) -> REFUSED", redact.Err(err))
 		return 0, "", bans.Refused()

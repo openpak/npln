@@ -22,7 +22,7 @@ func TestIdentityRoundTrip(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			OpenPak string
-			PID  uint64
+			PID     uint64
 		}
 		json.NewDecoder(r.Body).Decode(&in)
 		if r.URL.Path != "/internal/switch/identity" || r.Header.Get("X-Internal-Key") != "k" || (in.OpenPak != "nx2.a.b" && in.PID != 1800000005) {
@@ -37,14 +37,14 @@ func TestIdentityRoundTrip(t *testing.T) {
 	defer func() { adapterURL = oldURL }()
 
 	idToken := "eyJhbGciOiJSUzI1NiJ9." + b64u([]byte(`{"sub":"deadbeef","openpak":"nx2.a.b"}`)) + ".sig"
-	acc, err := accountFromOpenPak(idToken)
+	acc, err := accountFromOpenPakToken(idToken)
 	if err != nil || acc.PID != 1800000005 || len(acc.Friends) != 1 {
 		t.Fatalf("openpak not proven: %+v %v", acc, err)
 	}
 	if uid := acc.UserID(); len(uid) != 22 || uid[:2] != "u-" || uid == acc.Friends[0].UserID() {
 		t.Fatalf("bad user id %q", uid)
 	}
-	if _, err := accountFromOpenPak("eyJhbGciOiJSUzI1NiJ9." + b64u([]byte(`{"openpak":"nx2.a.c"}`)) + ".sig"); err == nil {
+	if _, err := accountFromOpenPakToken("eyJhbGciOiJSUzI1NiJ9." + b64u([]byte(`{"openpak":"nx2.a.c"}`)) + ".sig"); err == nil {
 		t.Fatal("rejected openpak accepted")
 	}
 	if me, err := lookupAccount(1800000005); err != nil || me.BaasUserID != "9198f6a6930b5fd1" {
