@@ -262,7 +262,7 @@ func mintAccessToken(pid uint64, userPath, tenant, appID string) string {
 }
 
 // mintSessionToken is the `gss` JWT a MatchedUserSession carries; the client's Pia/NPLN layer
-// parses it to build Gamesync/IssueToken (shape measured on a real capture by the measured server).
+// parses it to build Gamesync/IssueToken (shape measured on a real capture from earlier research).
 func mintSessionToken(uid, tenant, gsName, userSess, team, attrJSON, ltcyJSON string) string {
 	now := time.Now()
 	return signJWT(

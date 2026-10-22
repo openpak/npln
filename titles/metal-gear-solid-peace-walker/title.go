@@ -7,7 +7,7 @@
 // FriendSearch queries restricted to friends — all in the shared session code. Title-specific:
 // the config properties Nintendo stamps on every session (and with them the session's own
 // config name as gamesync's `mcn`), and the Matchmaker, messaging, UGC store and hydro
-// datastore, which the measured server registers for this title (docs/provenance.md). It is
+// datastore, which earlier research shows for this title (docs/provenance.md). It is
 // served with a leaf chained to the OpenPak CA, which the console or emulator trusts through
 // its system certificate store; unverified until booted.
 package peacewalker

@@ -1,7 +1,7 @@
 package npln
 
-// referee — the match verdict Splatoon 3 waits for, published on gamesync. Facts from the reference
-// server's notes on real Nintendo matches (titles/splatoon-3/docs/provenance.md):
+// referee — the match verdict Splatoon 3 waits for, published on gamesync. Facts from earlier research
+// notes on real Nintendo matches (titles/splatoon-3/docs/provenance.md):
 //
 //   - When every player is ready, each console writes "…/@@RefereeRequest/<time>_<game session>"
 //     and watches the "@@RefereeResult" collection. The verdict goes -1 (accepted), then the console

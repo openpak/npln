@@ -9,7 +9,7 @@ package npln
 // those are synthesized here from the farm session; everything the game writes itself
 // (WriteDocuments) is stored and relayed to every watcher of that farm.
 //
-// Document names and field keys are the NPLN SDK's (measured by the family's reference server):
+// Document names and field keys are the NPLN SDK's (measured from captures):
 //   …/__us/<uss>, …/__pus/<uss>, …/__gs/s   UserSession: uid ussid ucsid upcsid pgn st tn att ltc
 //   …/__stg/All                            GameSessionMutableData: gsid addr p mcn maxu rs{…}
 //   …/__stu/<uss>                          per-user state: suid susid sussid suscid pl(bytes)
@@ -362,7 +362,7 @@ func (g *gamesyncServer) withStationLocked(gsid, uss string, m *commonpb.MapValu
 	return out
 }
 
-// roomFields are the room documents docs/__gs/{f,m,r,n,ck} in the schema the measured server
+// roomFields are the room documents docs/__gs/{f,m,r,n,ck} in the schema
 // measured on Nintendo's own answers: f = the session address block, m = the room settings,
 // r = participant counters, n = lifetime, ck = the password key.
 func (g *gamesyncServer) roomFields(sub string, s *gsSession) *commonpb.MapValue {
@@ -772,7 +772,7 @@ func (g *gamesyncServer) apply(ctx context.Context, ops []*gspb.WriteOperation) 
 // mirrorProps republishes a written document's `prp` map (the Pia session properties — the
 // host's UpdateNetworkProperty job writes `prp._Pia_SystemData` with the lobby application data
 // appended, plus `ip`) into the farm's GameSession, so QueryGameSessions hands searchers the
-// updated blob. Nintendo's backend does the same (reference server: __gs/m.prp).
+// updated blob. Nintendo's backend does the same (__gs/m.prp).
 // Caller holds g.mu; lock order g.mu -> g.mm.mu as in roomFields.
 func (g *gamesyncServer) mirrorProps(gsid string, doc *commonpb.MapValue) {
 	prp, ip := doc.GetFields()["prp"].GetMapValue(), doc.GetFields()["ip"]

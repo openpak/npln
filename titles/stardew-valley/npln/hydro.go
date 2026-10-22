@@ -1,7 +1,7 @@
 package npln
 
 // hydro — nn.npln.hydro.v1.Datastore: small binary contents a player keeps on the server
-// (titles/super-mario-bros-wonder/docs/provenance.md). Known from the reference: created names
+// (titles/super-mario-bros-wonder/docs/provenance.md). Known from earlier research: created names
 // are <parent>/contents/<id> with server-set times, a missing content reads back as an empty
 // content carrying the asked name, and a search returns at most 50. What Wonder stores is not
 // known, so payloads are opaque.
@@ -151,7 +151,7 @@ func (h *hydro) GetContent(ctx context.Context, req *hydropb.GetContentRequest) 
 	if c := h.live(req.GetName()); c != nil {
 		return proto.Clone(c).(*hydropb.Content), nil
 	}
-	now := timestamppb.Now() // the reference answers a missing content empty, not NotFound
+	now := timestamppb.Now() // the working servers answer a missing content empty, not NotFound
 	return &hydropb.Content{Name: req.GetName(), CreateTime: now, UpdateTime: now}, nil
 }
 

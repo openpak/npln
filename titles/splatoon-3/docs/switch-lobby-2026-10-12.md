@@ -13,7 +13,7 @@
 > place nim calibrated (no retry burst) and the Switch reached the lobby with no overrides. Every hypothesis below
 > (TLS, peer name, SaltyNX, latency regions, UDP replies, account) was rejected; the third-party Splatoon 3
 > certificate/peer-name patches were tested on hardware and changed nothing. See the docs repo
-> `switch/sys-patch-notes.md` and `switch/prelude-patch-tracking.md`.
+> `switch/sys-patch-notes.md`.
 
 
 The retail Switch reports “A communication error has occurred”; Harbor reaches the lobby.
@@ -277,4 +277,4 @@ Private research directory: `scratch/spl3/lobby-20261012/` in the workspace. It 
 metadata-only UDP observer and game disassembly for investigating the startup checks. No packet
 payloads, player addresses, account IDs or tokens were written into this report. The temporary
 observer and the regional-discovery experiment were both removed; production runs the original
-v0.7.12 image again. No reference-network implementation or patch bytes were imported.
+v0.7.12 image again. No third-party implementation or patch bytes were imported.

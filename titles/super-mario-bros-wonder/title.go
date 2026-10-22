@@ -1,7 +1,7 @@
 // Package wonder is Super Mario Bros. Wonder (010015100B514000) on the shared NPLN host.
 //
 // Wonder runs Stardew Valley's NPLN service set (titles/stardewset) under its own tenant, plus
-// the services the measured server's Wonder code and captures show it reaching
+// the services earlier research and captures show it reaching
 // (docs/provenance.md): the Matchmaker (CourseMatch / WorldMapMatch pools, friend pools tied
 // to a FriendMatch room), messaging, the UGC store (its course query) and the hydro datastore.
 // Its sessions carry their config properties, so gamesync's `mcn` is the session's own config
