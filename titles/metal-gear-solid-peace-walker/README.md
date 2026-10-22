@@ -3,8 +3,8 @@
 METAL GEAR SOLID: Peace Walker, Master Collection version (`0100C6F01C4F8000`), on the shared
 NPLN host. It serves Stardew Valley's NPLN service set (auth, friends, presence, game sessions,
 gamesync) under Peace Walker's tenant, plus what the title is known to need beyond it,
-including the Matchmaker, messaging, UGC store and hydro datastore the measured server
-registers for it. Every
+including the Matchmaker, messaging, UGC store and hydro datastore the earlier research notes
+record for it. Every
 fact and its source is in [`docs/provenance.md`](docs/provenance.md). OpenPak has not booted it
 yet.
 

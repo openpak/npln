@@ -5,15 +5,15 @@
 > the shared host/joiner personas and the `OutboundHost`/`OutboundJoiner` accounts were all
 > retired on 2026-09-26.
 
-# Local earlier stack (podman)
+# Local earlier network stack (podman)
 
 Everything Stardew needs from "Nintendo" runs locally as podman containers from
-the [`legacy-local` — the pre-port earlier local bundle, frozen outside this tree bundle. Both emulators are pointed
+the `local-stack` bundle (the pre-port local setup, frozen outside this tree). Both emulators are pointed
 at it by the launch wrappers in `scripts/`; nothing reaches production.
 
 ## What runs
 
-| Container (`legacy-local_*`) | Host port | Role for Stardew |
+| Container (`local-stack_*`) | Host port | Role for Stardew |
 |---|---|---|
 | `account` | tcp 8099, and `https://account.tobagin.eu` via the local Traefik | identity: sign-in, the `openpak` token, verified-account gate |
 | `stardew` (this repo, `cmd/npln`) | tcp 18501 | Stardew's NPLN gRPC/TLS: auth, friends, farm sessions — the tenant route points HERE |
@@ -26,12 +26,12 @@ Port 18443 belongs to another project's host-process `baas-jwks` (Among Us);
 per-project instances coexist on different ports — leave it alone.
 
 ```sh
-cd ~/REPOS/legacy-local
+cd ~/REPOS/local-stack
 podman-compose --profile nncs up -d          # start / recreate everything
 podman-compose --profile nncs ps
-podman logs -f legacy-local_stardew_1      # [RPC]/[Auth]/[MM] lines + [MM][DIAG] full request dumps
+podman logs -f local-stack_stardew_1      # [RPC]/[Auth]/[MM] lines + [MM][DIAG] full request dumps
 podman-compose up -d --build stardew         # redeploy after a code change in this repo
-podman logs -f legacy-local_account_1
+podman logs -f local-stack_account_1
 ```
 
 Health in one pass:
@@ -49,7 +49,7 @@ ss -lun | grep -E ':(10025|10125) '
    citron: `https://account.tobagin.eu` (+ `OPENPAK_API_TRUSTED_SUFFIX=tobagin.eu`;
    the name resolves to the local Traefik, LE cert, matches the stack's
    `OPENPAK_BASE_URL`); Ryujinx: `http://127.0.0.1:8099` (its endpoint policy
-   trusts only loopback or the Reference domain). Same container either way. The
+   trusts only loopback or the earlier domain). Same container either way. The
    account's HMAC-signed `openpak` token is stored in the emulator profile.
 2. The emulator's fabricated BAAS id_token carries that token in an `openpak`
    claim and is signed with `secrets/baas_signing_key.pem` — the same key
@@ -59,7 +59,7 @@ ss -lun | grep -E ':(10025|10125) '
    Local test account: `stardewhost`, pid 1800000005, verified
    (credentials outside the repo, `~/.local/share/stardew-research/`).
 
-An emulator signed in to a different deployment (production Reference) presents
+An emulator signed in to a different deployment (the earlier production network) presents
 a token the local `npln` cannot prove → `IssuePrearrangedUserToken` DENIED
 (2321-5760). Not signed in at all → the client cancels pre-auth (2321-4992).
 
@@ -83,7 +83,7 @@ title's instance (`OPENPAK_ALLOW_SHARED=1` to override after asking; the old
 `STARDEW_ALLOW_SHARED=1` still works), and bake every `OPENPAK_*` var in —
 never launch the emulator bare for this project.
 
-First run of each profile: sign in from the emulator's Reference menu with the
+First run of each profile: sign in from the emulator's earlier network menu with the
 shared account — host profile → `OutboundHost` (pid 1800000003), joiner →
 `OutboundJoiner` (pid 1800000004), the family-wide host/joiner identities (see
 `https://github.com/openpak/docs/blob/main/playbooks/conventions.md`). The link is stored per profile, so the
@@ -97,7 +97,7 @@ HMAC token bound to id+email under the account server's `OPENPAK_SECRET` — see
 Verify on the running pid before trusting a result:
 
 ```sh
-pgrep -af "^~/REPOS/earlier-citron/build"   # or ^~/ryujinx/Ryujinx
+pgrep -af "^~/REPOS/citron/build"   # or ^~/ryujinx/Ryujinx
 tr '\0' '\n' < /proc/<pid>/environ | grep OPENPAK_ | sed 's/=.*//'
 readlink -f /proc/<pid>/cwd                              # citron: the profile dir
 ```
@@ -122,7 +122,7 @@ the next handler to write; `[MM][DIAG]` dumps show exactly what the game sent.
   npln-friends handler then demands an `X-Internal-Key` header the NPLN server
   never sends. Network rule authenticates callers instead.
 
-Verify: `podman exec legacy-local_npln_1 wget -qO- "http://account:8080/internal/npln-friends?pid=1800000005"`
+Verify: `podman exec local-stack_npln_1 wget -qO- "http://account:8080/internal/npln-friends?pid=1800000005"`
 → JSON with `"verified":true`; from the host the same URL on :8099 must be 403.
 
 ## Gotchas
@@ -134,5 +134,5 @@ Verify: `podman exec legacy-local_npln_1 wget -qO- "http://account:8080/internal
   (`~/ryujinx-instances/host` and `…/joiner`) are selected with
   `--root-data-dir`, which the launchers pass. One Ryujinx per profile dir;
   host + joiner run side by side.
-- `NNCS_SERVER_IP` in `legacy-local/.env` is only the address the responder
+- `NNCS_SERVER_IP` in `local-stack/.env` is only the address the responder
   reports back; loopback probes classify fine with it as is.

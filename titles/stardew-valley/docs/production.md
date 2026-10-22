@@ -2,7 +2,7 @@
 > `nx-baas` over `NX_INTERNAL_URL`/`NX_INTERNAL_KEY`; see the README. Everything below about
 > `OPENPAK_ACCOUNT_URL`, `/internal/*` account routes and port 18501 is out of date.
 
-# Production: plugging earlier-stardew into the live earlier network
+# Production: plugging stardew into the live earlier network
 
 Target measured for this guide: one public arm64 VM (OCI Ampere A1, 4 OCPU / 24 GB, Ubuntu).
 Files: `deploy/oci/`. Nothing here needs the local podman stack.
@@ -10,10 +10,10 @@ Files: `deploy/oci/`. Nothing here needs the local podman stack.
 ## How a production client reaches this server
 
 1. **Tenant host.** The game resolves `t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net` and connects
-   to it on **443**. The Reference emulator's DNS layer maps every `*.nintendo.net` to
+   to it on **443**. The earlier network emulator's DNS layer maps every `*.nintendo.net` to
    `OPENPAK_SERVER_IP` (IP only, port untouched — the per-host `host=ip:port` routes are a
-   local-testing feature, not something official builds ship). A real console under the third-party setup gets
-   the same via Atmosphère's hosts file. So the connection lands on the main earlier server's
+   local-testing feature, not something official builds ship). A patched real console gets
+   the same via Atmosphère's hosts file. So the connection lands on the main earlier network server's
    `:443`, where **sni-router** forwards the raw TLS stream by SNI. It needs one rule for the
    Stardew tenant — `deploy/sni-router rule` — pointing at this box's `:18501`.
 2. **Gamesync / session relay.** Not resolved via DNS: the console connects to the `host:port`
@@ -38,7 +38,7 @@ Files: `deploy/oci/`. Nothing here needs the local podman stack.
 ## Certificates
 
 `CERT_FILE`/`KEY_FILE` must cover both `t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net` and
-`gamesync.npln.nintendo.net`, issued by the CA the Reference emulator builds and the third-party setup trust.
+`gamesync.npln.nintendo.net`, issued by the CA the earlier emulator builds and patched consoles trust.
 sni-router never opens the stream, so only this box holds the key.
 
 ## Firewall (OCI security list / NSG + ufw on the VM)

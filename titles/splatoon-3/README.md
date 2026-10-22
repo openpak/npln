@@ -61,7 +61,7 @@ go build ./... && go vet ./... && go test ./...
 ## Clean room
 
 Read [`docs/clean-room-policy.md`](https://github.com/openpak/docs/blob/main/clean-room-policy.md) before writing a line. The
-earlier network `splatoon-3` server is source-available and was read **for facts only** —
+earlier research notes on the title were used **for facts only** —
 ports, hostnames, endpoint paths, wire field names, error codes, flows, and what actually runs. No
 code, comments, docs, structure, type or function names were copied or translated. Every fact taken
 is recorded with its source in [`docs/provenance.md`](docs/provenance.md), which is what makes

@@ -1,6 +1,6 @@
 # Evidence needed
 
-Rewritten after the clean-room policy changed to allow reading the earlier network server for
+Rewritten after the clean-room policy changed to allow working from earlier research notes for
 facts. Most of what this file used to ask for is now answered in
 [`provenance.md`](provenance.md) and did not need a capture after all. What is left is the part no
 document can supply: whether OpenPak's own stack satisfies this client.

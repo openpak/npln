@@ -54,9 +54,9 @@ Configuration is through `STARDEW_OBSERVER_TCP_ADDR`, `STARDEW_OBSERVER_UDP_ADDR
 OpenPak side: the `account` core (20000/20001), `nx-baas` with
 `ACCOUNT_BACKEND=openpak` and `NX_INTERNAL_KEY` set (console TLS 21000, internal
 API 20070), and this server on 21010 behind Traefik's SNI passthrough. The
-earlier launch wrappers were retired 2026-09-26; pointing a profile at
+earlier-stack launch wrappers were retired 2026-09-26; pointing a profile at
 nx-baas is the open client-integration item.
-[docs/local-stack.md](docs/local-stack.md) describes the previous (Reference)
+[docs/local-stack.md](docs/local-stack.md) describes the earlier
 local stack.
 
 ## Test

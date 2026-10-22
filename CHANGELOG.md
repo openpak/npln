@@ -292,7 +292,7 @@ of truth; this file is the readable summary.
 - NPLN skeleton: auth against nx-baas, TLS on 21012, health on 21013 [8478458]
 - seed: empty splatoon-3, AGPL-3.0-only, clean-room gate [8cdf788]
 - docs: bring stardew-valley's docs in line with what is deployed [1326dae]
-- Finish the move off Reference [4a808e3]
+- Finish the move off earlier network [4a808e3]
 - A health port beside the gRPC one [431392d]
 - Ship a container image on tag: rootless-ready Dockerfile + ghcr release workflow [cbbb24d]
 - handoff: session 14 — openpak flow verified, hardening list passed, 3 players, mailbox redelivery fix [843319d]

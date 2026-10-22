@@ -188,7 +188,7 @@ New with this round's protocol work, all unverifiable without a console (and a m
 5. **Rooms and the session transport are Stardew Valley's.** Since 2026-10-10 Splatoon 3 registers
    `titles/stardew-valley/npln`'s GameSessionService, Matchmaker and Gamesync (`RegisterSessions`), the
    set every Pia-over-NPLN title OpenPak hosts plays on. This package's own earlier copy never hosted
-   a session and is gone. Splatoon-specific gaps known from the reference: referee results
+   a session and is gone. Splatoon-specific gaps known from earlier research: referee results
    (`@@RefereeRequest`), per-room capacity (10 for a private battle).
 6. **The public match forms only with a full pool**, as the console refuses a battle below the
    mode's roster. A two-client test can validate the ticket/track/ICE sequence only.

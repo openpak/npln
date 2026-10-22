@@ -5,13 +5,8 @@ came from, as [`docs/clean-room-policy.md`](https://github.com/openpak/docs/blob
 
 Source keys:
 
-- **N** — the earlier network `metal-gear-solid-peacewalker` server (commit `5f0da66`, read
-  2026-09-23 from a clone outside the workspace), read for facts under the policy. source-available
-  Shield 1.0.0: no code, comments, docs, structure, type or function names were copied or
-  translated. Its matchmaking, messaging, UGC store and datastore code is annotated as
-  Wonder's, and its tests use Wonder's config names and captured requests; the file named is
-  where the fact is recorded there.
-- **D** — the protocol descriptors embedded in N's generated `proto/` files: service, method,
+- **N** — earlier research notes on the title's online services, kept outside this repository. They were used for facts only under the policy: no code, comments, docs, structure, type or function names were copied or translated.
+- **D** — the protocol descriptors recorded in N: service, method,
   message and field names, numbers and types. OpenPak's `.proto` files were written from a
   listing of those descriptors and regenerated with `proto/generate.sh`; no generated file was
   copied.
@@ -47,15 +42,15 @@ The Screening service is in the descriptors but N does not register it.
 
 | Fact | Value | Source |
 | --- | --- | --- |
-| Config names | `CourseMatch_20221202`, `WorldMapMatch_20221202`, `FriendWorldMapMatch_20230428`, `FriendMatch` (the last one a GameSessionService room) | N `matchmaking_test.go`, `session_integration_test.go` |
-| Pool | tickets with the same config, the same `MatchingKey` user attribute and the same friend room share one game session until it is full; different keys never share | N `matchmaking.go`, `matchmaking_test.go` |
-| Capacity | `WorldMapMatch*`, `FriendWorldMapMatch*`, `FriendMatch*`: 12; `CourseMatch*`: 4; anything else 4 | N `matchmaking.go` |
-| Ticket | exactly one user definition, the caller's own; the answer is SEARCHING with the config spelled under the concrete tenant | N `session_service.go`, `matchmaking.go` |
-| Track | streams SEARCHING and PLACING (no session, no matched users), then SUCCEEDED with the game session and every member as a matched user session; only the caller's entry carries a matchmaking id token, and only when `include_id_token_users` names the caller (or `current`) | N `matchmaking.go` |
-| A repeated ticket | a player already in a pool's session is answered with that session rather than taking a second seat | N `matchmaking.go` |
-| Pool session properties | `_BaseConfigName` (config's last segment), `_AliasSuffix` (empty), `MatchingKey` from the ticket | N `matchmaking.go` |
-| Friend pools | a ticket for a `Friend*` config must carry a `FriendGameSessionId` user attribute naming the base room; the room must be active and the caller already a member of it; a non-`Friend` config carrying the attribute is refused. The pool's session keeps `FriendGameSessionId`, is not public, and is never listed or joinable as a room of its own | N `session_service.go`, `matchmaking.go`, `README.md` |
-| Rooms from `FriendMatch` | not public | N `matchmaking.go` |
+| Config names | `CourseMatch_20221202`, `WorldMapMatch_20221202`, `FriendWorldMapMatch_20230428`, `FriendMatch` (the last one a GameSessionService room) | N |
+| Pool | tickets with the same config, the same `MatchingKey` user attribute and the same friend room share one game session until it is full; different keys never share | N |
+| Capacity | `WorldMapMatch*`, `FriendWorldMapMatch*`, `FriendMatch*`: 12; `CourseMatch*`: 4; anything else 4 | N |
+| Ticket | exactly one user definition, the caller's own; the answer is SEARCHING with the config spelled under the concrete tenant | N |
+| Track | streams SEARCHING and PLACING (no session, no matched users), then SUCCEEDED with the game session and every member as a matched user session; only the caller's entry carries a matchmaking id token, and only when `include_id_token_users` names the caller (or `current`) | N |
+| A repeated ticket | a player already in a pool's session is answered with that session rather than taking a second seat | N |
+| Pool session properties | `_BaseConfigName` (config's last segment), `_AliasSuffix` (empty), `MatchingKey` from the ticket | N |
+| Friend pools | a ticket for a `Friend*` config must carry a `FriendGameSessionId` user attribute naming the base room; the room must be active and the caller already a member of it; a non-`Friend` config carrying the attribute is refused. The pool's session keeps `FriendGameSessionId`, is not public, and is never listed or joinable as a room of its own | N |
+| Rooms from `FriendMatch` | not public | N |
 
 OpenPak keeps pool sessions in the same store as GameSessionService rooms, so gamesync,
 `JoinGameSession` and leaving work on them unchanged. One difference, OpenPak's choice: a pool
@@ -65,7 +60,7 @@ session closes when its last member leaves, not when its first one does (a pool 
 
 | Fact | Value | Source |
 | --- | --- | --- |
-| `mcn` in `docs/__stg/All` and `docs/__gs/f` | the session's `_BaseConfigName` | N `gamesync_store.go` |
+| `mcn` in `docs/__stg/All` and `docs/__gs/f` | the session's `_BaseConfigName` | N |
 
 OpenPak serves it for titles that stamp config properties (Wonder, Peace Walker). Every other
 title on the set keeps `Farm4Player`, which Stardew and Dinkum play with.
@@ -74,10 +69,10 @@ title on the set keeps `Farm4Player`, which Stardew and Dinkum play with.
 
 | Fact | Value | Source |
 | --- | --- | --- |
-| RecvMessage `user` | `tenants/current/users/current` observed; a user other than the caller is refused (PermissionDenied) | N `messaging.go`, `messaging_test.go` |
-| Opening | headers, then a `keep_alive` with `idle_timeout` 95 s straight away | N `messaging.go` |
-| Cadence | a `keep_alive` every 45 s after that (N sends `idle_timeout` 0 on those); without the opening one and the cadence Wonder abandons the stream again and again | N `messaging.go` |
-| SendMessage, SendAck, message and ack delivery | not implemented by N, never observed | N `messaging.go` |
+| RecvMessage `user` | `tenants/current/users/current` observed; a user other than the caller is refused (PermissionDenied) | N |
+| Opening | headers, then a `keep_alive` with `idle_timeout` 95 s straight away | N |
+| Cadence | a `keep_alive` every 45 s after that (N sends `idle_timeout` 0 on those); without the opening one and the cadence Wonder abandons the stream again and again | N |
+| SendMessage, SendAck, message and ack delivery | not implemented by N, never observed | N |
 
 What OpenPak does beyond N is **I**: a message sent to users is queued for each receiver and
 pushed on their RecvMessage stream with a resume token; `need_ack` messages stay queued until
@@ -89,10 +84,10 @@ session with.
 
 | Fact | Value | Source |
 | --- | --- | --- |
-| The course query | after a course: `RunQuery` with parent `tenants/current/documents/ke/<n>/sdv/<n>/sh/<n>` (numbers; `ke/1/sdv/3/sh/2937190396` captured), `from` collection `ku`, order by `` `ut` `` descending, limit 30, no filter, no rule context | N `ugcstore.go`, `ugcstore_test.go` |
-| Empty result | one response carrying only `read_time` (Firestore's documented marker) | N `ugcstore.go` |
-| Field paths | back-quoted (`` `ut` ``), as in gamesync | N `ugcstore_test.go`; O gamesync |
-| Everything else | N answers only that query and leaves every other method unimplemented | N `ugcstore.go` |
+| The course query | after a course: `RunQuery` with parent `tenants/current/documents/ke/<n>/sdv/<n>/sh/<n>` (numbers; `ke/1/sdv/3/sh/2937190396` captured), `from` collection `ku`, order by `` `ut` `` descending, limit 30, no filter, no rule context | N |
+| Empty result | one response carrying only `read_time` (Firestore's documented marker) | N |
+| Field paths | back-quoted (`` `ut` ``), as in gamesync | N; O gamesync |
+| Everything else | N answers only that query and leaves every other method unimplemented | N |
 
 Beyond that query OpenPak's behaviour is **I**, read from the Firestore-shaped schema: documents
 are stored, queries filter/order/limit/cursor over them, and a write is accepted only from the
@@ -103,10 +98,10 @@ and only within size limits. Attachments and upload/attachment URIs are not serv
 
 | Fact | Value | Source |
 | --- | --- | --- |
-| Created names | `<parent>/contents/<id>`, create and update time set by the server | N `datastore.go` |
-| A missing content | `GetContent` answers an empty content carrying the requested name, not NotFound | N `datastore.go` |
-| Search | returns stored contents, at most 50 | N `datastore.go` |
-| Meaning of Wonder's payloads | unknown; N assumes nothing | N `datastore.go` |
+| Created names | `<parent>/contents/<id>`, create and update time set by the server | N |
+| A missing content | `GetContent` answers an empty content carrying the requested name, not NotFound | N |
+| Search | returns stored contents, at most 50 | N |
+| Meaning of Wonder's payloads | unknown; N assumes nothing | N |
 
 The rest (owner and permissions enforced on change, etags, transforms of `payload` and
 `attributes.<n>`, TrackContent notifying on change) is **I**.

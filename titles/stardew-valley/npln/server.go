@@ -1,6 +1,6 @@
 // Package npln is the Stardew Valley NPLN service: nn.npln.* over gRPC/HTTP2/TLS, the control
 // plane the Switch client talks to for identity, friends and farm sessions. Independently
-// written; the transport quirks below were measured on the family's reference NPLN server.
+// written; the transport quirks below were measured on a working NPLN server.
 package npln
 
 import (
@@ -201,7 +201,7 @@ func NewServer(creds credentials.TransportCredentials, tenant, appID string, tit
 		grpc.UnknownServiceHandler(unknownService),
 		grpc.StatsHandler(&connTracer{}),
 		// The client pings often, also without streams; grpc-go's default policy answers with
-		// GOAWAY(ENHANCE_YOUR_CALM) and kills every in-flight RPC (measured on the measured server).
+		// GOAWAY(ENHANCE_YOUR_CALM) and kills every in-flight RPC (measured on a working server).
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 5 * time.Second, PermitWithoutStream: true}),
 		// Probe the console ourselves: a client that vanishes without closing (power loss,
 		// emulator killed) keeps its KeepUserSession stream — and its farm seat — until the

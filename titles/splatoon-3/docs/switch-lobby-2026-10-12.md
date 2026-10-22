@@ -11,7 +11,7 @@
 > disabled with `=0` (emuMMC serves the real CAL0). (2) nim 23.0.x accepts only `{"unixtime":"<ms>"}` from
 > `api.hac.lp1.ctest.srv.nintendo.net/v1/time`; nx-baas now answers that (commit 34d7a07, deployed). With both in
 > place nim calibrated (no retry burst) and the Switch reached the lobby with no overrides. Every hypothesis below
-> (TLS, peer name, SaltyNX, latency regions, UDP replies, account) was rejected; the third-party Splatoon 3
+> (TLS, peer name, SaltyNX, latency regions, UDP replies, account) was rejected; the outside Splatoon 3
 > certificate/peer-name patches were tested on hardware and changed nothing. See the docs repo
 > `switch/sys-patch-notes.md`.
 
@@ -64,8 +64,7 @@ of this lobby failure.
 ## Next experiment
 
 Fresh-launch controls and a seven-region latency response both failed. The latter produced
-35 UDP requests and 35 server replies, but still no lobby RPCs. See the facts-only
-[`reference comparison`](reference-comparison-2026-10-12.md) for the test and rejection.
+35 UDP requests and 35 server replies, but still no lobby RPCs.
 
 The next evidence needed is the Switch's latency result and the next game startup check.
 Server-side success and UDP replies alone cannot identify the rejection inside the game.
@@ -277,4 +276,4 @@ Private research directory: `scratch/spl3/lobby-20261012/` in the workspace. It 
 metadata-only UDP observer and game disassembly for investigating the startup checks. No packet
 payloads, player addresses, account IDs or tokens were written into this report. The temporary
 observer and the regional-discovery experiment were both removed; production runs the original
-v0.7.12 image again. No third-party implementation or patch bytes were imported.
+v0.7.12 image again. No outside implementation or patch bytes were imported.

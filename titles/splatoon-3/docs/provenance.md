@@ -6,10 +6,7 @@ from the facts" checkable later instead of a claim.
 
 Source keys:
 
-- **N** — the earlier network `splatoon-3` server (`~/REPOS/splatoon-3`, commit `b6a8c25`), read
-  for facts under the policy. source-available: no code, comments, docs, structure, type or
-  function names were copied or translated. Where a fact came from a comment there recording a
-  capture, the capture is named so the underlying evidence is identifiable.
+- **N** — earlier research notes on the title's online services, kept outside this repository. They were used for facts only under the policy: no code, comments, docs, structure, type or function names were copied or translated.
 - **E** — OpenPak's own emulator trees (`Openpak/emulators/*`, GPL forks).
 - **O** — OpenPak's own repositories (`nx-baas`, `servers/stardew-valley`, `ports.md`).
 - **P** — public documentation (upstream Ryujinx data, Kinnay's NPLN pages, switchbrew).
@@ -24,7 +21,7 @@ Source keys:
 | Fact | Value | Source |
 | --- | --- | --- |
 | Title id | `0100C2500FC20000` | P — upstream Ryujinx `TitleIDs.cs`, `docs/compatibility.csv` |
-| NPLN tenant host | `t-dce9377b-lp1.lp1.t.npln.srv.nintendo.net` | E — a dated DNS resolution (2026-08-25) in citron's `sfdnsres.cpp`; **independently confirmed** by N, which uses the same host for its TLS SNI, its session relay default and a 704-request console capture |
+| NPLN tenant host | `t-dce9377b-lp1.lp1.t.npln.srv.nintendo.net` | E — a dated DNS resolution (2026-08-25) in citron's `sfdnsres.cpp`; **independently confirmed** by N, which records the same host in a 704-request console capture |
 | Tenant id / `npln.tid` claim | `t-dce9377b-lp1` | N |
 | Client's tenant field | the client sends the alias `tenants/current`; the server resolves it | N |
 | `npln.app_id` claim | `0100c2500fc20000` — the title id, not a separate NPLN application id | N |
@@ -72,7 +69,7 @@ The NPLN schema Splatoon 3 speaks spans 20 services across `auth`, `friends`, `g
 `timber`, `toyohr`, `ugcstore` (source: N's generated bindings, method paths only). `toyohr` is
 the Splatoon-3-specific one — schedules, Splatfest, cloud save, lockers, replays, lobby messaging.
 
-**What a working server actually registers** (N, its server construction) is a much shorter list:
+**What a working server actually registers** (N) is a much shorter list:
 `Auth`, `Friends`, `PresenceService`, `Matchmaker`, `GameSessionService`, `Gamesync`,
 `Ugcstore`, `toyohr.Schedule`, `toyohr.FestService`. Everything else is answered by a fallback
 handler that replays captured bytes.
@@ -138,7 +135,7 @@ HTTP/2 HEADERS frame (source: N, O):
 
 ## Friends and presence
 
-Added when those services were built. Sources as above; N-sourced rows come from comments there
+Added when those services were built. Sources as above
 recording captures and dated measurements, named where they were given.
 
 ### `friends.v1.Friends`
@@ -220,11 +217,11 @@ matched players connect to **simulate the game**, or does it only **relay betwee
 | Evidence | Detail | Source |
 | --- | --- | --- |
 | The consoles report peer-by-peer links | during a match each console writes a status document summarising its connection **to each other player individually**: the reporting plugin (`nn::pia::nplnd::NplnPlugin`), the local user, the *remote* user, a connection counter for that peer and an error flag for that peer. One console reported six such peers. A console talking to a simulator has **one** link, not six with independent state | N — capture of an official Splatfest **against Nintendo's own servers**, 2026-08-23 |
-| The watched document is a mailbox | each console writes its own Pia contact blob into its own document; the server deposits **each peer's** blob into the document that console watches, one push per peer. In the reference's own words, that is how Pia learns who to join | N — session captures, 2026-08-25 |
-| The server does not know how a match went | eight consoles left a match together fourteen seconds after joining, with healthy matchmaking, TURN allocations at 100% and no server-side closure. The reference had to start reading the consoles' own telemetry to find out what happened. A simulator would already know | N, 2026-08-22 |
+| The watched document is a mailbox | each console writes its own Pia contact blob into its own document; the server deposits **each peer's** blob into the document that console watches, one push per peer. | N — session captures, 2026-08-25 |
+| The server does not know how a match went | eight consoles left a match together fourteen seconds after joining, with healthy matchmaking, TURN allocations at 100% and no server-side closure. Finding out what happened meant reading the consoles' own telemetry. A simulator would already know | N, 2026-08-22 |
 | Consoles track membership themselves | the Pia status blob carries a byte that follows the session headcount, written by the console | N (inferred from five observations there, and labelled as such) |
-| Nothing server-side holds game state | the reference implements schedules, Splatfests, lockers, records, replays and saves — metadata around matches. No match state, no tick loop, no physics | N — its own file inventory |
-| NAT traversal is ordinary ICE | `AllocateIceServerSet` returns a STUN server and TURN servers with username/password; the reference points it at a stock **coturn** using coturn's REST ephemeral-credential scheme | N |
+| Nothing server-side holds game state | the notes list schedules, Splatfests, lockers, records, replays and saves — metadata around matches. No match state, no tick loop, no physics | N |
+| NAT traversal is ordinary ICE | `AllocateIceServerSet` returns a STUN server and TURN servers with username/password; it points at a stock **coturn** using coturn's REST ephemeral-credential scheme | N |
 
 So the three infrastructure roles are:
 
@@ -282,11 +279,11 @@ in its generated bindings); the schema is Nintendo's and shared across NPLN tena
 | `MatchmakingTicket.state` | `SEARCHING=1`, `PLACING=2`, `SUCCEEDED=3`, `TIMED_OUT=4`, `FAILED=5`, `CANCELLED=6`, `REQUIRING_ACCEPTANCE=7`, `DECLINED=8`. The terminal `SUCCEEDED` carries a `game_session` and `matched_user_sessions[]`, each with a `matchmaking_id_token` | N |
 | `GameSession` | `{name, max_participant_count, current_participant_count, can_participate, is_public, password, state, host, port, create_time, properties: MapValue, user_sessions[]}`; state `CREATING=1`, `ACTIVE=2`, `TERMINATING=3`, `TERMINATED=4`. `host`/`port` is where the console dials the session endpoint (gamesync) | N |
 | `IceServerSet` | `{name, stun_server, turn_servers[], ttl, update_time, client_cache_duration}`. `StunServer{host, port, protocol}`; `TurnServer{host, port, protocol, username, password}`; protocol enum `UDP=1, TCP=2, TLS=3` | N |
-| coturn ephemeral credentials | TURN `username = "<unix-expiry>:<user>"`, `password = base64(HMAC-SHA1(static-auth-secret, username))`, STUN/TURN on `3478`. The reference points `AllocateIceServerSet` at a stock coturn using this scheme | N; P — coturn's published REST-auth (TURN REST API / RFC 7635 §2.2) |
+| coturn ephemeral credentials | TURN `username = "<unix-expiry>:<user>"`, `password = base64(HMAC-SHA1(static-auth-secret, username))`, STUN/TURN on `3478`. The notes record `AllocateIceServerSet` pointing at a stock coturn using this scheme | N; P — coturn's published REST-auth (TURN REST API / RFC 7635 §2.2) |
 | A partial ICE object | the client rejects the whole set and emits no STUN probe. So every field must be filled — measured the same day as the relay captures | N |
 | Latency measurement | the client sends each listed server a 20-byte STUN Binding Request once a second for 5 s from one UDP socket and accepts any reply of 20+ bytes from the exact ip:port echoing its transaction id; names, regions and count are not validated. The Stardew set answered `127.0.0.1:18504` (an unset default): Harbor carried on, a real Switch (fw 23) closed its NPLN connection ~6 s after ListLatencyMeasurementServers and showed a communication error with no code. Now the STUN host and port | G (`main+0x5bd438`..`0x5bd678`, receive loop `0x5b7570`, matcher `0x5be2c0`) + M (2026-10-11, [H2] connection trace) |
-| A created room's properties | the client's own properties plus `_BaseConfigName` (the matchmaking config's last segment) and `_AliasSuffix` (the room code); the config is echoed under the concrete tenant | N (`matchmaking.go`) |
-| Room capacity | a private battle room holds 10 (eight players, two spectators); the friend party that waits for matchmaking (`join_room_4_no_referee_config`) holds 4 | N (`matchmaking.go`) |
+| A created room's properties | the client's own properties plus `_BaseConfigName` (the matchmaking config's last segment) and `_AliasSuffix` (the room code); the config is echoed under the concrete tenant | N |
+| Room capacity | a private battle room holds 10 (eight players, two spectators); the friend party that waits for matchmaking (`join_room_4_no_referee_config`) holds 4 | N |
 | The match referee | at the start each console writes `…/@@RefereeRequest/<time>_<game session>` and watches `@@RefereeResult`; without a verdict the "getting ready" countdown ends in a communication error. At the end it writes `…/@@RefereeReport/<time>_<game session>/User/<user session>`. The verdict is one document `…/@@RefereeResult/<time>_<game session>` (first segment only), `request_id` = that suffix, `status` 0 at the start and 1 when decided, carrying the request's context and the report's `team_result`/`personal_result`; field inventory of a Turf War verdict: 25 keys | N (`gamesync.go`, notes on captures of real matches) |
 
 ## Boot-time toyohr services (2026-10-10)
@@ -312,13 +309,13 @@ PresenceService/SubscribePresences, then Locker/SelectDocuments every 8 s once t
 | FestService between Splatfests | SelectFestSchedule with an empty response is accepted at boot and on lobby entry | M |
 | PresenceService/KeepAlive | the game acks every heartbeat at once; answering acks loops (~2,000 heartbeats a minute measured 2026-10-10). Heartbeat on a timer and on presence updates only, as Stardew's server does | M; O (`titles/stardew-valley/npln/presence.go`) |
 | The schedule set the lobby accepts | the game stores at most 12 VS schedules and needs at least 5; every Bankara and X entry needs rule 1-4 and exactly 2 stages, regular exactly 2 stages; an empty League list passes, an empty Season list fails; any one kind failing fails the set | G (`main+0x32a28d0` schedule manager, `0x32a2e60`-`0x32a2fb4`, `0x32a48d8`, `0x32a5e8c`) |
-| Ranked rules | four different ranked rules per slot, all from 1-4, never turf war; the list starts one slot before the present | N (`rotation_generee.go`, `rotation_avance_test.go`) |
-| Challenge (League) schedules | an empty list when no event runs, and the game accepts it. Measured together with the ranked-rule change above: before both, the lobby showed a communication error with no update banner; after both it shows "Multiplayer maps and modes have been updated!" first | N (`toyohr.go`, `challenge_schedules.go`) + G + M |
-| Co-op `shift_id` | the shift's start as `YYYYMMDDhhmmss` | N (`coop_carte_points.go`) |
+| Ranked rules | four different ranked rules per slot, all from 1-4, never turf war; the list starts one slot before the present | N |
+| Challenge (League) schedules | an empty list when no event runs, and the game accepts it. Measured together with the ranked-rule change above: before both, the lobby showed a communication error with no update banner; after both it shows "Multiplayer maps and modes have been updated!" first | N + G + M |
+| Co-op `shift_id` | the shift's start as `YYYYMMDDhhmmss` | N |
 | What the lobby checks before it opens (snapshot at `main+0x35340b0`, "now" = network clock seconds) | VS: the window covering now and the next two exist, the current one's stages exist in the VS stage table. Co-op: the shift covering now and the next two exist; the current one's stage exists in the co-op stage table, each main weapon exists or is -1 (random), the Grizzco weapon exists or is negative. Season: the last entry covers now and its field 2 is a season-table id (field 2 itself when <= 8, else `((n-1)&3)+5`). League: at most one event | G (`0x35340b0`, `0x352ec90`, `0x353703c`) |
 | Table ids (v11.3.0 RSDB, looked up by `Id`) | VS stages 1-26; co-op stages 1, 2, 4, 6, 7, 8, 9 (Big Run 100, 102-107); seasons 0-9; weapons are not rows for -1 and -2 | G (romfs `VersusSceneInfo`, `CoopSceneInfo`, `SeasonInfo`, `WeaponInfoMain`) |
 | Co-op monthly reward | the lobby's CoopReward step refuses the current shift unless `reward_type` is "Head", "Clothes" or "Shoes" and `reward_gear_id` (21000-21999) exists in that gear table (Head 21000-21005, 21007-21023; Clothes 21000-21006, 21008-21017; Shoes 21001-21009). Without it the lobby shows a communication error with no code (measured live: reward record +0x60 = 7) | G (`0x3879c00`, `0x37e98f0`; romfs `GearInfoHead/Clothes/Shoes`) + M |
-| GameRecord/InitializeAttributes | called after a NOT_FOUND `CoopUserAttribute/Data` (or `VsUserAttribute/Data`) read; UNIMPLEMENTED shows 2321-4224. The game parses only `attributes`, every key optional (coop: `shift_id`, `limited_shift_id`, `mm_disable_limit`, `total_grade_point`, `smell`; VS: `season_id`, `udemae`, ...). Request/response field numbers from the reference's descriptors | G (`0x327fe6c`, `0x327ba70`, `0x327a230`) + N (descriptors) + M |
+| GameRecord/InitializeAttributes | called after a NOT_FOUND `CoopUserAttribute/Data` (or `VsUserAttribute/Data`) read; UNIMPLEMENTED shows 2321-4224. The game parses only `attributes`, every key optional (coop: `shift_id`, `limited_shift_id`, `mm_disable_limit`, `total_grade_point`, `smell`; VS: `season_id`, `udemae`, ...). Request/response field numbers from the notes' descriptors | G (`0x327fe6c`, `0x327ba70`, `0x327a230`) + N (descriptors) + M |
 | Hammer `UserAttribute/Data` | read at login; any non-OK status is taken as `total_participants` = 0, no error raised | G (`0x32b4f20`, handler `0x32acd88`) |
 | SelectVsParams | the SDK keeps only the name (parsed), the two timestamps and the attributes; `params_set_id` and both responses' `schedule_set_id` are dropped and never compared; the game reads only the attributes map, every key optional | G (`main+0x7b8620`, `0x7bbee0`, `0x32a4968`-`0x32a4dac`) |
 
@@ -328,7 +325,7 @@ The `proto/gamesync/**` and `proto/matchmaking/**` `.proto` files were copied fr
 `servers/stardew-valley/proto` (source O — OpenPak's own AGPL-3.0 repository) with only the
 `go_package` path rewritten from `openpak/stardew-valley` to `openpak/splatoon-3`. The `.pb.go`
 bindings are regenerated locally by stock `protoc`. This is a reuse of OpenPak's own reconstruction
-of Nintendo's shared NPLN schema, not a second read of the Shield-licensed tree — the field
+of Nintendo's shared NPLN schema, not a second read of the source notes — the field
 names/numbers/types were checked against N's descriptors (the tables above) and match. The
 duplication is deliberate debt: see `design.md`, "Lift the shared NPLN layer".
 

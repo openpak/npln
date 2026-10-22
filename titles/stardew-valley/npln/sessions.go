@@ -619,7 +619,7 @@ func (g *sessionServer) GetGameSessionShortAlias(ctx context.Context, req *mmpb.
 
 func (g *sessionServer) AllocateIceServerSet(ctx context.Context, req *mmpb.AllocateIceServerSetRequest) (*mmpb.IceServerSet, error) {
 	diag("AllocateIceServerSet", req)
-	// Shape measured by the family's reference server on Nintendo's answers: a STUN server AND a
+	// Shape observed in Nintendo's own answers: a STUN server AND a
 	// TURN server (shared-secret credentials "<exp>:<user>" / base64(HMAC-SHA1)), `ttl` PRESENT
 	// but empty, client cache 90 s. With the set incomplete (no TURN, or a field missing) Pia
 	// rejects it silently and never sends a single STUN probe — which is exactly what left our
