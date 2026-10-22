@@ -32,6 +32,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/openpak/npln/internal/connectivity"
 	commonpb "github.com/openpak/npln/proto/common"
 	mmpb "github.com/openpak/npln/proto/matchmaking/v1"
 	"github.com/openpak/npln/redact"
@@ -633,20 +634,35 @@ func (g *sessionServer) AllocateIceServerSet(ctx context.Context, req *mmpb.Allo
 	stunHost, stunPort, turnHost, turnPort := iceFor(lastSeg(user))
 	exp := time.Now().Add(time.Hour).Unix()
 	turnUser := fmt.Sprintf("%d:%s", exp, user)
-	mac := hmac.New(sha1.New, []byte(os.Getenv("NPLN_TURN_SECRET"))) // required at startup, see cmd/npln
-	mac.Write([]byte(turnUser))
+	var password string
+	shared, err := sharedICE(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if shared != nil {
+		stunHost, stunPort, _ = connectivity.Endpoint(shared.STUN)
+		turnHost, turnPort, _ = connectivity.Endpoint(shared.TURN)
+		turnUser, password = shared.Username, shared.Password
+	} else {
+		mac := hmac.New(sha1.New, []byte(os.Getenv("NPLN_TURN_SECRET")))
+		mac.Write([]byte(turnUser))
+		password = base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	}
 	set := &mmpb.IceServerSet{
 		Name:       tn + "/iceServerSets/static",
 		StunServer: &mmpb.StunServer{Host: stunHost, Port: stunPort, Protocol: mmpb.StunServer_UDP},
 		TurnServers: []*mmpb.TurnServer{{
 			Host: turnHost, Port: turnPort, Protocol: mmpb.TurnServer_UDP,
-			Username: turnUser, Password: base64.StdEncoding.EncodeToString(mac.Sum(nil)),
+			Username: turnUser, Password: password,
 		}},
 		Ttl:                 &durationpb.Duration{},
 		ClientCacheDuration: durationpb.New(90 * time.Second),
 		UpdateTime:          timestamppb.Now(),
 	}
 	log.Printf("[MM] AllocateIceServerSet user=%s -> STUN %s:%d TURN %s:%d", redact.Seg(user), stunHost, set.StunServer.Port, turnHost, set.TurnServers[0].Port)
+	if shared != nil {
+		log.Print("[Connectivity] ICE allocated by shared service")
+	}
 	return set, nil
 }
 
@@ -657,7 +673,17 @@ func (g *sessionServer) ListLatencyMeasurementServers(ctx context.Context, req *
 	// up online about 6 s later, while Harbor carried on (titles/splatoon-3/docs/provenance.md).
 	host := envOr("NPLN_LATENCY_HOST", envOr("NPLN_STUN_HOST", "127.0.0.1"))
 	port := envInt("NPLN_LATENCY_PORT", envInt("NPLN_STUN_PORT", 3478))
-	return &mmpb.ListLatencyMeasurementServersResponse{LatencyMeasurementServers: []*mmpb.LatencyMeasurementServer{
-		{Name: tenantFromCtx(ctx) + "/latencyMeasurementServers/eu-01-udp", Region: "europe-west2", Host: host, Port: port, Protocol: mmpb.LatencyMeasurementServer_UDP},
-	}}, nil
+	tenant := tenantFromCtx(ctx)
+	servers := []*mmpb.LatencyMeasurementServer{
+		{Name: tenant + "/latencyMeasurementServers/eu-01-udp", Region: "europe-west2"},
+	}
+	if titleOptions.LatencyServers != nil {
+		servers = titleOptions.LatencyServers(tenant)
+	}
+	for _, server := range servers {
+		server.Host = host
+		server.Port = port
+		server.Protocol = mmpb.LatencyMeasurementServer_UDP
+	}
+	return &mmpb.ListLatencyMeasurementServersResponse{LatencyMeasurementServers: servers}, nil
 }

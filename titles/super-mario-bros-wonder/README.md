@@ -2,7 +2,7 @@
 
 Super Mario Bros. Wonder (`010015100B514000`) on the shared NPLN host. It serves Stardew
 Valley's verified NPLN service set (auth, friends, game sessions, gamesync) under Wonder's
-tenant, plus the services the earlier research notes and captures show it reaching:
+tenant, plus the services the earlier implementation's Wonder code and captures show it reaching:
 the Matchmaker, messaging, the UGC store and the hydro datastore. Every fact and its source is
 in [`docs/provenance.md`](docs/provenance.md); OpenPak has not booted it yet, so any method still
 missing logs `UNIMPLEMENTED` and that log is the next work list.

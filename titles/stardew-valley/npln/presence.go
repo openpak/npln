@@ -112,6 +112,10 @@ func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveSer
 	_, uid, _ := bearer(stream.Context())
 	goOnline(uid)
 	defer goOffline(uid)
+	// Capture the interval before the opening response: a completed stream's
+	// timer goroutine must not read mutable configuration during the next test.
+	t := time.NewTicker(keepAliveBeat)
+	defer t.Stop()
 
 	var mu sync.Mutex // Send is not safe from two goroutines
 	beat := func() error {
@@ -125,8 +129,6 @@ func (p *presenceServer) KeepAlive(stream friendspb.PresenceService_KeepAliveSer
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
-		t := time.NewTicker(keepAliveBeat)
-		defer t.Stop()
 		for {
 			select {
 			case <-done:

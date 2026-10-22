@@ -18,7 +18,7 @@ in order and confirmed one at a time.
 1. **A REST bootstrap** on the Vermillion and Penne host families, before any gRPC exists: device
    initialisation, a per-device id, an account config carrying the online licence, a login ticket,
    and a persistent "frontline" connection that must stay open. In OpenPak this is
-   [`nx-baas`](../../../../../nx-baas)'s job — it already routes these hosts for the console link.
+   [`nx-baas`](../../../../../infra/nx-baas)'s job — it already routes these hosts for the console link.
 2. **The tenant's gRPC control plane** — this repository. Auth, friends, presence, matchmaking,
    game sessions, gamesync, and the Splatoon-specific `toyohr` services (schedules, Splatfest,
    cloud save, lockers, replays, lobby messaging).
@@ -149,7 +149,7 @@ revision could only argue from one side. Identical in both, and title-independen
 | ES256 access and refresh tokens | the claim shape is the SDK's, not the game's. The only per-title values are `tid` and `app_id` |
 | gRPC plumbing — `npln-grpc-type`, the keepalive policy, `UNIMPLEMENTED` logging, connection tracing | carried from Stardew to here unchanged, then independently confirmed as Splatoon 3 requirements with their own measured failure modes. That is the strongest evidence available that it is SDK behaviour rather than either title's |
 
-**Proposal: `servers/npln-common`, a Go module holding `proto/` plus identity, token minting and
+**Proposal: `platforms/switch/games/npln-common`, a Go module holding `proto/` plus identity, token minting and
 the server plumbing, with the per-title constants passed in.** Each title's repository then holds
 only its own handlers — which for Splatoon 3 is the entire interesting part, and for Stardew is
 already written.

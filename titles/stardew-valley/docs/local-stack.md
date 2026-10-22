@@ -1,23 +1,31 @@
-> Historical (written for the earlier stack). Since 2026-09-07 identity comes from OpenPak's
+> **Current Switch client (2026-10-13): Harbor**, at
+> `~/REPOS/Openpak/emulators/harbor`. Harbor is an independent
+> OpenPak project based on Eden. Citron, Ryujinx (desktop and Android), and
+> the former OpenPak Eden checkouts have been removed. References to those
+> forks below record historical evidence only: do not run their commands,
+> reinstall them, or select them for current work. Use Harbor's README and
+> current handoff for builds and testing; old results do not establish Harbor parity.
+
+> Historical. Since 2026-09-07 identity comes from OpenPak's
 > `nx-baas` over `NX_INTERNAL_URL`/`NX_INTERNAL_KEY`; see the README. Everything below about
 > `OPENPAK_ACCOUNT_URL`, `/internal/*` account routes and port 18501 is out of date.
 > The emulator side is out of date too: the `scripts/` and workspace `tools/` launch wrappers,
 > the shared host/joiner personas and the `OutboundHost`/`OutboundJoiner` accounts were all
 > retired on 2026-09-26.
 
-# Local earlier network stack (podman)
+# Local earlier stack (podman; historical, )
 
 Everything Stardew needs from "Nintendo" runs locally as podman containers from
-the `local-stack` bundle (the pre-port local setup, frozen outside this tree). Both emulators are pointed
+the earlier local bundle — the pre-port local bundle, frozen outside this tree. Both emulators are pointed
 at it by the launch wrappers in `scripts/`; nothing reaches production.
 
 ## What runs
 
-| Container (`local-stack_*`) | Host port | Role for Stardew |
+| Container (`local_*`) | Host port | Role for Stardew |
 |---|---|---|
 | `account` | tcp 8099, and `https://account.tobagin.eu` via the local Traefik | identity: sign-in, the `openpak` token, verified-account gate |
 | `stardew` (this repo, `cmd/npln`) | tcp 18501 | Stardew's NPLN gRPC/TLS: auth, friends, farm sessions — the tenant route points HERE |
-| `npln` (splatoon-3 server) | tcp 18500 | reference NPLN server (Splatoon 3); used for Stardew only until 2026-09-01 |
+| `npln` (earlier Splatoon 3 server) | tcp 18500 | earlier NPLN implementation; used for Stardew only until 2026-09-01 |
 | `baas-jwks` | tcp 18448 | JWK Set for the id_token `jku` fetch (`kid openpak-baas-key-1`) |
 | `nncs` (profile `nncs`, host network) | udp 10025/10125 (+33334 sinkhole) | NAT-check responder |
 | `website` / `dashboard` | tcp 8081 / 8093 | browser sign-in (`/api` proxied) / monitoring |
@@ -26,12 +34,12 @@ Port 18443 belongs to another project's host-process `baas-jwks` (Among Us);
 per-project instances coexist on different ports — leave it alone.
 
 ```sh
-cd ~/REPOS/local-stack
+# from the local-stack checkout:
 podman-compose --profile nncs up -d          # start / recreate everything
 podman-compose --profile nncs ps
-podman logs -f local-stack_stardew_1      # [RPC]/[Auth]/[MM] lines + [MM][DIAG] full request dumps
+podman logs -f local_stardew_1      # [RPC]/[Auth]/[MM] lines + [MM][DIAG] full request dumps
 podman-compose up -d --build stardew         # redeploy after a code change in this repo
-podman logs -f local-stack_account_1
+podman logs -f local_account_1
 ```
 
 Health in one pass:
@@ -59,7 +67,7 @@ ss -lun | grep -E ':(10025|10125) '
    Local test account: `stardewhost`, pid 1800000005, verified
    (credentials outside the repo, `~/.local/share/stardew-research/`).
 
-An emulator signed in to a different deployment (the earlier production network) presents
+An emulator signed in to a different deployment presents
 a token the local `npln` cannot prove → `IssuePrearrangedUserToken` DENIED
 (2321-5760). Not signed in at all → the client cancels pre-auth (2321-4992).
 
@@ -83,7 +91,7 @@ title's instance (`OPENPAK_ALLOW_SHARED=1` to override after asking; the old
 `STARDEW_ALLOW_SHARED=1` still works), and bake every `OPENPAK_*` var in —
 never launch the emulator bare for this project.
 
-First run of each profile: sign in from the emulator's earlier network menu with the
+First run of each profile: sign in from the emulator's account menu with the
 shared account — host profile → `OutboundHost` (pid 1800000003), joiner →
 `OutboundJoiner` (pid 1800000004), the family-wide host/joiner identities (see
 `https://github.com/openpak/docs/blob/main/playbooks/conventions.md`). The link is stored per profile, so the
@@ -122,7 +130,7 @@ the next handler to write; `[MM][DIAG]` dumps show exactly what the game sent.
   npln-friends handler then demands an `X-Internal-Key` header the NPLN server
   never sends. Network rule authenticates callers instead.
 
-Verify: `podman exec local-stack_npln_1 wget -qO- "http://account:8080/internal/npln-friends?pid=1800000005"`
+Verify: `podman exec local_npln_1 wget -qO- "http://account:8080/internal/npln-friends?pid=1800000005"`
 → JSON with `"verified":true`; from the host the same URL on :8099 must be 403.
 
 ## Gotchas
@@ -134,5 +142,5 @@ Verify: `podman exec local-stack_npln_1 wget -qO- "http://account:8080/internal/
   (`~/ryujinx-instances/host` and `…/joiner`) are selected with
   `--root-data-dir`, which the launchers pass. One Ryujinx per profile dir;
   host + joiner run side by side.
-- `NNCS_SERVER_IP` in `local-stack/.env` is only the address the responder
+- `NNCS_SERVER_IP` in the local-stack `.env` is only the address the responder
   reports back; loopback probes classify fine with it as is.

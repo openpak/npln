@@ -163,6 +163,10 @@ func (c *connTracer) HandleConn(_ context.Context, s stats.ConnStats) {
 
 // Options are the per-title differences a title on this service set may ask for.
 type Options struct {
+	// LatencyServers supplies fresh resource names and regions for a title's latency list.
+	// The session service fills in the configured OpenPak UDP endpoint. Nil uses one candidate.
+	LatencyServers func(tenant string) []*mmpb.LatencyMeasurementServer
+
 	// ConfigProperties adds _BaseConfigName (the matchmaking config's last segment) and an
 	// empty _AliasSuffix to a created session's properties, as Nintendo's backend does. Off by
 	// default: Stardew's joiners drop any farm whose properties carry them. It also makes the

@@ -50,7 +50,7 @@ friends[]}`, and only then issues its own NPLN tokens. An identity nx-baas canno
 `proto/` holds the auth subset of the NPLN schema and the bindings generated from it
 (`proto/generate.sh`, see [`proto/NOTICE.md`](../../proto/NOTICE.md)). The schema and the identity/token
 code are not title-specific and are duplicated from `stardew-valley`; design.md proposes lifting
-them into one `servers/npln-common` module before a third NPLN title starts.
+them into one `platforms/switch/games/npln-common` module before a third NPLN title starts.
 
 ## Test
 
@@ -61,7 +61,7 @@ go build ./... && go vet ./... && go test ./...
 ## Clean room
 
 Read [`docs/clean-room-policy.md`](https://github.com/openpak/docs/blob/main/clean-room-policy.md) before writing a line. The
-earlier research notes on the title were used **for facts only** —
+earlier implementation for `splatoon-3` is a source-available licence and was read **for facts only** —
 ports, hostnames, endpoint paths, wire field names, error codes, flows, and what actually runs. No
 code, comments, docs, structure, type or function names were copied or translated. Every fact taken
 is recorded with its source in [`docs/provenance.md`](docs/provenance.md), which is what makes

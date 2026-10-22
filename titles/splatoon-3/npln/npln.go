@@ -522,7 +522,9 @@ func NewServer(creds credentials.TransportCredentials, rot *atomic.Pointer[rotat
 	// every Pia-over-NPLN title OpenPak hosts plays on (Stardew, Dinkum, Terraria). This package's
 	// own copy never hosted a session. Nintendo's backend adds _BaseConfigName/_AliasSuffix to a
 	// Splatoon 3 room (docs/provenance.md), hence ConfigProperties; Referee publishes the match verdicts.
-	stardew.RegisterSessions(s, Tenant, stardew.Options{ConfigProperties: true, Matchmaker: true, Referee: true})
+	stardew.RegisterSessions(s, Tenant, stardew.Options{
+		ConfigProperties: true, Matchmaker: true, Referee: true, LatencyServers: latencyServers,
+	})
 	// The toyohr services the game calls on its way to the lobby, and the maintenance feed.
 	s.RegisterService(withRawUnary(toyohrpb.CloudSave_ServiceDesc, map[string]rawHandler{"GetSaveRecord": getSaveRecord}), &cloudSave{})
 	s.RegisterService(withRawUnary(toyohrpb.UserScreening_ServiceDesc, map[string]rawHandler{"GetViolation": getViolation}), &userScreening{})

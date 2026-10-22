@@ -13,6 +13,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
+	"github.com/openpak/npln/internal/connectivity"
 	"github.com/openpak/npln/redact"
 	"github.com/openpak/npln/titles"
 )
@@ -57,8 +58,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("listen %s: %s", addr, redact.Err(err))
 	}
-	if os.Getenv("NPLN_TURN_SECRET") == "" {
+	connectivityClient, err := connectivity.FromEnvironment()
+	if err != nil {
+		log.Fatal("invalid shared connectivity configuration")
+	}
+	if connectivityClient == nil && os.Getenv("NPLN_TURN_SECRET") == "" {
 		log.Fatal("NPLN_TURN_SECRET is required: it must match coturn's --static-auth-secret")
+	}
+	if connectivityClient != nil {
+		log.Print("shared connectivity enabled for NPLN ICE allocation")
 	}
 	serveHealth(env("HEALTH_LISTEN", title.HealthListen), title.Name)
 	log.Printf("%s NPLN server listening on %s (gRPC/TLS)", title.Name, addr)

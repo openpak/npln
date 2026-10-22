@@ -4,12 +4,15 @@ package titles
 import (
 	host "github.com/openpak/npln"
 	bayonetta3 "github.com/openpak/npln/titles/bayonetta-3"
+	corekeeper "github.com/openpak/npln/titles/core-keeper"
 	"github.com/openpak/npln/titles/dinkum"
 	endlessocean "github.com/openpak/npln/titles/endless-ocean-luminous"
+	gogotown "github.com/openpak/npln/titles/go-go-town"
 	hamsterplayground "github.com/openpak/npln/titles/hamster-playground"
 	humanfallflat "github.com/openpak/npln/titles/human-fall-flat"
 	peacewalker "github.com/openpak/npln/titles/metal-gear-solid-peace-walker"
 	mhrise "github.com/openpak/npln/titles/monster-hunter-rise"
+	"github.com/openpak/npln/titles/plateup"
 	arceus "github.com/openpak/npln/titles/pokemon-legends-arceus"
 	scarletviolet "github.com/openpak/npln/titles/pokemon-scarlet-violet"
 	splatoon3 "github.com/openpak/npln/titles/splatoon-3"
@@ -22,10 +25,13 @@ import (
 
 // All is every title, by the NPLN_TITLE value that selects it. Adding a game is one line here.
 var All = map[string]host.Title{
+	corekeeper.Title.Name:        corekeeper.Title,
+	plateup.Title.Name:           plateup.Title,
 	stardew.Title.Name:           stardew.Title,
 	splatoon3.Title.Name:         splatoon3.Title,
 	wonder.Title.Name:            wonder.Title,
 	dinkum.Title.Name:            dinkum.Title,
+	gogotown.Title.Name:          gogotown.Title,
 	humanfallflat.Title.Name:     humanfallflat.Title,
 	hamsterplayground.Title.Name: hamsterplayground.Title,
 	wavecade.Title.Name:          wavecade.Title,

@@ -1,8 +1,16 @@
 # stardew-valley
 
+> **Current Switch client (2026-10-13): Harbor**, at
+> `~/REPOS/Openpak/emulators/harbor`. Harbor is an independent
+> OpenPak project based on Eden. Citron, Ryujinx (desktop and Android), and
+> the former OpenPak Eden checkouts have been removed. References to those
+> forks below record historical evidence only: do not run their commands,
+> reinstall them, or select them for current work. Use Harbor's README and
+> current handoff for builds and testing; old results do not establish Harbor parity.
+
 An early-stage, independent clean-room interoperability project investigating the network services needed by Stardew Valley multiplayer on Nintendo Switch.
 
-Status (2026-09-07): the NPLN server (`cmd/npln` — `nn.npln.auth`, `nn.npln.friends`, `nn.npln.matchmaking.GameSessionService`, `nn.npln.gamesync`) hosts, lists, joins and runs three-player farms with rejoin, host-leave and stale-seat cleanup (verified on Ryujinx, `handoff.md` session 14). Identity now comes from the OpenPak stack: the client's BAAS id_token is minted by [`nx-baas`](../../../../nx-baas) (the Switch adapter over the `account` core), and this server proves its `openpak` claim and reads the friend graph through nx-baas's internal API. Not yet re-run end to end on OpenPak: an emulator profile pointed at nx-baas is the next step. The repository also keeps the research tools that got here: a metadata-only TCP/UDP observer and a sanitized TLS/HTTP2 probe.
+Status (2026-09-07): the NPLN server (`cmd/npln` — `nn.npln.auth`, `nn.npln.friends`, `nn.npln.matchmaking.GameSessionService`, `nn.npln.gamesync`) hosts, lists, joins and runs three-player farms with rejoin, host-leave and stale-seat cleanup (verified on Ryujinx, `handoff.md` session 14). Identity now comes from the OpenPak stack: the client's BAAS id_token is minted by [`nx-baas`](../../../../infra/nx-baas) (the Switch adapter over the `account` core), and this server proves its `openpak` claim and reads the friend graph through nx-baas's internal API. Not yet re-run end to end on OpenPak: an emulator profile pointed at nx-baas is the next step. The repository also keeps the research tools that got here: a metadata-only TCP/UDP observer and a sanitized TLS/HTTP2 probe.
 
 This project is not affiliated with or endorsed by Nintendo, ConcernedApe, Stardew Valley, Chucklefish, or any original service provider. It contains no proprietary game code, assets, SDK material, binaries, certificates, keys, firmware, extracted files, credentials, or raw packet captures.
 

@@ -1,6 +1,14 @@
+> **Current Switch client (2026-10-13): Harbor**, at
+> `~/REPOS/Openpak/emulators/harbor`. Harbor is an independent
+> OpenPak project based on Eden. Citron, Ryujinx (desktop and Android), and
+> the former OpenPak Eden checkouts have been removed. References to those
+> forks below record historical evidence only: do not run their commands,
+> reinstall them, or select them for current work. Use Harbor's README and
+> current handoff for builds and testing; old results do not establish Harbor parity.
+
 > **2026-09-08 — the OpenPak conversion is committed and the server is deployed.** The module is
 > `openpak/stardew-valley`, imports and generated stubs follow, the licence is AGPL-3.0, and the
-> deployment talks to nx-baas's internal API rather than an earlier account server. That work had
+> deployment talks to nx-baas's internal API rather than a earlier account server. That work had
 > been done on the workstation and never pushed, so the repository on GitHub could not build; a
 > tag on 2026-09-08 exposed it. Build the container locally before tagging — CI builds the
 > committed tree, not the working one.
@@ -10,7 +18,7 @@
 > The website's status page checks that endpoint.
 >
 > Everything below predates the conversion and still says "legacy" in places; the blocker list
-> in particular is earlier-stack and no longer describes this deployment.
+> in particular is earlier and no longer describes this deployment.
 
 # stardew-valley Handoff
 
@@ -117,7 +125,7 @@ Build an independently written, open-source compatibility service for the networ
   - **Farm listing facts learned:** the farm list is a friends-only query (`users=` = the caller's
     friend list), so a new tester must be friended first — done for stardewhost via the account
     server's `/internal/friend-request` + `/internal/friend-accept` (`{"from":…,"to":…}` /
-    `{"pid":…,"from":…,"accept":true}` from inside `local-stack-account-1`). The GAME then
+    `{"pid":…,"from":…,"accept":true}` from inside `local-account-1`). The GAME then
     filters client-side on `_Pia_SystemData`: a friend's farm shows only if your id is in
     `farmhands` or `newFarmhands` is `True`. Cabins cost 4000g on this build; the host only
     republishes the properties on join/leave/day change, NOT when a cabin is built, so after
@@ -154,11 +162,11 @@ Build an independently written, open-source compatibility service for the networ
     `change-me`), both images built with `podman compose build`, coturn UP and answering STUN
     locally, `podman-restart` user service enabled.
   - **Still blocked on the user:** (1) OCI security list ingress for those three port ranges —
-    external probes never reach the VM (iptables counters stay 0); (2) cert+key from the earlier network
+    external probes never reach the VM (iptables counters stay 0); (2) cert+key from the earlier
     CA into `deploy/oci/certs/` (Ryujinx clients would accept anything thanks to patch #23, real
     hardware would not); (3) `OPENPAK_INTERNAL_KEY`; (4) merge+deploy PR #8 and
     reach `/internal/*` PRIVATELY — the production proxy returns 404 for every internal route and
-    the earlier design notes say they must never be public; the box already sits on the
+    prior docs ARCHITECTURE.md says they must never be public; the box already sits on the
     user's ZeroTier network, so joining the main server to it and pointing `OPENPAK_ACCOUNT_URL`
     at its ZeroTier address needs no proxy change; (5) the backend env for the Stardew tenant.
   - **citron re-test (both personas, local stack):** base 1.2.34 dies ~6 s in with an uncaught
@@ -173,9 +181,9 @@ Build an independently written, open-source compatibility service for the networ
     stored credential helper points at a missing `/usr/bin/gh`; push with
     `git -c credential.helper= -c credential.helper="!$(command -v gh) auth git-credential"`. The
     local stack now starts with `podman compose` (docker-compose provider → hyphenated names
-    `local-stack-stardew-1`, image `localhost/local-stack-stardew`); build the Stardew image
-    with `podman build -f deploy/oci/Dockerfile .` and tag both `local-stack-stardew` and
-    `local-stack_stardew`. Emulators: start them to the game list, never pass the NSP.
+    `local-stardew-1`, image `localhost/local-stardew`); build the Stardew image
+    with `podman build -f deploy/oci/Dockerfile .` and tag both `local-stardew` and
+    `local_stardew`. Emulators: start them to the game list, never pass the NSP.
   - **NEXT:** unchanged hardening list from session 12b (host quits with joiner inside, keepalive
     kill test, 3+ players), plus: run one emulator login on the new openpak flow locally, then the
     production bring-up once the five blockers above clear.
@@ -235,7 +243,7 @@ Build an independently written, open-source compatibility service for the networ
     `__pus`/`__us` document gets `ussid`, `ucsid`, `upcsid` overlaid with the participant's rank.
     Rebuilt manually: compose's `dockerfile_inline` is not supported by the docker-compose provider
     podman uses here — write the Dockerfile to a temp file, `podman build -t
-    localhost/local-stack-stardew:latest -f <file> <repo>`, then `podman compose up -d --no-build
+    localhost/local-stardew:latest -f <file> <repo>`, then `podman compose up -d --no-build
     --force-recreate stardew`. The restart wipes the in-memory farm; the host must re-host.
   - **Result (17:27 join, host re-hosted):** roster pushes both ways within the same second, NAT
     tables correct on both sides (`joiner: [1]{id=1,peer=6b49d203,state=0xd}`, `host:
@@ -279,7 +287,8 @@ Build an independently written, open-source compatibility service for the networ
       (bare launches, "identity not provable (no valid openpak claim)"); the original passwords were
       never recorded, so they were reset via the account service's `/api/forgot` + `/api/reset`
       (dev mode logs the reset link) — new credentials in
-      `~/.local/share/stardew-research/local-accounts.txt`. Signing in from the earlier network
+      `~/.local/share/stardew-research/local-accounts.txt`. Signing in from the earlier
+      account flow — see the local-stack doc. (`stardewjoin` pending the server's registration rate limit.)
       menu created a SECOND emulator user profile (new user id → empty save set → "the farm is not
       there"); fix = set `profile_user_id=00000000000000010000000000000000` in
       `openpak_account.txt` and remove the duplicate from `system/Profiles.json` (the Test farm
@@ -767,7 +776,7 @@ Build an independently written, open-source compatibility service for the networ
 
 - 2026-09-03 (session 7 — **local stack rebuilt after a machine reset; live `:34343` telemetry
   CAPTURED AND DECRYPTED for the first time; the error-code field traced to a struct offset, not
-  yet read live**): this machine had lost state since session 6c — local-stack's containers
+  yet read live**): this machine had lost state since session 6c — earlier local stack's containers
   were down, `tcpdump`, `python-cryptography`, and a JDK were no longer installed, and passwordless
   sudo was gone. All rebuilt (see **Environment rebuild** below). Fresh joiner still fails in a
   consistent **12-13 s**, not session 6c's 25-30 s — that earlier timing was not a reliable
@@ -814,10 +823,10 @@ Build an independently written, open-source compatibility service for the networ
     error. A flag byte at **~0x31a** is `0xff` (absent) in the earlier report and `0x01` in the
     final one — plausibly a "job settled" flag, not itself an error code.
   - **Environment rebuild this session** (do these once per fresh machine/session, they were all
-    missing): local-stack's `dockerfile_inline` services (`stardew`, `stun`, `nncs`) fail to
+    missing): earlier local stack's `dockerfile_inline` services (`stardew`, `stun`, `nncs`) fail to
     build under the `docker-compose` CLI plugin (`podman compose`) with a spurious
     "Dockerfile path" symlink error — **build them manually** with `podman build -t
-    local-stack-<svc> -t local-stack_<svc> -f <dockerfile> <context>` (the compose file's
+    local-<svc> -t local_<svc> -f <dockerfile> <context>` (the compose file's
     `dockerfile_inline:` block, copied to a temp file, or `./stun`'s real Dockerfile as-is), then
     `podman compose up -d --no-build` / `podman compose --profile stun --profile nncs up -d
     --no-build` picks up the pre-built images. **`nncs` (the `nncs` profile) must be started too** —
@@ -1068,7 +1077,7 @@ Build an independently written, open-source compatibility service for the networ
   ROOT CAUSE of the P2P stall: both consoles authenticate to coturn fine (our HMAC creds accepted)
   but every TURN **ALLOCATE gets 400 "Transport field missed or wrong"** — Pia sends the ALLOCATE
   WITHOUT a REQUESTED-TRANSPORT attribute (coturn `if (!transport)`), retries every 500 ms, and Pia
-  gives up with **2318-1202**. FIX IN PROGRESS: local-stack `stun/Dockerfile` builds coturn from
+  gives up with **2318-1202**. FIX IN PROGRESS: earlier local stack `stun/Dockerfile` builds coturn from
   source with a one-line patch (missing REQUESTED-TRANSPORT → UDP); compose `stun` now builds it.
   Tools: header-only UDP capture `sudo tcpdump -i any -nn -l udp …` (needs sudo; CAP_NET_RAW) and
   `readsess.py joiner` (base cached per pid → instant) read the joiner in the ~20 s connecting
@@ -1080,8 +1089,8 @@ Build an independently written, open-source compatibility service for the networ
   glue stays in state 6 (`CreateSessionAsync` pending forever), Pia Session state 0, all station
   fields 0 — and the app-data flush (gated on local station == host station) never runs. Live read
   BEFORE the fix: glue 6, session 0, stations 0. FIX: `AllocateIceServerSet` now returns the shape
-  the earlier server measured on Nintendo (STUN + TURN with `<exp>:<user>` / base64 HMAC-SHA1
-  credentials, `ttl` present-but-empty, client cache 90 s) and local-stack's coturn runs
+   the earlier implementation measured on Nintendo (STUN + TURN with `<exp>:<user>` / base64 HMAC-SHA1
+  credentials, `ttl` present-but-empty, client cache 90 s) and earlier local stack's coturn runs
   STUN+TURN with `--use-auth-secret` (`NPLN_TURN_SECRET`, `.env` + compose; backups
   `.env.bak-turn`, `compose.yml.bak-turn`). Live read AFTER: glue 9, session 1, local station ==
   host station (0x6b49d203 idx 18), and the host writes `docs/__gs/m {ip, prp._Pia_SystemData}`
@@ -1100,7 +1109,7 @@ Build an independently written, open-source compatibility service for the networ
   **WriteDocuments** carrying a `prp` map: the create/update jobs (`NplnBackgroundProcessJob::
   WaitCreateNetwork` 0x7ab2880, `WaitUpdateHostPlayerName` 0x7ab6980, `WaitRegistSessionProperty`
   0x7ab0910, plus 0x7aa9130) build the field path `["prp","_Pia_SystemData"]` (constant helper
-  0x7ad6bbc returns `"prp"`). This matches the earlier server's note that Nintendo republishes
+  0x7ad6bbc returns `"prp"`). This matches the earlier implementation's note that Nintendo republishes
   session properties in `docs/__gs/m.prp`. Our host never sent such a write (only `__pus`).
   (3) **The joiner can only see `_Pia_SystemData`**: the search consumer (`WaitSearchNetwork`)
   looks up exactly that key in the returned session's properties, memcpy's it (0x5c..0x200 bytes)
@@ -1130,7 +1139,7 @@ Build an independently written, open-source compatibility service for the networ
   startup) and coturn saw nothing, so Pia's transport/mesh never started and the local station is
   presumably still 0 → lobby data never published → empty join list. Per-user station doc is
   `docs/__pgn/All/__stu/<uss>` (keys suid/susid/sussid/suscid/pl; reader 0x7b57718), which we
-  synthesize like the earlier server.
+  synthesize like the earlier implementation.
   (8) More glue facts: the glue singleton pointer is a static at ELF 0xe582088 (guest 0x16A88088;
   object 0x270 bytes: +0x68 state, +0x6d is-host, +0x6f update-pending, +0x70 backend mode). The
   glue's create (0x1ac5070, state 4→7) calls Pia `Session::CreateSessionAsync` (0x760b160) with a
@@ -1179,19 +1188,19 @@ Build an independently written, open-source compatibility service for the networ
 - 2026-09-02 (session 3, RYUJINX PROFILE CONSOLIDATION): the family moved from a Ryujinx data dir per
   game to **two shared profiles for all games** — host `~/ryujinx-instances/host` + joiner
   `~/ryujinx-instances/joiner` — signed into the family-wide shared accounts **`OutboundHost`
-  (1800000003)** / **`OutboundJoiner` (1800000004)** (per `shared-docs/conventions.md`, set by the
+  (1800000003)** / **`OutboundJoiner` (1800000004)** (per `prior shared conventions doc`, set by the
   citron consolidation; names historical, treated as generic host/joiner). New family launchers
-  `shared-docs/scripts/launch-ryujinx-{host,joiner}.sh` (engine `launch-ryujinx.sh <host|joiner>`);
+  `prior shared launch scripts` (engine `launch-ryujinx.sh <host|joiner>`);
   `scripts/launch-ryujinx.sh` is now a thin wrapper (`--joiner`, `--menu`) that bakes in Stardew's NSP
   + route via `OPENPAK_ROUTE`. The shared profile's `openpak_routes.env` accumulates one line per
   game (launchers ensure, never overwrite). Account migration DONE (2026-09-02): `OutboundHost`
   (1800000003, u-s5jwdwpyopejkzvxcsjq) and `OutboundJoiner` (1800000004, u-rxroqs444xrkmhpny2na) are
   mutual friends AND now VERIFIED (verified via `GET /api/verify?token=…`, an HMAC token bound to
-  id+email under `OPENPAK_SECRET`; recipe in `shared-docs/ryujinx-isolation.md`), so Stardew's auth
+  id+email under `OPENPAK_SECRET`; recipe in `prior shared emulator-isolation doc`), so Stardew's auth
   gate passes for them. Remaining profile TODO (emulators closed): seed the two profile dirs and sign
   them into these accounts. Old dated entries below still name the
   per-game dirs (`~/ryujinx-instances/stardew`, `stardew-join`) and the old accounts — historical.
-  Docs updated: `shared-docs/ryujinx-isolation.md`, `emulator-launch-protocol.md`, `conventions.md`
+  Docs updated: prior shared emulator-isolation, emulator-launch-protocol and conventions docs
   (citron agent's), `README.md`, `docs/local-stack.md`.
 
 - 2026-09-02 (session 3, MECHANISM): the join-list entry is `CoopMenu.FriendFarmSlot` built from
@@ -1301,11 +1310,11 @@ Build an independently written, open-source compatibility service for the networ
 - 2026-08-31: A minimal Go research scaffold and protocol-neutral TCP/UDP observer were implemented and exercised with synthetic traffic.
 - 2026-08-31: An empty Git repository was initialized after the scaffold was created; no commit was made.
 - 2026-08-31: Stardew's startup reaches NNCS NAT checks and the NPLN tenant over redirected networking. DNS, TCP, SNI, TLS server-flight behavior, and the certificate-trust failure were measured.
-- 2026-08-31: A clean-room, exact-build Citron compatibility patch crossed the TLS trust boundary. Stardew now completes the client handshake and sends its first encrypted application record to earlier network, then immediately closes. The first HTTP/2/gRPC method remains unknown.
+- 2026-08-31: A clean-room, exact-build Citron compatibility patch crossed the TLS trust boundary. Stardew now completes the client handshake and sends its first encrypted application record to the earlier endpoint, then immediately closes. The first HTTP/2/gRPC method remains unknown.
 - 2026-08-31: A controlled loopback TLS-termination probe proved the client's first encrypted record is a pre-HEADERS cancel flight (preface/SETTINGS/ACK/RST/WINDOW_UPDATE), not an HTTP/2 request. The client cancels its first RPC before transmission regardless of server behavior; the blocker is client-local, upstream of the wire protocol.
-- 2026-09-01: The local earlier network stack is complete on podman (`local-stack`: account 8099, npln 18500, baas-jwks 18448, nncs UDP 10025/10125, website/dashboard). Per-title launch wrappers (`scripts/launch-citron.sh`, `scripts/launch-ryujinx.sh`) pin every host to it and isolate the emulator profile; runbook in `docs/local-stack.md`. Next: sign the emulator into the local account and rerun the online attempt (identity-consistent test).
+- 2026-09-01: The local earlier stack is complete on podman (`earlier local stack`: account 8099, npln 18500, baas-jwks 18448, nncs UDP 10025/10125, website/dashboard). Per-title launch wrappers (`scripts/launch-citron.sh`, `scripts/launch-ryujinx.sh`) pin every host to it and isolate the emulator profile; runbook in `docs/local-stack.md`. Next: sign the emulator into the local account and rerun the online attempt (identity-consistent test).
 - 2026-09-01: FIRST AUTHENTICATED STARDEW SESSION on the local podman stack (Ryujinx + local account `stardewhost`): `Auth/IssuePrearrangedUserToken` PASSED, then `Friends/ActivateUser`, `Friends/SubscribeFriendUsers`, then `GameSessionService/QueryGameSessions` → server UNIMPLEMENTED → client 2321-4224. The Stardew-specific RPC surface starts at `QueryGameSessions`; that is the next handler to build. Under citron the same identity still cancels pre-HEADERS (2321-4992): emulator gap, not protocol.
-- 2026-09-01: Own NPLN server written (`cmd/npln`), deployed as `stardew` container on 18501, tenant route switched to it. Auth/Friends/GameSessionService implemented per the observed shapes; every session RPC dumps its request (DIAG) so hosting/joining can be built from what Stardew actually sends.
+- 2026-09-01: Own NPLN server written (`cmd/npln`), deployed as `stardew` container on 18501, tenant route switched to it. Auth/Friends/GameSessionService implemented per reference-implementation shapes; every session RPC dumps its request (DIAG) so hosting/joining can be built from what Stardew actually sends.
 - 2026-09-01 (evening): HOSTING WORKS on our server. Host flow measured end to end: `QueryGameSessions` (search config `Farm8Player_GameSessionSearchConfigs`, view BASIC, min_vacancy 1, page_size 1) → `CreateGameSessionCreationTicket` (matchmaking config `Farm4Player`, one `_Pia_SystemData` bytes property carrying the host name) → Track → session transport dialed with SNI `gamesync.npln.nintendo.net` (cert must cover it; that SAN was the gate) → `Gamesync/IssueToken` → `KeepUserSession` watching `docs/__us/<uss>`, `docs/__pgn/All/__stu/<uss>`, `docs/__stg/All` and collection `docs/__pgn/All/__pus` → host writes its `__pus` member (pgn,pusa,ucsid,uid,upcsid,ussid) → `AllocateIceServerSet` → `GetDocument docs/__gs/f` → the farm loads. Joining: second account `stardewjoin` (pid 1800000007) + second Ryujinx data dir `~/ryujinx-instances/stardew-join`; STUN-only coturn added to the stack (`stun` profile, 127.0.0.1:3478) for ICE.
 - 2026-09-01 (late): JOIN LIST STAYS EMPTY. The joiner (`stardewjoin`) queries `QueryGameSessions` with `users=[host]` (page_size 20, view BASIC, `Farm8Player_GameSessionSearchConfigs`) and receives the host's ACTIVE session, yet lists nothing and sends no further RPC. Twelve response variants (user path form, no user_sessions, no properties, LAN host address, name under tenants/current, is_public false, capacity 4..8, friend relationship flags, Nintendo's `_BaseConfigName`/`_AliasSuffix` system properties, config echoed with concrete tenant) all produced an empty list — the gate is client-side and not in those fields. Next: decompile the client's `_Pia_SystemData` / QueryGameSessions consumers (Ghidra project `~/ghidra-projects/sdfull`, script `~/ghidra-projects/decomp_query.py`, output `~/ghidra-projects/out/`).
 - 2026-09-01 (night): JOIN FILTER LOCALISED by decompiling the exact build (Ghidra project `~/ghidra-projects/sdfull`). The joiner's QueryGameSessions result consumer is main `FUN_07bb3d30`; it deserialises each session's `_Pia_SystemData` bytes property (accepts length 0x5c..0x200; the host's blob is exactly 0x5c=92 bytes, so it passes) and then filters with a criteria matcher (`0x76ecee4`). For the QueryGameSessions path the criteria (built in `0x1bc23b8` from `Farm8Player_GameSessionSearchConfigs`) sets **bit3** and **bit4** (setters `0x76edbfc`/`0x76edc0c`), NOT bit1/bit2. The matcher's bit3/bit4 read the session via VIRTUAL methods (`vtbl+0x30 &1`; `session+0xa2` vs `vtbl+0x20`/`vtbl+0x38`, plus `param_3` from `*(*(mgr+0x80)+0x510)`, default 1) on a session-info object built from the BLOB, not from the wire GameSession. Twenty server-side variants (config name in every form, max_participant 2..9, current 0/1, is_public, user_sessions present/absent, properties present/absent) ALL produced an empty join list — because the deciding values come from the host's opaque `_Pia_SystemData`, which we echo unchanged and cannot vary from the server. Presence is never called (0 Presence RPCs), so the list is not presence-driven. NEXT (heavier): runtime memory inspection of the joiner at the filter moment — read the criteria object (`mgr+0x1130`) and one session-info object (`uStack_658`) to capture the real bit3/bit4 comparison values; or decode the Pia `_Pia_SystemData` layout (92-byte struct: byte[1]=0x5c length, byte[2]=0x16, host name "<user-a>" at ~offset 0x1a) to learn which field the host must advertise as "joinable/has-vacancy". Decompiled functions saved under `~/ghidra-projects/out/`.
@@ -1314,7 +1323,7 @@ Build an independently written, open-source compatibility service for the networ
 
 ## Architecture
 
-Since 2026-09-01 the main component is `cmd/npln` + `internal/npln`: Stardew's own NPLN gRPC/TLS server (Auth with openpak-proof identity and ES256 access tokens, Friends from the earlier graph, GameSessionService with an in-memory farm-session store that logs every request in full while the flow is measured). Generated NPLN protobuf bindings live in `proto/` (generated locally). Deployed as the `stardew` container (18501) of `local-stack`; the reference `splatoon-3` server stays the model for gamesync and P2P.
+Since 2026-09-01 the main component is `cmd/npln` + `internal/npln`: Stardew's own NPLN gRPC/TLS server (Auth with openpak-proof identity and ES256 access tokens, Friends from the prior account graph, GameSessionService with an in-memory farm-session store that logs every request in full while the flow is measured). Generated NPLN protobuf bindings live in `proto/` (from the family's earlier implementation, notice preserved). Deployed as the `stardew` container (18501) of `earlier local stack`; the prior `splatoon-3` earlier implementation stays the model for gamesync and P2P.
 
 The earlier research component is a dependency-free Go process with independent TCP and UDP listeners and a shared structured-event sink. Socket handling is separate from event serialization. It reads a bounded amount of traffic, logs byte counts but not contents or remote addresses, and sends no guessed response. Service modules will be introduced only when observations justify them.
 
@@ -1323,7 +1332,7 @@ The earlier research component is a dependency-free Go process with independent 
 - Workspace: `~/REPOS/stardew`
 - Session date: 2026-08-31
 - Nearby OpenPak-related repositories exist and are being reviewed only for independently written, license-compatible infrastructure concepts. No code has been copied.
-- Local stack (2026-09-01): `~/REPOS/local-stack` on podman — see `docs/local-stack.md` for ports, identity chain, launch and verification. Emulator profiles (2026-09-02: consolidated to two SHARED host/joiner profiles for all games — see the Current Status consolidation note): Ryujinx `~/ryujinx-instances/{host,joiner}` (`--root-data-dir`, via `shared-docs/scripts/launch-ryujinx-{host,joiner}.sh`); citron `~/.local/share/citron/{host,joiner}`. (Earlier this project used per-game dirs `~/ryujinx-instances/stardew` + `stardew-join`.)
+- Local stack (2026-09-01): `prior local-stack checkout` on podman — see `docs/local-stack.md` for ports, identity chain, launch and verification. Emulator profiles (2026-09-02: consolidated to two SHARED host/joiner profiles for all games — see the Current Status consolidation note): Ryujinx `~/ryujinx-instances/{host,joiner}` (`--root-data-dir`, via `prior shared launch scripts`); citron `~/.local/share/citron-{host,joiner}`. (Earlier this project used per-game dirs `~/ryujinx-instances/stardew` + `stardew-join`.)
 
 ## Discoveries
 
@@ -1548,7 +1557,7 @@ Method and results (all sanitized; raw binaries/dumps stayed external):
    - `internal/npln/auth.go` — Auth service (IssuePrearrangedUserToken, IssueToken,
      IssueAnonymousUserToken, RefreshToken, ValidateToken).
    - `internal/npln/friends.go` — Friends service (ActivateUser, SubscribeFriendUsers streamed from
-     the earlier account graph, keep-alive held open).
+     the prior account graph, keep-alive held open).
    - `internal/npln/sessions.go` — GameSessionService (Create/Track/Cancel, Get/BatchGet/Query,
      Join, Sync, ListUserSessions, short aliases, AllocateIceServerSet, ListLatencyMeasurementServers)
      with an in-memory farm store; logs every request in full (`prototext`) while the flow is measured.
@@ -1561,7 +1570,7 @@ Method and results (all sanitized; raw binaries/dumps stayed external):
      Go import lines, NEVER the embedded rawDesc bytes (doing so corrupts the descriptors — panic on
      init).
 
-2. **Deployed as the `stardew` container** (tcp 18501) of `local-stack`; the emulator route table
+2. **Deployed as the `stardew` container** (tcp 18501) of the earlier local stack; the emulator route table
    points the Stardew tenant at it, keeping the `splatoon-3` server on 18500 for S3.
    Three account-server bundle fixes were required for the npln→account internal call to pass its
    guard (see the local-stack doc / Session Log): `OPENPAK_DATA_DIR=/data`,
@@ -1646,15 +1655,15 @@ Observation:
 - **HIGH:** 2321-4224 is the client-side mapping of gRPC UNIMPLEMENTED (server-attributed; the converter table has no entry read for it yet).
 - **CONFIRMED (citron):** identical stack and account, patches applied (both logged), NAT checks answered locally, three tenant connections with h2 established and ZERO RPCs → 2321-4992. The pre-HEADERS cancel now follows the EMULATOR, not the identity or the server. Candidates: Ryujinx's gRPC connect repairs (`OPENPAK_GRPC_CONNECT_SYNC`, lost-address substitution) and its NPLN-init hold, which citron lacks (`OPENPAK_NPLN_DELAY_MS` exists but was not set).
 
-Decision: Ryujinx is the Stardew test client until citron's gRPC connect path is repaired. Next: log the sanitized request fields of `QueryGameSessions` on the earlier server (or the probe), then implement the minimal response in this repository's own service — the first Stardew handler.
+Decision: Ryujinx is the Stardew test client until citron's gRPC connect path is repaired. Next: log the sanitized request fields of `QueryGameSessions` on the earlier implementation (or the probe), then implement the minimal response in this repository's own service — the first Stardew handler.
 
 Artifacts: sanitized server-log conclusions only; tokens never recorded.
 
 ### Experiment 2026-09-01 (cont.): FIRST STARDOW RPCs OBSERVED — identity deployment confirmed as the gate
 
-Correction to the attribution above: the **2321-5760** result was **Ryujinx + Stardew + the earlier production network account + local earlier server** (not citron). Ryujinx results: **without** earlier network login → 2321-4992; **with** earlier network login → 2321-5760.
+Correction to the attribution above: the **2321-5760** result was **Ryujinx + Stardew + earlier production reference account + local earlier implementation** (not citron). Ryujinx results: **without** prior-reference login → 2321-4992; **with** prior-reference login → 2321-5760.
 
-Breakthrough (server log, local earlier server):
+Breakthrough (server log, local earlier implementation):
 
 ```
 CONN begin (h2 established)
@@ -1668,13 +1677,13 @@ IssuePrearrangedUserToken DENIED ext=nsa:eyJ… : PermissionDenied
 
 - **CONFIRMED:** first Stardew NPLN method observed on the wire: `nn.npln.auth.v1.Auth/IssuePrearrangedUserToken`, tenant `t-9f607adf-lp1` — matches the method surface embedded in the binary (experiment 8).
 - **CONFIRMED:** the full client chain works end-to-end under Ryujinx once the patches actually apply: patches → TLS → h2 → auth metadata → RPC delivered. The citron-side equivalent remains to be re-tested (citron patches were always applying; its local failures are now attributed to the identity deployment mismatch, same as Ryujinx).
-- **CONFIRMED:** the error code maps to the account state: no earlier network login → 2321-4992 (UNAVAILABLE, pre-auth failure path); earlier network login → RPC sent → server denial → 2321-5760 (UNAUTHENTICATED).
-- **CONFIRMED:** the remaining rejection is identity proof: the `nsa:` NsaIdToken presented by the emulator (signed into the PRODUCTION account server) is not provable against the LOCAL earlier server, which requires production-mode HMAC-proof NSA tokens and trusts `OPENPAK_ACCOUNT_URL=127.0.0.1:8099` (the local account server).
+- **CONFIRMED:** the error code maps to the account state: no prior-reference login → 2321-4992 (UNAVAILABLE, pre-auth failure path); prior-reference login → RPC sent → server denial → 2321-5760 (UNAUTHENTICATED).
+- **CONFIRMED:** the remaining rejection is identity proof: the `nsa:` NsaIdToken presented by the emulator (signed into the PRODUCTION account server) is not provable against the LOCAL earlier implementation, which requires production-mode HMAC-proof NSA tokens and trusts `OPENPAK_ACCOUNT_URL=127.0.0.1:8099` (the local account server).
 
 Next steps:
 
 1. **Identity-consistent local test**: sign the emulator into the account server the NPLN server trusts (local: custom-server override / route the account hostname to `127.0.0.1:8099`; Ryujinx currently signs into production). Expect `IssuePrearrangedUserToken` to PASS and the flow to advance to the next RPC (friends/matchmaking/gamesync — the full Stardew RPC surface finally observable).
-2. **Production provisioning** (end goal): register Stardew's tenant `t-9f607adf-lp1` and accept its NSA tokens on the earlier server, then test Stardew + production end-to-end.
+2. **Production provisioning** (end goal): register Stardew's tenant `t-9f607adf-lp1` and accept its NSA tokens on the earlier implementation, then test Stardew + production end-to-end.
 3. Both paths converge on the same deliverable: the Stardew RPC catalog (every method the game calls, in order) — the input for the Stardew server handlers.
 
 ### Experiment 2026-08-31-11 / 2026-09-01: The identity deployment is the gate (UNAUTHENTICATED breakthrough)
@@ -1686,14 +1695,14 @@ Method and observations:
 1. **Patch-application bug found and fixed (Ryujinx).** `ModLoader.ApplyNsoPatches` only invoked the built-in patch tables inside the `ModsInterdits` (Splatoon 3 mods-ban) branch, so Stardew's patches never applied under Ryujinx; the earlier Ryujinx local test was invalid (client died at TLS, server saw nothing). Fixed: built-in tables now apply for every title (build-ID keyed, no-op otherwise). citron was never affected (its `nso.cpp` patch is unconditional for the title).
 2. **Citron S3 correction.** citron + S3 + production **always worked**; the single morning failure (2321-4992) was session-specific (region selection Europe vs the supported Americas, and/or account state). The "citron NPLN gap" theory is retracted; the playbooks were corrected.
 3. **The account deployment changes the outcome (Stardew, citron, production NPLN, both patches):**
-   - local account (`stardewhost`, local `earlier account server`): **2321-4992** (UNAVAILABLE — cancelled pre-authentication), identically against the local earlier server AND production.
+   - local account (`stardewhost`, local `earlier account server`): **2321-4992** (UNAVAILABLE — cancelled pre-authentication), identically against the local earlier implementation AND production.
    - production account (signed in via production `earlier account server` after the stored local token was rejected at startup): **2321-5760** — grpc status 16 = **UNAUTHENTICATED** per the same conversion table.
 
 Conclusion:
 
 - **CONFIRMED:** the identity deployment is a real gate. With a recognized identity, Stardew's flow reaches authentication and gets a credential verdict instead of the pre-authentication cancel. The earlier "client-local, environment-independent" interpretation is refined: the failure followed the *identity*, not the server or the emulator.
 - **OPEN:** where the UNAUTHENTICATED verdict is produced (production auth rejecting the fabricated token/tenant, or a client-side check against the production identity), and what production needs to accept Stardew: tenant `t-9f607adf-lp1` provisioning and/or per-title BAAS client id (the fabricated `aud` is still S3's `ed9e2f05d286f7b8` in both emulators).
-- **NEXT:** (1) read the production NPLN server logs for the rejected call — method, status, `rawContext` (the splatoon-3 server spells the failing method out); (2) provision Stardew's tenant on the earlier server (or point the local stack at a fully matching account+NPLN pair) and retest; (3) if production auth still rejects, align the fabricated token's `aud` with Stardew's registered BAAS client id (value TBD from the game/tenant config).
+- **NEXT:** (1) read the production NPLN server logs for the rejected call — method, status, `rawContext` (the prior splatoon-3 implementation spells the failing method out); (2) provision Stardew's tenant on the earlier implementation (or point the local stack at a fully matching account+NPLN pair) and retest; (3) if production auth still rejects, align the fabricated token's `aud` with Stardew's registered BAAS client id (value TBD from the game/tenant config).
 
 Artifacts: no proprietary material; production log excerpts stay on the operator's side and enter this document only as sanitized conclusions.
 
@@ -1763,7 +1772,7 @@ The universal pre-HEADERS cancel (both titles, any server) is caused by a client
 
 Method:
 
-1. Production control: fresh citron without the tap envs; Splatoon 3 lobby attempt against the earlier production network.
+1. Production control: fresh citron without the tap envs; Splatoon 3 lobby attempt against the earlier production reference.
 2. Created a dedicated local account (`stardewhost`, pid 1800000005) on the local earlier account server (127.0.0.1:8099) via `/api/register`, verified via the dev-mode logged link. Credentials stored outside any repository under `~/.local/share/stardew-research/`. (`stardewjoin` pending the server's registration rate limit.)
 3. Relaunched the Stardew citron instance with `OPENPAK_API=http://127.0.0.1:8099` (citron's `BaseUrl()` accepts loopback for the account API) plus the tap envs; user signed in via **OpenPak → Sign in** (OAuth code emitted for pid 1800000005, confirmed in the account server log).
 4. Offline, authorized local analysis of the already-exported main module (external artifacts under `~/.local/share/citron/research/stardew-0.20.0/`): strings/JSON scan of the reconstructed ELF.
@@ -1781,14 +1790,14 @@ Hypothesis (current):
 Stardew's NPLN SDK validates the fabricated id_token locally before its first auth RPC and rejects it on game-specific claims — most plausibly `aud` (BAAS client id), which is hardcoded to another title's value. The expected value likely lives in the game's `npln_config.json` (game data, not main). This would explain: identical pre-HEADERS aborts for both titles pre-link, Stardew failing post-link, S3-works/Stardew-broken across both emulators, and OpenPak's earlier Ryujinx port's `online-broken` marking.
 
 - **CONFIRMED ( conclusive negative):** Against the FULL earlier NPLN server (splatoon-3 implementation: complete `nn.npln.*` services, emulator-token-accepting auth, tenant-covering cert) run locally on the tapped port with the linked local account, Stardew completes TLS+h2 ("h2 established — reached the gRPC layer") and then closes with **ZERO RPCs received** — identical pre-HEADERS cancel, 2321-4992. Combined with runs A–C: the gate is definitively inside Stardew's NPLN SDK initialization, before any request exists. Server-side completeness is irrelevant.
-- **CONFIRMED (offline):** The cloned earlier nncs server implements ONLY the UDP NAT-check responder (Pia NatDetectionJob, 16-byte probes, NAT classification) — it delivers no environment/config data. The `_npln:/npln_config.json` file is not in the base RomFS dump (Content/ assets only) and not persisted in emulated NAND; it is an in-memory SDK mount.
+- **CONFIRMED (offline):** The cloned prior NNCS earlier implementation implements ONLY the UDP NAT-check responder (Pia NatDetectionJob, 16-byte probes, NAT classification) — it delivers no environment/config data. The `_npln:/npln_config.json` file is not in the base RomFS dump (Content/ assets only) and not persisted in emulated NAND; it is an in-memory SDK mount.
 - **CONFIRMED (offline):** Stardew main embeds its own Pia/NPLN login state machine diagnostics (`ChangeStateJob::WaitInitializeNetworkSdk`, `ChangeStateJob::Login`, `LoginJob::FailureProcess`, `(Auth RPC result)`, `Failed to get NsaIdToken cache. Need call EnsureNetworkServiceAccountAvailableAsync()`) — a local wrapper around the SDK whose failure branch produces the observed behavior. ADRP+ADD xref anchors located for these strings (code refs at ~0x760cf24, 0x776bea0, 0x7788354, 0x7610994/0x7610d38 in main build E7F845…).
 - **CONFIRMED (memory):** Guest-RAM inspection (authorized) found the citron-fabricated id_token DECODED in the SDK heap (`"aud":"ed9e2f05d286f7b8"` with iss/iat/exp/jku/jti/di claims) — the token is delivered AND parsed; no validation-error text nearby. `_npln:/npln_config.json` does not exist in guest RAM, the base RomFS dump (Content/ assets only), or emulated NAND — the mount is never materialized at runtime.
 - **CONFIRMED (citron HLE):** `IManagerForApplication::EnsureIdTokenCacheAsync` is a stub returning success + async interface; `LoadIdTokenCache` serves the real token; `EnsureNetworkServiceAccountAvailableAsync` is not implemented in citron's ACC tables. The id_token `aud` remains hardcoded (`ed9e2f05d286f7b8`) with a random `sub` and a `jku` pointing at the real Nintendo BAAS certificates URL.
 - **CONFIRMED (log):** The complete ACC IPC sequence around the abort is clean (CheckAvailability, GetAccountId ×3, EnsureIdTokenCacheAsync, async HasDone/GetResult, LoadIdTokenCache with 1405-byte token, GetProfile/GetBase, GetUserExistence, GetBaasAccountManagerForApplication, InitializeApplicationInfoV2) — no unknown commands, no error results. Account-side IPC is formally satisfied.
 - **CONFIRMED (offline, static):** With corrected LOAD-segment mappings (LOAD0 covers VAs < 0x7c46000; an earlier mapping bug produced garbage windows), located the wrapper's diagnostic formatter: code at 0x776b438/0x776be20/0x776bf28 formats `(ResultNetworkServiceAccountUnavailable)` when handed an nn::Result with module field 0x7c (124 = Account) and description in [200, 269]. All three refs live in one ~34KB function at 0x776377c that also references the NsaIdToken-failure string; the Pia login state machine (ChangeStateJob/LoginJob refs) lives in a ~110KB function at 0x75f1e04. `_npln:/npln_config.json` turned out to be grpc-core service-config plumbing (a channel target string), not a title config — not a differentiator vs S3.
 - **CONFIRMED (experiment):** Name-mimicry ruled out: serving a certificate whose CN is EXACTLY the tenant hostname (vs wildcard) produced the identical pre-HEADERS abort (2321-4992, zero RPCs at the full local server). Stardew's pin is hash/DER-based, not a name compare — a build-scoped binary patch (S3-style) is required.
-- **BREAKTHROUGH (root cause identified, HIGH confidence):** The citron fork contains its S3 patch loader (mirrored from OpenPak's earlier Ryujinx port's `OpenPakS3Patches.cs`) whose own documentation states: without the integrated patch, "the game's certificate PINNING remains active" and "NPLN fails with **2321-4992** after a successful TLS handshake." This is EXACTLY the Stardew symptom — and the S3 patch is a single 4-byte IPS entry: at S3-main offset 0x00157B20, `LDRB W10,[X21,#0x38]` → `MOV W10,#1` (Ryujinx notes: "64-byte-unique signature in 100 MB"). I.e., the NPLN SDK's post-handshake pin check reads a stored "certificate accepted" flag; the patch forces it true. Diagnosis: **Stardew's NPLN SDK performs the same style of local certificate-pin check; our X.509_verify_cert chain-validation patch satisfied chain validation but not the pin, so the SDK aborts with 2321-4992 before any RPC — on every server, regardless of account state.** S3 works on emulators solely because its pin check is patched.
+- **BREAKTHROUGH (root cause identified, HIGH confidence):** The former citron third-party fork (removed; facts retained) contains its S3 patch loader (mirrored from the public compat fork's `OpenPakS3Patches.cs`) whose own documentation states: without the integrated patch, "the game's certificate PINNING remains active" and "NPLN fails with **2321-4992** after a successful TLS handshake." This is EXACTLY the Stardew symptom — and the S3 patch is a single 4-byte IPS entry: at S3-main offset 0x00157B20, `LDRB W10,[X21,#0x38]` → `MOV W10,#1` (Ryujinx notes: "64-byte-unique signature in 100 MB"). I.e., the NPLN SDK's post-handshake pin check reads a stored "certificate accepted" flag; the patch forces it true. Diagnosis: **Stardew's NPLN SDK performs the same style of local certificate-pin check; our X.509_verify_cert chain-validation patch satisfied chain validation but not the pin, so the SDK aborts with 2321-4992 before any RPC — on every server, regardless of account state.** S3 works on emulators solely because its pin check is patched.
 - **CONFIRMED (offline):** Stardew's pin is not name-based: no "Nintendo CA"/"Nintendo Class 2"/"nintendo-private-server" strings exist in main (0 hits), and the tenant hostname is assembled at runtime (`%s.%s%s.t.npln.srv.nintendo.net:443`) — so serving mimicry certs cannot pass it; a build-scoped binary patch (or equivalent) is required, exactly like S3's.
 - **CONFIRMED (offline):** All four direct BL callers of Stardew's X509_verify_cert (0x78df090, 0x78df67c, 0x78fdf14, 0x79b724c) are OpenSSL-internal (surrounding code raises ERR_LIB_SSL=20 errors with statem file/line args) — the pin check consumes the handshake result elsewhere (S3-style stored flag), not by calling X509_verify_cert directly.
 - **TOOLING:** devkitA64 `aarch64-none-elf-objdump -D -b binary -m aarch64 --adjust-vma=...` works for raw windows; capstone 5.0.7 + pyghidra available (persistent Ghidra 12.1.3 at `~/.local/opt/ghidra_12.1.3_PUBLIC`; headless analysis command in `~/ghidra_sdfull.log`). radare2/Ghidra-from-pip unavailable.
@@ -1821,7 +1830,7 @@ Method:
 1. Added `cmd/probe` + `internal/probe` to this repository: a loopback-only TLS terminator (in-memory self-signed RSA-2048 cert covering the tenant hostname; never written to disk) that answers only the minimum HTTP/2 framing required to keep the peer talking (server preface, SETTINGS ACK, PING ACK), and logs only: TLS version/cipher/ALPN, HTTP/2 frame types/flags/stream IDs, HPACK-decoded pseudo-headers (`:method`, `:path`, `:scheme`, `:authority`), other header NAMES with value lengths only, byte counts, and timing. Payload bodies, non-pseudo header values, keys, addresses, and certificates are never logged. The probe never answers an application request.
 2. HPACK decoding uses `golang.org/x/net/http2/hpack` (BSD-3) for vetted Huffman-correct decoding; the observer remains dependency-free. Tests include an end-to-end redaction guarantee: a secret bearer token and request body bytes provably never appear in the log while `:path` does.
 3. External citron change (dirty worktree, same established pattern): `GetNplnDebugProxyIp` was already defined but only wired into the `GetAddrInfoRequestImpl` chain; it is now also first in the `GetHostByNameRequestImpl` chain. Added a companion port-remap branch in `bsd.cpp` `ConnectImpl` (OPENPAK_S3_DEBUG_PROXY_PORT, npln-host-scoped, unset by default) mirroring the Fall Guys / CTR:NF overrides, so the tap target need not own port 443.
-4. Launch citron with `OPENPAK_S3_DEBUG_PROXY_IP=127.0.0.1 OPENPAK_S3_DEBUG_PROXY_PORT=18500`; NNCS/NAT traffic keeps its the earlier production network redirect; only hosts containing "npln" move to the local probe.
+4. Launch citron with `OPENPAK_S3_DEBUG_PROXY_IP=127.0.0.1 OPENPAK_S3_DEBUG_PROXY_PORT=18500`; NNCS/NAT traffic keeps its earlier production reference redirect; only hosts containing "npln" move to the local probe.
 5. User opens the online co-op menu; probe log is then reviewed and only sanitized summaries enter this file.
 
 Decision rule:
@@ -1835,18 +1844,18 @@ Observation:
 Three probe configurations were run against live client attempts; all produced identical client behavior.
 
 - **Run A (probe answers nothing, empty server SETTINGS):** Each of 3 connections: TLS 1.2 `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256`, ALPN `h2`, client preface + client SETTINGS (ids: `ENABLE_PUSH`, `MAX_CONCURRENT_STREAMS`, `INITIAL_WINDOW_SIZE`, `MAX_FRAME_SIZE`, `MAX_HEADER_LIST_SIZE`, plus Nintendo-custom ephemeral id `0xfe03`), client ACK of server SETTINGS, then `RST_STREAM(stream=1, REFUSED_STREAM)` — **without ever sending HEADERS on stream 1** — then `WINDOW_UPDATE(0)` and FIN. Total lifetime 9–75 ms.
-- **Run B (server SETTINGS byte-equivalent to the real earlier network grpc-go server — single `MAX_FRAME_SIZE=16384`, no window updates; verified against grpc-go v1.81.1 source used by the production server):** Identical client behavior on all 3 connections.
+- **Run B (server SETTINGS byte-equivalent to the real earlier grpc-go server — single `MAX_FRAME_SIZE=16384`, no window updates; verified against grpc-go v1.81.1 source used by the production server):** Identical client behavior on all 3 connections.
 - **Run C (probe answers every completed request stream with a valid trailers-only gRPC response: `:status=200`, `content-type=application/grpc`, `grpc-status=12` UNIMPLEMENTED; response path round-trip-tested against a real HPACK decoder):** Identical client behavior. The client cancels before any request can be answered.
 
 Correlated citron flow (sanitized, metadata-only):
 
-- **CONFIRMED:** Resolution/connect order at both startup (~[32s]) and menu attempt (~[465s]): `nncs1` → `nncs2` NAT checks (UDP, the earlier production network) → `g2122d301` resolved but **never connected** → tenant TLS ×3 with the identical pre-HEADERS abort.
+- **CONFIRMED:** Resolution/connect order at both startup (~[32s]) and menu attempt (~[465s]): `nncs1` → `nncs2` NAT checks (UDP, earlier production reference) → `g2122d301` resolved but **never connected** → tenant TLS ×3 with the identical pre-HEADERS abort.
 - **CONFIRMED:** No account/BAAS/token host (`*baas.nintendo.com`, `*accounts.nintendo.com`) is ever resolved during the entire flow. The game never attempts tenant-token acquisition before the NPLN channel aborts.
 - **CONFIRMED:** The external debug tap (`OPENPAK_S3_DEBUG_PROXY_IP` + new `OPENPAK_S3_DEBUG_PROXY_PORT` remap) redirected every tenant connect to the loopback probe; citron logged each 443→18500 remap.
 
 Conclusion:
 
-**CONFIRMED:** Stardew's NPLN client fully accepts the probe's TLS (with the build-scoped X.509 patch) and HTTP/2 layer — it ACKs the server SETTINGS — and then cancels its first RPC **before transmitting HEADERS**, deterministically (~1–11 ms), regardless of server SETTINGS content or application responses. This refines the earlier interpretation of the 2,483-byte-server-flight experiments: the 133-byte "ApplicationData" flight against the real earlier network server was almost certainly this same preface/SETTINGS/ACK/RST/WINDOW_UPDATE cancel flight, **not an HTTP/2 request**. The blocker is client-local, upstream of the wire protocol: most plausibly a missing NPLN session prerequisite (tenant credential/environment activation), consistent with the observed absence of any BAAS/token step. Transport-level work alone cannot advance the protocol further; the next experiments must target the client's environment/credential acquisition path (NNCS answers, `g2122d301` role, token-source bypass) or compare against a working NPLN title through the same probe.
+**CONFIRMED:** Stardew's NPLN client fully accepts the probe's TLS (with the build-scoped X.509 patch) and HTTP/2 layer — it ACKs the server SETTINGS — and then cancels its first RPC **before transmitting HEADERS**, deterministically (~1–11 ms), regardless of server SETTINGS content or application responses. This refines the earlier interpretation of the 2,483-byte-server-flight experiments: the 133-byte "ApplicationData" flight against the real earlier implementation was almost certainly this same preface/SETTINGS/ACK/RST/WINDOW_UPDATE cancel flight, **not an HTTP/2 request**. The blocker is client-local, upstream of the wire protocol: most plausibly a missing NPLN session prerequisite (tenant credential/environment activation), consistent with the observed absence of any BAAS/token step. Transport-level work alone cannot advance the protocol further; the next experiments must target the client's environment/credential acquisition path (NNCS answers, `g2122d301` role, token-source bypass) or compare against a working NPLN title through the same probe.
 
 Artifacts:
 
@@ -1888,7 +1897,7 @@ All ExeFS files, NSOs, reconstructed ELF files, disassembly databases, and futur
 
 Hypothesis:
 
-Returning success from the identified `X509_verify_cert` function will allow Stardew to complete TLS against the earlier replacement CA and emit its first HTTP/2/NPLN request.
+Returning success from the identified `X509_verify_cert` function will allow Stardew to complete TLS against the prior-reference replacement CA and emit its first HTTP/2/NPLN request.
 
 Method:
 
@@ -1896,10 +1905,10 @@ The dirty external `../citron` worktree now contains a guarded runtime patch in 
 
 Observation:
 
-**CONFIRMED:** Citron rebuilt successfully and logged that the exact-build patch applied. Against the redirected earlier network endpoint, Stardew then advanced beyond the previously failing server-certificate flight:
+**CONFIRMED:** Citron rebuilt successfully and logged that the exact-build patch applied. Against the redirected prior-reference endpoint, Stardew then advanced beyond the previously failing server-certificate flight:
 
 1. sent ClientHello with the correct Stardew tenant SNI;
-2. received the 2,483-byte earlier network server handshake flight;
+2. received the 2,483-byte prior-reference handshake flight;
 3. sent a 126-byte TLS handshake flight beginning with handshake type `0x10` (ClientKeyExchange in the negotiated pre-TLS-1.3 framing observed here);
 4. received a 233-byte server handshake response beginning with handshake type `0x04`;
 5. sent a 133-byte TLS ApplicationData record;
@@ -1909,7 +1918,7 @@ The same progression repeated across multiple connections. Before the patch, Sta
 
 Conclusion:
 
-**CONFIRMED:** Offset `0x79B4C10` is a valid certificate-verification compatibility point for Stardew main build `E7F845093E8CBC68DACF011CCB620D6667B5A20B`. The patch moves the client across the TLS trust barrier and causes it to emit its first encrypted application request to earlier network. This is the project's first confirmed transition from “TLS server flight rejected” to “TLS established/application data sent.”
+**CONFIRMED:** Offset `0x79B4C10` is a valid certificate-verification compatibility point for Stardew main build `E7F845093E8CBC68DACF011CCB620D6667B5A20B`. The patch moves the client across the TLS trust barrier and causes it to emit its first encrypted application request to the earlier endpoint. This is the project's first confirmed transition from “TLS server flight rejected” to “TLS established/application data sent.”
 
 **UNKNOWN:** The encrypted application request's HTTP/2/gRPC method and the reason for the immediate post-send shutdown are not yet identified. The next experiment should instrument the local/controlled NPLN TLS termination point or run a Stardew-specific local endpoint with research-only TLS key logging outside the repository, then record only sanitized HTTP/2 service/method and metadata-field names. Do not guess Splatoon RPCs.
 
@@ -1935,11 +1944,11 @@ Conclusion:
 
 Hypothesis:
 
-Stardew rejects the redirected earlier network server flight because its game-local TLS validation does not accept that endpoint's certificate identity/key. If the normal NPLN endpoint's certificate is accepted, the client will produce a post-server-flight TLS record.
+Stardew rejects the redirected prior-reference flight because its game-local TLS validation does not accept that endpoint's certificate identity/key. If the normal NPLN endpoint's certificate is accepted, the client will produce a post-server-flight TLS record.
 
 Method:
 
-An opt-in, exact-host Citron diagnostic (`OPENPAK_STARDEW_TLS_PROBE=1`) resolves only `t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net` normally. After receiving its TLS server flight, Citron observes only the type and length of the next client TLS record and suppresses it while returning success to the guest. This prevents a TLS Finished, HTTP/2 data, token, or authenticated request from reaching the external endpoint. All other earlier network redirects remain enabled.
+An opt-in, exact-host Citron diagnostic (`OPENPAK_STARDEW_TLS_PROBE=1`) resolves only `t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net` normally. After receiving its TLS server flight, Citron observes only the type and length of the next client TLS record and suppresses it while returning success to the guest. This prevents a TLS Finished, HTTP/2 data, token, or authenticated request from reaching the external endpoint. All other prior-reference redirects remain enabled.
 
 Observation:
 
@@ -1947,7 +1956,7 @@ Observation:
 
 Conclusion:
 
-**CONFIRMED:** Stardew accepts the normal NPLN endpoint's certificate sufficiently to continue its TLS handshake. It does not produce the equivalent post-server-flight record against the redirected earlier network endpoint. Therefore the first earlier network interoperability barrier is game-local certificate identity/key validation, not DNS, TCP, SNI, an NPLN RPC response, or client authentication.
+**CONFIRMED:** Stardew accepts the normal NPLN endpoint's certificate sufficiently to continue its TLS handshake. It does not produce the equivalent post-server-flight record against the redirected prior-reference endpoint. Therefore the first prior-reference interoperability barrier is game-local certificate identity/key validation, not DNS, TCP, SNI, an NPLN RPC response, or client authentication.
 
 Artifacts:
 
@@ -1998,7 +2007,7 @@ Method:
 Observation:
 
 - **CONFIRMED:** `../citron/build/use-nopgo/bin/citron` exists.
-- **CONFIRMED:** The Citron worktree already contains numerous uncommitted changes, including socket, DNS, friend-service, and earlier network UI changes. They must be preserved.
+- **CONFIRMED:** The Citron worktree already contains numerous uncommitted changes, including socket, DNS, friend-service, and account-UI changes. They must be preserved.
 - **CONFIRMED:** The existing Citron binary launched successfully in the active Wayland graphical session on 2026-08-31. It remains running for interactive testing.
 - Stardew launch/menu result: pending user interaction in the emulator window.
 - **CONFIRMED:** The first Stardew launch did not reach the title screen. All four emulated CPU cores were idle and no Stardew network activity had occurred; this was a pre-network emulator-startup failure.
@@ -2011,7 +2020,7 @@ Observation:
 - **CONFIRMED:** With the GDB stub disabled, Stardew Valley reached an online communication attempt and displayed Switch error `2321-4992`: “A communication error has occurred. Please try again later.”
 - **CONFIRMED:** This is the first observed network-facing client transition. The exact failing service/transport is pending sanitized log correlation; the error code alone does not identify the backend architecture.
 - **CONFIRMED:** Observed DNS/service sequence includes `nncs1-lp1.n.n.srv.nintendo.net`, `nncs2-lp1.n.n.srv.nintendo.net`, `g2122d301.lp1.p.srv.nintendo.net`, and `t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net`.
-- **CONFIRMED:** NAT-check traffic uses UDP: a local ephemeral port sent synthetic-observed 16-byte datagrams to ports 33334 and 10025 across the two configured earlier network NAT addresses. Payload contents are not retained here.
+- **CONFIRMED:** NAT-check traffic uses UDP: a local ephemeral port sent synthetic-observed 16-byte datagrams to ports 33334 and 10025 across the two configured prior-reference NAT addresses. Payload contents are not retained here.
 - **CONFIRMED:** The game-specific and NPLN transport connections use TCP port 443 and negotiate HTTP/2 (`h2`) with TLS 1.3 when independently probed without authentication data.
 - **CONFIRMED:** During the failing client run, TCP connects succeeded and each ClientHello received a 2,483-byte server handshake beginning with ServerHello. The client then closed before sending TLS Finished or HTTP/2 data.
 - **CONFIRMED:** The game-specific endpoint currently presents a self-signed `CN=nintendo-private-server` certificate; the NPLN endpoint presents a Nintendo-issued wildcard certificate covering the NPLN hostname. Certificate bodies were not stored.
@@ -2019,6 +2028,9 @@ Observation:
 - **HIGH:** Stardew uses the NPLN control plane rather than assuming a traditional dedicated Stardew server. Whether gameplay becomes peer-to-peer after session establishment remains unconfirmed.
 - **REJECTED (2026-08-31):** The shared redirected IP does not cause Stardew's observed TLS failure through a missing or wrongly inferred SNI. A metadata-only Citron diagnostic confirmed every observed ClientHello already carried `t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net`, matching the requested NPLN tenant hostname.
 - **CONFIRMED:** A 20-second raw-capture attempt failed for lack of `CAP_NET_RAW`; the created file was zero bytes and was deleted. No capture was committed.
+- **USER-SUPPLIED:** A local copy of earlier infrastructure is available or already running for controlled Stardew experiments. Exact components and configuration are pending inventory; no credentials or environment values should be copied into this repository.
+- **CONFIRMED:** On 2026-08-31, prior third-party NNCS, Splatoon 3, router, and docs checkouts were cloned as sibling repositories under `~/REPOS` for external inspection/runtime use. All four are a source-available licence. Reuse still requires preserving each repository's notices and checking compatibility rather than copying code implicitly.
+- **CONFIRMED:** The prior `splatoon-3` earlier implementation is the published NPLN/gRPC reference. Its documentation states that NPLN TLS runs inside the game over raw sockets and requires hostname redirection, a game-specific certificate-pinning/trust compatibility step, and an accepted identity.
 - **HIGH:** Stardew's observed behavior—receiving the server TLS handshake, sending no Finished or HTTP/2 HEADERS, then showing `2321-4992`—matches the documented pre-RPC failure when the embedded NPLN client does not accept the redirected service certificate. A local server alone cannot pass this barrier.
 - **Decision:** Do not adapt Splatoon-specific RPC handlers or captured-response consumers to Stardew before the Stardew client sends its first HTTP/2 HEADERS frame. First establish a clean-room client trust path and observe the requested RPC service/method.
 - **CONFIRMED:** The rebuilt Citron diagnostic observed repeated ClientHello attempts where SNI injection was not applied and the IP-keyed fallback candidate was always `t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net`. The current diagnostic cannot yet distinguish an already-present SNI extension from a parser rejection.
@@ -2065,7 +2077,7 @@ Only sanitized conclusions will be recorded here. Citron user data and raw logs 
 - Do not implement authentication, sessions, discovery, NAT traversal, relay, or gameplay handling without evidence.
 - Default diagnostic logs will contain metadata only; raw payload logging is out of scope for the initial implementation.
 - Synthetic fixtures only.
-- Use Go 1.23 for the initial dependency-free observer, consistent with nearby independently written earlier network research tools and easy single-binary deployment. This is an architectural choice, not copied code.
+- Use Go 1.23 for the initial dependency-free observer, consistent with nearby independently written prior research tools and easy single-binary deployment. This is an architectural choice, not copied code.
 - Do not reuse game-specific assumptions from neighboring projects. The nearby Fall Guys project is MIT-licensed, but this repository's observer is being independently implemented; the Outbound project's Photon findings are not transferable evidence.
 
 ## Security / Secrets Notes
@@ -2084,11 +2096,11 @@ go test -race ./...
 go vet ./...
 printf 'synthetic-tcp' | nc 127.0.0.1 18080
 printf 'synthetic-udp' | nc -u -w1 127.0.0.1 18080
-cd ~/REPOS/local-stack && podman-compose --profile nncs up -d   # local stack
-scripts/launch-ryujinx.sh            # shared HOST profile, hosting Stardew (thin wrapper over shared-docs/scripts/launch-ryujinx-host.sh)
+cd prior local-stack checkout && podman-compose --profile nncs up -d   # local stack
+scripts/launch-ryujinx.sh            # shared HOST profile, hosting Stardew (thin wrapper over prior shared launch script)
 scripts/launch-ryujinx.sh --joiner   # shared JOINER profile
 scripts/launch-citron.sh             # citron (its own two-persona launchers)
-podman logs -f local-stack_npln_1
+podman logs -f local_npln_1
 ```
 
 ## Next Steps
@@ -2199,7 +2211,7 @@ podman logs -f local-stack_npln_1
       zero, the publish gate is the station assignment (Pia mesh never created on our stack) and
       the next work item is the mesh/`CreateMeshJob` path; if it is non-zero and equal, the gate is
       elsewhere (dirty flag / C# `updateLobbyData` not called — check farm joinability in-game).
-   b. Watch `podman logs -f local-stack_stardew_1` for a `[GS] write … fields=…prp…` line and
+   b. Watch `podman logs -f local_stardew_1` for a `[GS] write … fields=…prp…` line and
       the new `[GS] mirror prp -> farm …` line: that is the lobby-data flush landing. If it lands,
       the joiner's next Refresh should list the farm (blob now carries `key\nvalue\n` app data).
    c. If the flush never comes, the lazy diagnostic fallback is to append synthetic app data
@@ -2260,7 +2272,7 @@ The NPLN tenant channel reaches a fully functional HTTP/2 layer (client ACKs ser
 
 Recommended next experiment:
 
-Compare against a working NPLN title through the same probe. Run Splatoon 3 (already functional against the earlier production network) with the same debug tap (`OPENPAK_S3_DEBUG_PROXY_IP` now also covers any "npln" host) and record its connection-start behavior: whether it sends HEADERS immediately, which services/methods it calls first, what its client SETTINGS contain, and whether it resolves account/BAAS hosts before its tenant. Differences versus Stardew isolate the client-local prerequisite. Do not retain tokens, payload bodies, certificates, keys, account identifiers, or raw captures.
+Compare against a working NPLN title through the same probe. Run Splatoon 3 (already functional against the earlier production reference) with the same debug tap (`OPENPAK_S3_DEBUG_PROXY_IP` now also covers any "npln" host) and record its connection-start behavior: whether it sends HEADERS immediately, which services/methods it calls first, what its client SETTINGS contain, and whether it resolves account/BAAS hosts before its tenant. Differences versus Stardew isolate the client-local prerequisite. Do not retain tokens, payload bodies, certificates, keys, account identifiers, or raw captures.
 
 - **Hypothesis:** A healthy NPLN client (Splatoon 3) sends HEADERS on a freshly opened tenant connection without requiring any server application response, and resolves a token/identity source before connecting; Stardew's divergence from that pattern identifies the missing prerequisite.
 - **Smallest method:** Same loopback probe, same sanitized metadata logging, one controlled Splatoon 3 boot to the lobby; compare sanitized flow summaries (DNS order, SETTINGS ids, first frames) between titles.
@@ -2268,8 +2280,8 @@ Compare against a working NPLN title through the same probe. Run Splatoon 3 (alr
 
 ## Emulator Launch Protocol
 
-Family-wide, canonical version: `shared-docs/emulator-launch-protocol.md`
-(symlinked into this repo as `shared-docs/`). Short form: autonomous
+Family-wide, canonical version: `prior shared emulator-launch protocol`
+(formerly symlinked into this repo; ). Short form: autonomous
 launch/kill/restart only when no other title's citron instance is running or
 when only this project's own instance runs; otherwise ASK FIRST. Detect via
 `pgrep -af "^~/REPOS/citron/build"` and inspect each
@@ -2287,13 +2299,13 @@ pressure alone (29 GB host) can OOM a foreign session.
 
 ## Session Log: 2026-09-01 (local stack)
 
-- Found: `local-stack` containers up except `nncs`; the Stardew citron ran from the default profile with `OPENPAK_API=https://account.tobagin.eu` — verified to be the LOCAL account container via the local Traefik (resolves to the podman network, LE cert), i.e. the right deployment — but not signed in (log: `PollInvitations: skipped, not linked`), and with the profile setting `openpak_server_ip` still at the production IP (see the precedence lesson below).
+- Found: `earlier local stack` containers up except `nncs`; the Stardew citron ran from the default profile with `OPENPAK_API=https://account.tobagin.eu` — verified to be the LOCAL account container via the local Traefik (resolves to the podman network, LE cert), i.e. the right deployment — but not signed in (log: `PollInvitations: skipped, not linked`), and with the profile setting `openpak_server_ip` still at the production IP (see the precedence lesson below).
 - Started the `nncs` profile container (host network, UDP 10025/10125 + 33334 sinkhole). Verified: JWKS served with `kid openpak-baas-key-1`, account API answering, npln cert SAN covers the tenant, `stardewhost` (pid 1800000005) present and verified in the local account store, Ryujinx's `openpak_baas.pem` identical to the stack's signing key.
 - Added `scripts/launch-citron.sh` (portable profile, nand/keys symlinked; `OPENPAK_API=https://account.tobagin.eu` + trusted suffix, `OPENPAK_SERVER_IP`/`NAT_IP` 127.0.0.1, npln tap 18500, JWKS port 18448, signing key from the stack) and `scripts/launch-ryujinx.sh` (`--root-data-dir ~/ryujinx-instances/stardew`, seeded from the main portable dir minus the production link, route table tenant→18500 / jku→18448). Both enforce the launch protocol and preflight the stack.
 - Lesson (citron, source-verified in `sfdnsres.cpp` `GetConfiguredIp`): the profile SETTING `openpak_server_ip`/`openpak_nat_ip` wins over `OPENPAK_SERVER_IP`/`OPENPAK_NAT_IP`, and a fresh profile defaults both to the production IPs — the env vars alone are silently ignored (this is why NAT checks and the JWKS fetch kept going to production). The wrapper now pins the settings in `qt-config.ini` (`\default=false`) and refuses to launch if that did not take. Added to the citron isolation playbook (now `docs/shared/` here, canonical `docs/playbooks/`).
 - Lesson (shared doc corrected, source-verified): Ryujinx detects `portable/` next to the BINARY only; per-title data dirs need `--root-data-dir`.
 - Added `docs/local-stack.md`; README pointer.
-- Test run (Experiment 2026-09-01-B): citron → 2321-4992 (pre-HEADERS cancel, emulator gap). Ryujinx → auth denied until two bundle fixes (account `OPENPAK_DATA_DIR=/data` + `data/account/internal_net.conf` with a static account IP 10.89.1.100; `OPENPAK_INTERNAL_KEY` removed from the account service), then auth PASSED and the RPC chain ran to `QueryGameSessions` → UNIMPLEMENTED → 2321-4224. `local-stack/compose.yml` was also being edited by another session during this work (backup `compose.yml.bak-*`).
+- Test run (Experiment 2026-09-01-B): citron → 2321-4992 (pre-HEADERS cancel, emulator gap). Ryujinx → auth denied until two bundle fixes (account `OPENPAK_DATA_DIR=/data` + `data/account/internal_net.conf` with a static account IP 10.89.1.100; `OPENPAK_INTERNAL_KEY` removed from the account service), then auth PASSED and the RPC chain ran to `QueryGameSessions` → UNIMPLEMENTED → 2321-4224. `local-stack compose.yml` was also being edited by another session during this work (backup `compose.yml.bak-*`).
 - Wrapper additions: `launch-ryujinx.sh --menu` (main window only, sign in first, then load the game).
 - Next: observe `QueryGameSessions` request fields, implement the first Stardew handler.
 
@@ -2305,7 +2317,7 @@ Built and confirmed:
   (copied NPLN bindings, notice preserved). `go build ./...`, `go vet ./...`, `go test -race
   ./internal/npln/` all pass. Identity round-trip test in `internal/npln/identity_test.go`.
 - `scripts/launch-citron.sh`, `scripts/launch-ryujinx.sh` (`--menu` mode), `docs/local-stack.md`.
-- `local-stack`: added `stardew` (18501) and `stun` (coturn) services; account bundle fixes
+- `earlier local stack`: added `stardew` (18501) and `stun` (coturn) services; account bundle fixes
   (`OPENPAK_DATA_DIR`, `internal_net.conf` + static IP, drop `OPENPAK_INTERNAL_KEY`). npln cert
   reissued with SAN `gamesync.npln.nintendo.net`. `compose.yml.bak-*` backups left from concurrent
   edits by another session.
@@ -2344,8 +2356,8 @@ model + the contradiction to resolve first.
   NSO offsets +0x100) with NO static references found (no ADRP, no pointers) —
   table-driven at runtime. Ghidra's sdfull project has 0 recorded xrefs too.
 - Ryujinx root cause found and fixed separately: its Bsd answered Pia UDP
-  receives with ETIMEDOUT; ported the earlier Ryujinx IClient (commit 3bab55478 in
-  emulators/ryujinx) — verified to full auth + QueryGameSessions + farm list.
+  receives with ETIMEDOUT; ported the reference IClient implementation (commit 3bab55478 in
+  the former local emulator fork) — verified to full auth + QueryGameSessions + farm list.
 - eden artifacts: `~/opencode-scan/` — sdk_frozen.bin (SDK module image),
   lr_context.bin, wait_object.bin, find_base.py, capture_frozen.py,
   sdk_analysis.py, ryu_state.py, gold_obj.py, main_state_machine.py

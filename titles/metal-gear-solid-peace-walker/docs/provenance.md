@@ -6,7 +6,7 @@ Every non-obvious fact this title relies on, and where it came from, as
 Source keys:
 
 - **N** — earlier research notes on the title's online services, kept outside this repository. They were used for facts only under the policy: no code, comments, docs, structure, type or function names were copied or translated.
-- **O** — OpenPak's own repositories (`servers/npln`, `ports.md`).
+- **O** — OpenPak's own repositories (`platforms/switch/games/npln`, `ports.md`).
 
 Nothing below has been observed by OpenPak yet: no boot, no capture of ours.
 

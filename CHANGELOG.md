@@ -1,7 +1,54 @@
 # Changelog — npln
 
+> **Current Switch client (2026-10-13): Harbor**, at
+> `~/REPOS/Openpak/emulators/harbor`. Harbor is an independent
+> OpenPak project based on Eden. Citron, Ryujinx (desktop and Android), and
+> the former OpenPak Eden checkouts have been removed. References to those
+> forks below record historical evidence only: do not run their commands,
+> reinstall them, or select them for current work. Use Harbor's README and
+> current handoff for builds and testing; old results do not establish Harbor parity.
+
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
+
+## Unreleased — 2026-10-13
+
+- Integrate the standalone connectivity service in the shared NPLN ICE handler;
+  deploy to all 18 title services with independent private tokens and guarded
+  rollback. Preserve wire TTL/cache shapes, use verified bearer generations and
+  fail closed on configured service errors. Infrastructure/TURN probes pass;
+  game acceptance starts with Stardew Valley.
+- Capture the presence heartbeat timer configuration before the opening reply,
+  eliminating a pre-existing keepalive race exposed by the complete race suite.
+
+## Unreleased — 2026-10-12
+
+- Register and deploy Core Keeper (`core-keeper`, `010070201D1BA000`) under its
+  Harbor-observed tenant `t-b0546eeb-lp1`, ports 21130/21131 and session 24570.
+  Preserve per-session config names. PlayFab Party QoS 503 is tolerated, but
+  the later console Nintendo service-account login gets five PlayFab 503s,
+  coinciding with the reported authentication error. Multiplayer is blocked
+  pending PlayFab login support and further validation.
+
+- Register PlateUp! (`plateup`, `01003F901A83E000`), ports 21128/21129 and session
+  24560. The captured tenant `t-a8f1d737-lp1` is deployed with an exact SNI route,
+  separate TLS/signing state and public TLS/gRPC probes passing. Hardware retest
+  confirmed auth/session creation/Gamesync at 17:34 UTC; second-device joining and
+  gameplay remain pending. The installed Switch 1.5.2 build selects
+  NPLN lobbies/Gamesync and QUIC peers, excluding Photon for Switch. Record native
+  call-path evidence and a reusable IL2CPP v27 method mapper. Retail compatibility
+  and the separately required LeaderboardService remain unverified.
+
+- Register Go-Go Town! (`go-go-town`, `010095001B12A000`) on the initial Stardew service
+  set, with tenant/health ports 21126/21127 and session port 24550. Capture tenant
+  `t-05cbf648-lp1` from Switch hardware and deploy its own server and SNI route.
+  Switch hosting, Harbor joining and two-player gameplay are confirmed; no RPC
+  errors or unimplemented methods appeared in the inspected test.
+
+- Splatoon 3 latency discovery advertises seven candidates with the protocol resource IDs,
+  regions and ordering recorded in the reference audit, all using OpenPak's configured UDP
+  endpoint. Other titles keep their existing one-candidate response. Hardware lobby success
+  remains unconfirmed.
 
 ## v0.7.12 — 2026-10-11
 
@@ -280,7 +327,7 @@ of truth; this file is the readable summary.
 - npln: the shared NPLN host [0caa6ae]
 - Go 1.26, the house version [04e192f]
 - Go 1.26, the house version [c4e9ed6]
-- Deploy from the release image; stop tracking the shared-docs symlink [33ddbc7]
+- Deploy from the release image; stop tracking the earlier shared docs symlink [33ddbc7]
 - NPLN: the bearer is the identity, sessions leave the store as copies [470638a]
 - NPLN: the bearer is the identity, and it expires [01ac876]
 - Matchmaking, gamesync mailbox, and the container: the relay protocol work [0381ca0]

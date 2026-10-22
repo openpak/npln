@@ -1,5 +1,13 @@
 # Provenance
 
+> **Current Switch client (2026-10-13): Harbor**, at
+> `~/REPOS/Openpak/emulators/harbor`. Harbor is an independent
+> OpenPak project based on Eden. Citron, Ryujinx (desktop and Android), and
+> the former OpenPak Eden checkouts have been removed. References to those
+> forks below record historical evidence only: do not run their commands,
+> reinstall them, or select them for current work. Use Harbor's README and
+> current handoff for builds and testing; old results do not establish Harbor parity.
+
 Every non-obvious fact this repository relies on, and where it came from. Required by
 [`docs/clean-room-policy.md`](https://github.com/openpak/docs/blob/main/clean-room-policy.md): it is what makes "we rewrote it
 from the facts" checkable later instead of a claim.
@@ -52,6 +60,32 @@ now resolves instead of being passed through — see `resolveTenant`.
 | It must be attached with `SetHeader`, not `SendHeader` | forcing the header frame out early breaks the two-frame shape an absent resource needs (headers, then `NotFound` trailers) | N |
 | Keepalive enforcement | the client pings often **and while no RPC is in flight** (it holds long-lived streams and pings to keep the NAT mapping alive). grpc-go's default policy (`MinTime` 5 min, `PermitWithoutStream` false) counts this as abuse and sends `GOAWAY(ENHANCE_YOUR_CALM)`, killing every in-flight RPC | N — measured: schedules, save and `ActivateUser` all died mid-call |
 | Our setting | `MinTime: 5s`, `PermitWithoutStream: true` | derived from the above |
+
+## Splatoon 3 latency discovery profile (2026-10-12)
+
+Source: earlier implementation for `splatoon-3`, revision `1d6c062acc47656cd1a7edddecc34bb8bc06fa14`,
+`matchmaking.go`'s latency discovery response, read for protocol values only.
+OpenPak's independently written profile returns these suffixes and regions in wire order:
+
+| Resource suffix | Region |
+| --- | --- |
+| `eu-01-udp` | `europe-central2` |
+| `eu-02-udp` | `europe-west2` |
+| `us-01-udp` | `northamerica-northeast1` |
+| `us-02-udp` | `us-west2` |
+| `jp-01-udp` | `asia-northeast1` |
+| `sg-01-udp` | `asia-southeast1` |
+| `au-01-udp` | `australia-southeast1` |
+
+Names have the form `tenants/{tenant}/latencyMeasurementServers/{suffix}`. All seven
+entries use one configured UDP endpoint, not seven geographically distinct deployments.
+OpenPak retains its latency/STUN endpoint overrides; the deployed default is UDP 3478.
+Only Splatoon 3 requests this profile through the shared session-service options.
+No earlier implementation, comments or patch bytes were imported.
+
+This reproduces advertised values that the earlier seven-region experiment did not match
+exactly. Its effect on the physical console's failure remains unconfirmed; response validation
+alone does not prove lobby success or UDP acceptance.
 
 ## Error codes
 
