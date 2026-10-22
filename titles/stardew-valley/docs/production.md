@@ -10,12 +10,11 @@ Files: `deploy/oci/`. Nothing here needs the local podman stack.
 ## How a production client reaches this server
 
 1. **Tenant host.** The game resolves `t-9f607adf-lp1.lp1.t.npln.srv.nintendo.net` and connects
-   to it on **443**. The earlier network emulator's DNS layer maps every `*.nintendo.net` to
+   to it on **443**. The emulator's DNS layer maps every `*.nintendo.net` to
    `OPENPAK_SERVER_IP` (IP only, port untouched — the per-host `host=ip:port` routes are a
    local-testing feature, not something official builds ship). A patched real console gets
-   the same via Atmosphère's hosts file. So the connection lands on the main earlier network server's
-   `:443`, where **sni-router** forwards the raw TLS stream by SNI. It needs one rule for the
-   Stardew tenant — `deploy/sni-router rule` — pointing at this box's `:18501`.
+   the same via Atmosphère's hosts file. So the connection lands on the front `:443`, which forwards the raw TLS stream by SNI
+   to this box's `:18501`.
 2. **Gamesync / session relay.** Not resolved via DNS: the console connects to the `host:port`
    this server puts in the GameSession (`NPLN_RELAY_HOST/PORT`), with SNI
    `gamesync.npln.nintendo.net`. Point it straight at this box's public IP and the same port; no

@@ -288,7 +288,7 @@ Build an independently written, open-source compatibility service for the networ
       when the user is away.
     - Tools this part: `leavepoll.py`, `netstpoll.py` (roster gates + relay ring), `sttbl.py`,
       `nattbl.py`; logs `leavepoll-*.log`, `netstpoll-joiner*.log`.
-  - **Production plan written (`docs/production.md`, `deploy/oci/`, `deploy/sni-router rule`):**
+  - **Production plan written (`docs/production.md`, `deploy/oci/`):**
     official emulator builds map `*.nintendo.net` to `OPENPAK_SERVER_IP` with the port untouched
     (the `host=ip:port` route file is local-testing only — `DnsMitmResolver.cs`), so the tenant
     lands on the main server's `:443` and sni-router needs a `t-9f607adf-lp1` rule; gamesync/relay
