@@ -145,9 +145,7 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 		log.Printf("[Auth] identity not provable (%s) -> REFUSED", redact.Err(err))
 		return 0, "", status.Error(codes.PermissionDenied, "OpenPak account not recognised — link your OpenPak account to play online")
 	}
-	if acc.Country != "" {
-		countryByUID.Store(acc.UserID(), strings.ToUpper(acc.Country))
-	}
+	RememberPlayer(acc.BaasUserID, acc.Country) // routing: country now, tester from the core
 	// Latest version only (appversion.go): the same table aauth refuses with.
 	ai, av := appClaims(ext.GetNsaIdToken())
 	if old, latest := titleOutdated(ai, av); old {

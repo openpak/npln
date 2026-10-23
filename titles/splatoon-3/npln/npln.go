@@ -140,6 +140,7 @@ type Account struct {
 	BaasUserID string   `json:"baas_user_id"`
 	Nickname   string   `json:"nickname"`
 	Friends    []Friend `json:"friends"`
+	Country    string   `json:"country"` // where the player lives; routes the sessions they host
 }
 
 type Friend struct {
@@ -227,6 +228,7 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 		log.Printf("[Auth] identity not provable (%s) -> REFUSED", redact.Err(err))
 		return 0, "", status.Error(codes.PermissionDenied, "OpenPak account not recognised — link your OpenPak account to play online")
 	}
+	stardew.RememberPlayer(acc.BaasUserID, acc.Country) // the shared session service routes by it
 	return acc.PID, tenant + "/users/" + acc.UserID(), nil
 }
 

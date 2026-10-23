@@ -198,7 +198,7 @@ func NewServer(creds credentials.TransportCredentials, tenant, appID string, tit
 	if len(title) > 0 {
 		titleOptions = title[0]
 	}
-	startRegions()
+	startRouting()
 	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(typeUnary, bans.Default.Unary(banSubject), rpclog.Unary),
 		grpc.ChainStreamInterceptor(typeStream, bans.Default.Stream(banSubject), rpclog.Stream),
@@ -247,7 +247,7 @@ func RegisterSessions(s *grpc.Server, tenant string, opts Options) {
 		Tenant = tenant
 	}
 	titleOptions = opts
-	startRegions()
+	startRouting()
 	mm := newSessionServer()
 	mmpb.RegisterGameSessionServiceServer(s, mm)
 	gspb.RegisterGamesyncServer(s, newGamesync(mm))

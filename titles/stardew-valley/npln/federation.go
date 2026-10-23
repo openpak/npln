@@ -1,94 +1,117 @@
 package npln
 
-// federation — which region node a player's STUN and TURN come from.
+// federation — which region node a session's STUN and TURN come from.
 //
 // Matchmaking and the gamesync session documents stay here: they are control plane, low
 // volume, and share this process's room state. The game itself is Pia peer-to-peer, and when
-// NAT defeats that it goes through TURN, which is the one hop worth putting in the player's own
-// country. Regions come from openpak.org's /api/v1/regions (OPENPAK_REGIONS_URL); a player's
-// country from the adapter's identity reply at auth.
+// NAT defeats that it goes through TURN, the one hop worth putting near the players. Every
+// member of a session gets the TURN of the session HOST's region node: joiners go to the
+// room's node, never their own region's (federation-worldwide-plan.md, "NPLN + Pia").
+//
+// The decision is the shared resolver's (internal/routing), fed by the account core's routing
+// table (OPENPAK_ROUTING_URL / OPENPAK_ROUTING_KEY). A player's country comes from the
+// adapter's identity reply at auth; their test-node allow-list status from the core. With
+// OPENPAK_ROUTING_URL unset, or no node in the host's region chain, everyone gets this
+// deployment's own STUN/TURN, exactly as before federation.
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/openpak/npln/redact"
 	"log"
 	"net"
-	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"github.com/openpak/npln/internal/routing"
+	"github.com/openpak/npln/redact"
 )
 
-// Region is one approved node as /api/v1/regions lists it.
-type Region struct {
-	ID       string            `json:"id"`
-	Country  string            `json:"country"`
-	Services map[string]string `json:"services"`
+// player is what routing knows about an authenticated player.
+type player struct {
+	baas    string // BAAS user id: the core's "switch" subject
+	country string // ISO 3166-1 alpha-2, "" = unknown
+	tester  bool   // on the test-node allow-list
+}
+
+// roomHost is the routing input recorded on a session when it is created: the host's.
+type roomHost struct {
+	uid     string
+	country string
+	tester  bool
 }
 
 var (
-	regions      atomic.Pointer[[]Region]
-	countryByUID sync.Map // uid -> "AU"; filled at auth, read at room creation
-	regionsOnce  sync.Once
+	routes      *routing.Client
+	playerByUID sync.Map // uid -> player; filled at auth, read at session creation
+	routesOnce  sync.Once
 )
 
-// startRegions polls the region list once a minute. Failures keep the last good list.
-func startRegions() {
-	regionsOnce.Do(func() {
-		url := envOr("OPENPAK_REGIONS_URL", "")
-		if url == "" {
+// startRouting reads the routing env once and warms the table. Unset URL = federation off.
+func startRouting() {
+	routesOnce.Do(func() {
+		routes = &routing.Client{BaseURL: os.Getenv("OPENPAK_ROUTING_URL"), Key: os.Getenv("OPENPAK_ROUTING_KEY")}
+		if routes.BaseURL == "" {
 			return
 		}
 		go func() {
-			for {
-				refreshRegions(url)
-				time.Sleep(time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := routes.Refresh(ctx); err != nil {
+				log.Printf("[Federation] routing table: %s", redact.Err(err))
 			}
 		}()
 	})
 }
 
-func refreshRegions(url string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	resp, err := httpc.Do(req)
-	if err != nil {
-		log.Printf("[Federation] regions: %s", redact.Err(err))
+// RememberPlayer records an authenticated player's country (from the adapter identity) and,
+// when federation is on, asks the core in the background whether they are a tester. Titles with
+// their own auth (Splatoon 3) call it too, so their sessions route like everyone else's.
+func RememberPlayer(baas, country string) {
+	if baas == "" {
 		return
 	}
-	defer resp.Body.Close()
-	var out struct {
-		Regions []Region `json:"regions"`
+	uid := userID(baas)
+	p := player{baas: baas, country: strings.ToUpper(strings.TrimSpace(country))}
+	if old, ok := playerByUID.Load(uid); ok {
+		p.tester = old.(player).tester // keep what the core said until it answers again
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || resp.StatusCode != 200 {
-		log.Printf("[Federation] regions: HTTP %d err=%s", resp.StatusCode, redact.Err(err))
+	playerByUID.Store(uid, p)
+	if routes == nil || routes.BaseURL == "" {
 		return
 	}
-	for i := range out.Regions {
-		out.Regions[i].Country = strings.ToUpper(out.Regions[i].Country)
-	}
-	regions.Store(&out.Regions)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		a := routes.Account(ctx, routing.AccountRef{Namespace: "switch", Subject: baas})
+		q := player{baas: baas, country: p.country, tester: a.Tester}
+		if q.country == "" {
+			q.country = a.Country
+		}
+		playerByUID.Store(uid, q)
+	}()
 }
 
-// regionFor is the node serving a country with the named service, or nil for home.
-// ponytail: first match; nearest-by-ping when someone in Perth complains about Sydney.
-func regionFor(country, service string) *Region {
-	rs := regions.Load()
-	if rs == nil || country == "" {
+// playerOf is what is known about uid; the zero player (home) when nothing is.
+func playerOf(uid string) player {
+	v, _ := playerByUID.Load(uid)
+	p, _ := v.(player)
+	return p
+}
+
+// hostOf is the routing input to record for a session uid creates.
+func hostOf(uid string) roomHost {
+	p := playerOf(uid)
+	return roomHost{uid: uid, country: p.country, tester: p.tester}
+}
+
+// routingTable is the current table, nil (all home) when federation is off.
+func routingTable() *routing.Table {
+	if routes == nil {
 		return nil
 	}
-	country = strings.ToUpper(country)
-	for i := range *rs {
-		r := &(*rs)[i]
-		if r.Country == country && r.Services[service] != "" {
-			return r
-		}
-	}
-	return nil
+	return routes.Table()
 }
 
 // hostPort splits "host:port"; a missing or bad port yields def.
@@ -103,15 +126,15 @@ func hostPort(s string, def int32) (string, int32) {
 	return h, def
 }
 
-// iceFor is the STUN and TURN a player uses: their own country's when a node runs them, so the
-// NAT probe is a short hop, else this deployment's.
-func iceFor(uid string) (stunHost string, stunPort int32, turnHost string, turnPort int32) {
+// iceFor is the STUN and TURN for a member of session gsid hosted by h: the host's region
+// node's when one runs TURN (its STUN too, else the TURN address answers STUN), else this
+// deployment's.
+func iceFor(t *routing.Table, gsid string, h roomHost) (stunHost string, stunPort int32, turnHost string, turnPort int32) {
 	stunHost, stunPort = envOr("NPLN_STUN_HOST", "127.0.0.1"), envInt("NPLN_STUN_PORT", 3478)
 	turnHost, turnPort = envOr("NPLN_TURN_HOST", ""), envInt("NPLN_TURN_PORT", 3478)
-	c, _ := countryByUID.Load(uid)
-	country, _ := c.(string)
-	if r := regionFor(country, "turn"); r != nil {
-		turnHost, turnPort = hostPort(r.Services["turn"], 3478)
+	r := t.Resolve(routing.Request{Stack: routing.StackNPLN, Country: h.country, Tester: h.tester, Service: "turn", Key: gsid})
+	if !r.IsHome() && r.Address != "" {
+		turnHost, turnPort = hostPort(r.Address, 3478)
 		if s := r.Services["stun"]; s != "" {
 			stunHost, stunPort = hostPort(s, 3478)
 		} else {
@@ -122,4 +145,25 @@ func iceFor(uid string) (stunHost string, stunPort int32, turnHost string, turnP
 		turnHost, turnPort = stunHost, stunPort
 	}
 	return
+}
+
+// latencyNode is the STUN address of a node in the region a GCP region name maps to, or ""
+// when that region has none this caller may use (or it is home's own region).
+func latencyNode(t *routing.Table, gcpRegion string, tester bool) string {
+	if t == nil {
+		return ""
+	}
+	home := t.Home
+	if home == "" {
+		home = routing.HomeRegion
+	}
+	for _, code := range t.RegionsForToken(routing.StackGCP, gcpRegion) {
+		if code == home {
+			continue
+		}
+		if nodes := t.Eligible(code, "stun", tester); len(nodes) > 0 {
+			return nodes[0].Services["stun"]
+		}
+	}
+	return ""
 }

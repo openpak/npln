@@ -48,6 +48,7 @@ type sessionServer struct {
 	aliases  map[string]string                          // short code -> session name
 	pools    map[string]string                          // session id -> Matchmaker pool key, for pool sessions only
 	versions map[string]string                          // session id -> its creator's title version (appversion.go)
+	hosts    map[string]roomHost                        // session id -> its host's routing input (federation.go)
 }
 
 func newSessionServer() *sessionServer {
@@ -58,6 +59,7 @@ func newSessionServer() *sessionServer {
 		aliases:  map[string]string{},
 		pools:    map[string]string{},
 		versions: map[string]string{},
+		hosts:    map[string]roomHost{},
 	}
 }
 
@@ -231,6 +233,7 @@ func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req
 		if _, pooled := g.pools[gsid]; !pooled && len(mem) > 0 && mem[0].GetUser() == hostUser {
 			delete(g.sessions, gsid)
 			delete(g.versions, gsid)
+			delete(g.hosts, gsid)
 			delete(g.members, gsid)
 			log.Printf("[MM] evict stale farm session=%s (host %s re-hosted)", redact.Tag(gsid), redact.Seg(hostUser))
 		}
@@ -238,6 +241,7 @@ func (g *sessionServer) CreateGameSessionCreationTicket(ctx context.Context, req
 	g.tickets[lastSeg(ticketName)] = t
 	g.sessions[lastSeg(gsName)] = room
 	g.versions[lastSeg(gsName)] = callerVersion(ctx)
+	g.hosts[lastSeg(gsName)] = hostOf(lastSeg(hostUser))
 	g.addMember(lastSeg(gsName), &mmpb.UserSession{Name: userSess, User: hostUD.GetUser(), State: mmpb.UserSession_ACTIVE, Attributes: hostUD.GetAttributes(), CreateTime: timestamppb.Now()})
 	g.mu.Unlock()
 	log.Printf("[MM] Create host=%s ticket=%s session=%s @ %s:%d", redact.Seg(hostUD.GetUser()), redact.Seg(ticketName), redact.Seg(gsName), room.Host, room.Port)
@@ -272,6 +276,7 @@ func (g *sessionServer) CancelGameSessionCreationTicket(ctx context.Context, req
 		delete(g.tickets, lastSeg(req.GetName()))
 		delete(g.sessions, gsid)
 		delete(g.versions, gsid)
+		delete(g.hosts, gsid)
 		delete(g.members, gsid)
 	}
 	g.mu.Unlock()
@@ -481,6 +486,7 @@ func (g *sessionServer) dropMember(gsid, user string) {
 	if !pooled && lastSeg(list[0].GetUser()) == lastSeg(user) {
 		delete(g.sessions, gsid)
 		delete(g.versions, gsid)
+		delete(g.hosts, gsid)
 		delete(g.members, gsid)
 		log.Printf("[MM] host %s left: farm %s closed", redact.Seg(user), redact.Tag(gsid))
 		return
@@ -498,6 +504,7 @@ func (g *sessionServer) dropMember(gsid, user string) {
 	if pooled && len(kept) == 0 { // a pool has no host: it closes with its last member
 		delete(g.sessions, gsid)
 		delete(g.versions, gsid)
+		delete(g.hosts, gsid)
 		delete(g.members, gsid)
 		delete(g.pools, gsid)
 		log.Printf("[MM] pool session %s emptied and closed", redact.Tag(gsid))
@@ -618,6 +625,29 @@ func (g *sessionServer) GetGameSessionShortAlias(ctx context.Context, req *mmpb.
 
 // ---- connectivity ----
 
+// roomOf is the session uid entered most recently and the routing input of its host. With no
+// session (ICE asked before any room) the caller stands for its own future room.
+func (g *sessionServer) roomOf(uid string) (string, roomHost) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	var gsid string
+	var at time.Time
+	for id, list := range g.members {
+		for _, m := range list {
+			if lastSeg(m.GetUser()) != uid {
+				continue
+			}
+			if t := m.GetCreateTime().AsTime(); gsid == "" || t.After(at) {
+				gsid, at = id, t
+			}
+		}
+	}
+	if h, ok := g.hosts[gsid]; ok {
+		return gsid, h
+	}
+	return gsid, hostOf(uid)
+}
+
 func (g *sessionServer) AllocateIceServerSet(ctx context.Context, req *mmpb.AllocateIceServerSetRequest) (*mmpb.IceServerSet, error) {
 	diag("AllocateIceServerSet", req)
 	// Shape observed in Nintendo's own answers: a STUN server AND a
@@ -631,11 +661,14 @@ func (g *sessionServer) AllocateIceServerSet(ctx context.Context, req *mmpb.Allo
 	if err != nil {
 		return nil, err
 	}
-	stunHost, stunPort, turnHost, turnPort := iceFor(lastSeg(user))
+	// The request names no session: the caller's is the one it entered last (a host asks right
+	// after creating, a joiner right after joining). Its host's region decides for everyone in it.
+	gsid, h := g.roomOf(lastSeg(user))
+	stunHost, stunPort, turnHost, turnPort := iceFor(routingTable(), gsid, h)
 	exp := time.Now().Add(time.Hour).Unix()
 	turnUser := fmt.Sprintf("%d:%s", exp, user)
 	var password string
-	shared, err := sharedICE(ctx)
+	shared, err := sharedICE(ctx, h.country)
 	if err != nil {
 		return nil, err
 	}
@@ -659,7 +692,7 @@ func (g *sessionServer) AllocateIceServerSet(ctx context.Context, req *mmpb.Allo
 		ClientCacheDuration: durationpb.New(90 * time.Second),
 		UpdateTime:          timestamppb.Now(),
 	}
-	log.Printf("[MM] AllocateIceServerSet user=%s -> STUN %s:%d TURN %s:%d", redact.Seg(user), stunHost, set.StunServer.Port, turnHost, set.TurnServers[0].Port)
+	log.Printf("[MM] AllocateIceServerSet user=%s session=%s -> STUN %s:%d TURN %s:%d", redact.Seg(user), redact.Tag(gsid), stunHost, set.StunServer.Port, turnHost, set.TurnServers[0].Port)
 	if shared != nil {
 		log.Print("[Connectivity] ICE allocated by shared service")
 	}
@@ -680,9 +713,19 @@ func (g *sessionServer) ListLatencyMeasurementServers(ctx context.Context, req *
 	if titleOptions.LatencyServers != nil {
 		servers = titleOptions.LatencyServers(tenant)
 	}
+	// A candidate whose GCP region has a node gets that node's STUN, so the console measures a
+	// real path; every other candidate answers from here, as before federation.
+	t := routingTable()
+	var tester bool
+	if _, uid, ok := bearer(ctx); ok {
+		tester = playerOf(uid).tester
+	}
 	for _, server := range servers {
 		server.Host = host
 		server.Port = port
+		if addr := latencyNode(t, server.GetRegion(), tester); addr != "" {
+			server.Host, server.Port = hostPort(addr, 3478)
+		}
 		server.Protocol = mmpb.LatencyMeasurementServer_UDP
 	}
 	return &mmpb.ListLatencyMeasurementServersResponse{LatencyMeasurementServers: servers}, nil

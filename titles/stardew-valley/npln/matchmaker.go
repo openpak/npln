@@ -201,6 +201,7 @@ func (m *matchmaker) newPool(ctx context.Context, t *mmpb.MatchmakingTicket, key
 	m.rooms.sessions[gsid] = s
 	m.rooms.pools[gsid] = key
 	m.rooms.versions[gsid] = callerVersion(ctx)
+	m.rooms.hosts[gsid] = hostOf(lastSeg(ud.GetUser())) // a pool's host is the player who opened it
 	log.Printf("[MM] pool session %s opened: config=%s capacity=%d friend room=%s", redact.Tag(gsid), redact.Tag(cfg), capacity, redact.Tag(room))
 	return gsid
 }

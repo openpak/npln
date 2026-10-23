@@ -32,6 +32,14 @@ Unavailable; there is no silent fallback to locally minted credentials. When bot
 settings are absent, the legacy `NPLN_TURN_SECRET` path remains available for local
 development and rollback. Existing TURN allocations retain their normal lifetime.
 
+Federation routing: set `OPENPAK_ROUTING_URL` (account core, e.g. `http://openpak-account:8000`)
+and `OPENPAK_ROUTING_KEY` to read the core's routing table (`internal/routing`, a copy of the
+account core's resolver). Every member of a session then gets the STUN/TURN of the session
+**host's** region node (host country from the adapter identity, test-node access from the core's
+allow-list); with the connectivity service configured, it is sent the host's country instead.
+Splatoon 3's latency candidates whose GCP region has a STUN node measure that node. With the URL
+unset, or no nodes, everything is answered from home as before. `OPENPAK_REGIONS_URL` is gone.
+
 - `cmd/nplnd` owns what every title needs identically: the TLS listener on the tenant port
   (`NPLN_LISTEN`, `CERT_FILE`, `KEY_FILE`), the plain `/health` (`HEALTH_LISTEN`) and the
   `NPLN_TURN_SECRET` check. It then hands the listener to the title's `Run`.

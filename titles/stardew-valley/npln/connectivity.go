@@ -13,7 +13,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func sharedICE(ctx context.Context) (*connectivity.ICE, error) {
+// sharedICE asks the connectivity service for credentials. country is the session HOST's, so
+// every member is placed on the host's region relay.
+func sharedICE(ctx context.Context, country string) (*connectivity.ICE, error) {
 	client, err := connectivity.FromEnvironment()
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "connectivity configuration unavailable")
@@ -41,13 +43,11 @@ func sharedICE(ctx context.Context) (*connectivity.ICE, error) {
 		return nil, status.Error(codes.Unauthenticated, "expired connectivity identity")
 	}
 	digest := sha256.Sum256([]byte(token))
-	country, _ := countryByUID.Load(uid)
-	countryCode, _ := country.(string)
 	// Tenant is the configured title, not caller-supplied tenant/user fields.
 	key := connectivity.Identity{Title: lastSeg(Tenant), Session: "ice-bootstrap", Player: uid, Generation: hex.EncodeToString(digest[:]), Component: "pia-ice"}
 	allocationCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	ice, err := client.Allocate(allocationCtx, key, countryCode, ttl)
+	ice, err := client.Allocate(allocationCtx, key, country, ttl)
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "shared connectivity allocation unavailable")
 	}
