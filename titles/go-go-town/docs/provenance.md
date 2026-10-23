@@ -6,7 +6,7 @@
   application `010095001B12A000` and native NPLN Auth, Friends, Gamesync,
   Maintenance and matchmaking/GameSession strings. No literal tenant was
   recovered. Sanitized source:
-  [workspace research sweep](../../../../../docs/research/research-switch-multiplayer-sweep-2026-10-12.md).
+  workspace research sweep (internal research notes).
 - **Hypothesis:** Stardew's service set is a useful starting point. No
   runtime call sequence, room configuration, properties or host/join behavior
   has been established for this title. Additional services and configuration

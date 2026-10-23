@@ -26,7 +26,7 @@ go build ./cmd/npln          # NPLN_LISTEN=:21010 CERT_FILE=… KEY_FILE=… NX_
 
 | Env | Meaning |
 | --- | --- |
-| `NPLN_LISTEN` | gRPC/TLS listener, default `:21010` (Stardew tenant, [ports.md](https://github.com/openpak/docs/blob/main/ports.md)); gamesync shares it |
+| `NPLN_LISTEN` | gRPC/TLS listener, default `:21010` (Stardew tenant, [ports.md](https://docs.openpak.org/contributors/ports/)); gamesync shares it |
 | `NX_INTERNAL_URL` | nx-baas game/internal API, default `http://127.0.0.1:20070` |
 | `NX_INTERNAL_KEY` | nx-baas's `NX_INTERNAL_KEY`, sent as `X-Internal-Key` |
 | `NPLN_JWT_KEY` | persisted ES256 key for the access tokens |
@@ -78,7 +78,7 @@ go vet ./...
 
 State a hypothesis and the smallest experiment in [handoff.md](handoff.md) before changing protocol behavior. Record observations immediately, label confidence, and use synthetic fixtures. Raw captures and sensitive or proprietary research inputs must remain outside the repository and be referenced through local configuration only.
 
-The living [handoff.md](handoff.md) is part of the implementation and records current knowledge, experiments, failures, decisions, and next steps. For applying the same method to other titles and backends, see the [Online Compatibility Playbook](https://github.com/openpak/docs/blob/main/playbooks/online-compatibility-playbook.md) and its [NPLN worked example](https://github.com/openpak/docs/blob/main/playbooks/npln-online-gate-playbook.md). Protocol-specific modules will be added only when controlled observations justify them.
+The living [handoff.md](handoff.md) is part of the implementation and records current knowledge, experiments, failures, decisions, and next steps. For applying the same method to other titles and backends, see the [Online Compatibility Playbook](https://docs.openpak.org/contributors/online-compatibility/) and its NPLN worked example (internal research notes). Protocol-specific modules will be added only when controlled observations justify them.
 
 ## Contribution and clean-room policy
 

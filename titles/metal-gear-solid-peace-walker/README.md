@@ -11,7 +11,7 @@ yet.
 | Fact | Value |
 | --- | --- |
 | NPLN tenant | `tenants/t-4f53195c-lp1`, host `t-4f53195c-lp1.lp1.t.npln.srv.nintendo.net` |
-| Ports | tenant 21114, health 21115, session 24530 ([ports.md](https://github.com/openpak/docs/blob/main/ports.md)) |
+| Ports | tenant 21114, health 21115, session 24530 ([ports.md](https://docs.openpak.org/contributors/ports/)) |
 | Relay | TURN is required (without it the mesh stalls at `WaitSetupRelayAddress`); the shared `openpak-turn` coturn is advertised with `NPLN_TURN_SECRET` credentials, as for every title on the set |
 | Lobby size | read from the config name: `Mmc_CoOps2` holds 2 |
 | Session properties | `_BaseConfigName` / `_AliasSuffix` stamped on every created session (`npln.Options.ConfigProperties`) |

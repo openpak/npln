@@ -13,8 +13,7 @@ facts. Most of what this file used to ask for is now answered in
 [`provenance.md`](provenance.md) and did not need a capture after all. What is left is the part no
 document can supply: whether OpenPak's own stack satisfies this client.
 
-Before touching an emulator, read
-[`emulator-launch-protocol.md`](https://github.com/openpak/docs/blob/main/playbooks/emulator-launch-protocol.md) — one instance
+Before touching an emulator, note the launch rules (internal research notes): one instance
 per data dir, the game path on the cmdline is the only title identifier, and **ask first** if
 another title is running. Raw logs, dumps and captures stay outside this repository.
 

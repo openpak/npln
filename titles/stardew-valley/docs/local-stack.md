@@ -84,7 +84,7 @@ Ryujinx now uses **two shared profiles for every game** (host + joiner), not a
 dir per title — `scripts/launch-ryujinx.sh` is a thin wrapper over the family
 launchers (workspace `tools/launch-ryujinx-{host,joiner}.sh`), baking in Stardew's
 NSP and its route (`t-9f607adf-lp1…=127.0.0.1:18501`). See
-[the online-compatibility playbook](https://github.com/openpak/docs/blob/main/playbooks/online-compatibility-playbook.md) §0 (the per-fork isolation documents it used to name are retired).
+[the online-compatibility playbook](https://docs.openpak.org/contributors/online-compatibility/) §0 (the per-fork isolation documents it used to name are retired).
 
 Both wrappers warn if a stack port is down, refuse to launch next to another
 title's instance (`OPENPAK_ALLOW_SHARED=1` to override after asking; the old
@@ -94,13 +94,13 @@ never launch the emulator bare for this project.
 First run of each profile: sign in from the emulator's account menu with the
 shared account — host profile → `OutboundHost` (pid 1800000003), joiner →
 `OutboundJoiner` (pid 1800000004), the family-wide host/joiner identities (see
-`https://github.com/openpak/docs/blob/main/playbooks/conventions.md`). The link is stored per profile, so the
+`https://docs.openpak.org/contributors/conventions/`). The link is stored per profile, so the
 production link in `~/.config/citron` / `~/ryujinx/portable` is untouched.
 NOTE: `OutboundHost`/`OutboundJoiner` are mutual friends AND verified on the
 local account server (done 2026-09-02) — Stardew's auth gate passes for them.
 (To verify a local account: `GET http://127.0.0.1:8099/api/verify?token=…`, an
 HMAC token bound to id+email under the account server's `OPENPAK_SECRET` — see the recipe in
-`https://github.com/openpak/docs/blob/main/playbooks/online-compatibility-playbook.md`.)
+`https://docs.openpak.org/contributors/online-compatibility/`.)
 
 Verify on the running pid before trusting a result:
 

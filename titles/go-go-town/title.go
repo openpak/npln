@@ -19,5 +19,5 @@ const TitleID = "010095001B12A000"
 const DefaultTenant = "tenants/t-05cbf648-lp1"
 
 // Title serves the captured tenant; NPLN_TENANT can override a later capture.
-// Tenant port 21126, health 21127 and session 24550 are allocated in docs/ports.md.
+// Tenant port 21126, health 21127 and session 24550 are allocated in the port plan (https://docs.openpak.org/contributors/ports/).
 var Title = stardewset.Title("go-go-town", TitleID, ":21126", ":21127", ":24550", DefaultTenant)

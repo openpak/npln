@@ -17,5 +17,5 @@ const DefaultTenant = "tenants/t-a8f1d737-lp1"
 // Title starts the initial Auth/Friends/Presence/GameSession/Gamesync service
 // set. This is registration, not verified retail compatibility: QUIC peer
 // setup and LeaderboardService still require client acceptance testing.
-// Ports are reserved in the workspace docs/ports.md.
+// Ports are reserved in the port plan (https://docs.openpak.org/contributors/ports/).
 var Title = stardewset.Title("plateup", TitleID, ":21128", ":21129", ":24560", DefaultTenant)
