@@ -1,75 +1,46 @@
-# npln
+# NPLN
 
-The shared NPLN host and, under `titles/`, every OpenPak NPLN title. One module, one image
-(`ghcr.io/openpak/npln`), one tag per release; a container runs one title, chosen by
-`NPLN_TITLE`. NPLN is the gRPC-over-TLS transport family Nintendo Switch titles such as
-Stardew Valley and Splatoon 3 use instead of NEX.
+OpenPak's NPLN Server.
 
-| Title | `NPLN_TITLE` | Tenant port | Status |
-| --- | --- | --- | --- |
-| [`titles/core-keeper`](titles/core-keeper) | `core-keeper` | 21130 (health 21131), session 24570 | deployed: tenant captured in Harbor; NPLN Auth works; later PlayFab Nintendo login fails with 503 and blocks the reported console flow; hosted session and join unverified |
-| [`titles/plateup`](titles/plateup) | `plateup` | 21128 (health 21129), session 24560 | deployed under captured tenant `t-a8f1d737-lp1`: Switch 1.5.2 selects NPLN lobbies/Gamesync and QUIC peers; Switch hosting and Harbor joining confirmed; sustained gameplay/reconnect and leaderboards pending |
-| [`titles/stardew-valley`](titles/stardew-valley) | `stardew-valley` | 21010 (health 21011) | live, console-verified |
-| [`titles/splatoon-3`](titles/splatoon-3) | `splatoon-3` | 21012 (health 21013), session 22210 | early, not run against retail |
-| [`titles/super-mario-bros-wonder`](titles/super-mario-bros-wonder) | `super-mario-bros-wonder` | 21014 (health 21015), session 22220 | early: Stardew's service set under Wonder's tenant `t-ba973ec6-lp1`, plus the Matchmaker (course/world-map and friend pools), messaging, UGC store and hydro datastore; deployed, not console-verified. Served with a leaf chained to the OpenPak CA, which the console/emulator trusts via its system store; unverified until booted |
-| [`titles/dinkum`](titles/dinkum) | `dinkum` | 21122 (health 21123), session 22230 | registered: Stardew's service set; tenant unknown, so `NPLN_TENANT` is required; NPLN 1.43.3 with WebRTC/QUIC P2P add-ons |
-| [`titles/human-fall-flat`](titles/human-fall-flat) | `human-fall-flat` | 21124 (health 21125), session 22240 | registered: Stardew's service set; tenant unknown, so `NPLN_TENANT` is required; NPLN 1.41.1, Pia 6.42.0 |
-| [`titles/go-go-town`](titles/go-go-town) | `go-go-town` | 21126 (health 21127), session 24550 | live: Switch hosted, Harbor joined and both played together (2026-10-12); Stardew service set under captured tenant `t-05cbf648-lp1` |
-| [`titles/metal-gear-solid-peace-walker`](titles/metal-gear-solid-peace-walker) | `metal-gear-solid-peace-walker` | 21114 (health 21115), session 24530 | registered, never booted: Stardew's service set under tenant `t-4f53195c-lp1`, with config-name lobby sizes, FriendSearch and config properties, plus the Matchmaker, messaging, UGC store and hydro datastore. Served with a leaf chained to the OpenPak CA, which the console/emulator trusts via its system store; unverified until booted |
+| | |
+| --- | --- |
+| Network | Nintendo Switch |
+| Protocol | NPLN (gRPC over TLS) |
+| Image | `ghcr.io/openpak/npln` |
+| Licence | AGPL-3.0-only |
 
-## Shape
+## Titles
 
-All 18 deployed title services use the standalone OpenPak connectivity service for
-ICE credential allocation as of 2026-10-13. The adapter verifies the caller's bearer,
-registers its generation independently of IP, and preserves NPLN's ICE response
-fields/cache conventions. Each title has its own API token. Infrastructure probes
-pass; post-rollout game testing starts with Stardew Valley. Deployment and guarded
-rollback: [connectivity rollout](../../../../openpak/connectivity/docs/npln-deployment-2026-10-13.md).
+One module, one image: a container runs one title, chosen by `NPLN_TITLE`. Add a title by adding a
+module under `titles/` and one line to `titles/titles.go`.
 
-Set `NPLN_CONNECTIVITY_URL` and `NPLN_CONNECTIVITY_TOKEN_FILE` (private 0600 mounted
-file) to enable it. With integration configured, allocation failures return gRPC
-Unavailable; there is no silent fallback to locally minted credentials. When both
-settings are absent, the legacy `NPLN_TURN_SECRET` path remains available for local
-development and rollback. Existing TURN allocations retain their normal lifetime.
+| Game | Title ID | Module |
+| --- | --- | --- |
+| [Bayonetta 3](https://openpak.org/titles#t-66707) | `01004A4010FEA000` | `titles/bayonetta-3` |
+| [Core Keeper](https://openpak.org/titles#t-72356) | `010070201D1BA000` | `titles/core-keeper` |
+| [Dinkum](https://openpak.org/titles#t-53688) | `0100A5A020D5E000` | `titles/dinkum` |
+| [Endless Ocean Luminous](https://openpak.org/titles) | `010067B017588000` | `titles/endless-ocean-luminous` |
+| [Go-Go Town!](https://openpak.org/titles#t-72358) | `010095001B12A000` | `titles/go-go-town` |
+| [Hamster Playground](https://openpak.org/titles) | `010035901701A000` | `titles/hamster-playground` |
+| [Human Fall Flat](https://openpak.org/titles) | `01000CA004DCA000` | `titles/human-fall-flat` |
+| [METAL GEAR SOLID: Peace Walker](https://openpak.org/titles) | `0100C6F01C4F8000` | `titles/metal-gear-solid-peace-walker` |
+| [Monster Hunter Rise](https://openpak.org/titles) | `0100B04011742000` | `titles/monster-hunter-rise` |
+| [PlateUp!](https://openpak.org/titles#t-72373) | `01003F901A83E000` | `titles/plateup` |
+| [Pokémon Legends: Arceus](https://openpak.org/titles) | `01001F5010DFA000` | `titles/pokemon-legends-arceus` |
+| [Pokémon Scarlet and Violet](https://openpak.org/titles) | `0100A3D008C5C000` | `titles/pokemon-scarlet-violet` |
+| [Splatoon 3](https://openpak.org/titles#t-3) | `0100C2500FC20000` | `titles/splatoon-3` |
+| [Stardew Valley](https://openpak.org/titles#t-2) | `0100E65002BB8000` | `titles/stardew-valley` |
+| [Super Mario Bros. Wonder](https://openpak.org/titles#t-8691) | `010015100B514000` | `titles/super-mario-bros-wonder` |
+| [Super Mario Party Jamboree](https://openpak.org/titles#t-93) | `0100965017338000` | `titles/super-mario-party-jamboree` |
+| [Terraria](https://openpak.org/titles#t-142) | `0100E46006708000` | `titles/terraria` |
+| [Wavecade](https://openpak.org/titles) | `0100F7A017F4C000` | `titles/wavecade` |
 
-Federation routing: set `OPENPAK_ROUTING_URL` (account core, e.g. `http://openpak-account:8000`)
-and `OPENPAK_ROUTING_KEY` to read the core's routing table (`internal/routing`, a copy of the
-account core's resolver). Every member of a session then gets the STUN/TURN of the session
-**host's** region node (host country from the adapter identity, test-node access from the core's
-allow-list); with the connectivity service configured, it is sent the host's country instead.
-Splatoon 3's latency candidates whose GCP region has a STUN node measure that node. With the URL
-unset, or no nodes, everything is answered from home as before. `OPENPAK_REGIONS_URL` is gone.
+## What it serves
 
-- `cmd/nplnd` owns what every title needs identically: the TLS listener on the tenant port
-  (`NPLN_LISTEN`, `CERT_FILE`, `KEY_FILE`), the plain `/health` (`HEALTH_LISTEN`) and the
-  `NPLN_TURN_SECRET` check. It then hands the listener to the title's `Run`.
-- `proto/` is the one NPLN schema both titles share (Stardew's tree plus Splatoon's `toyohr`
-  services). One copy is not tidiness: two copies of the same `.proto` file names in one
-  binary would collide in the protobuf registry at start-up. Regenerate with
-  `proto/generate.sh`.
-- `titles/<game>/npln` is that title's service implementations. Stardew and Splatoon still
-  carry their own auth, friends and gamesync code. Titles not yet observed run Stardew's set
-  under their own tenant through `titles/stardewset` (Wonder, Dinkum, Human Fall Flat).
-- Services beyond Stardew's set are opt-in per title through `npln.Options`: `Matchmaker`
-  (matchmaking.v1 ticket pools and friend pools), `Messaging` (messaging.v1), `UGC`
-  (ugcstore.v1 Ugcstore and Screening) and `Hydro` (hydro.v1 Datastore). Wonder and Peace Walker
-  take all four; every other title is unchanged and logs `UNIMPLEMENTED` for them.
-  `ConfigProperties` also makes gamesync's `mcn` the session's own config name; titles without
-  it keep Stardew's `Farm4Player`.
-- The UGC store keeps its documents in one JSON file, `NPLN_UGC_FILE` (default
-  `ugcstore.json` in the working directory; point it into the data volume, e.g.
-  `/app/data/ugcstore.json`). Everything else is in memory.
-- Each title keeps its own README, docs and tools (`titles/stardew-valley/cmd/observer`,
-  `cmd/probe`; `titles/splatoon-3/cmd/genrotation`) in its directory.
-
-## Bans
-
-`bans` locks a banned OpenPak account out of every title
-([`website/docs/ban-lookup.md`](../../website/docs/ban-lookup.md)): no token is issued or
-refreshed for it, calls carrying its token are refused with `PermissionDenied`, and its open
-streams end within a minute. The source is nx-baas (`/internal/switch/identity` answers 403
-`account_banned`), reached with the `NX_INTERNAL_URL` / `NX_INTERNAL_KEY` every title already
-has. A title wires it with `bans.Default.Unary` / `bans.Default.Stream` in its server chain.
+| Endpoint | What | Served by |
+| --- | --- | --- |
+| `NPLN_LISTEN` (per title) | NPLN gRPC services over TLS | `cmd/nplnd`, then the title's `Run` |
+| `HEALTH_LISTEN` (per title) | Plain `/health` | `cmd/nplnd` |
 
 ## Run
 
@@ -77,6 +48,16 @@ has. A title wires it with `bans.Default.Unary` / `bans.Default.Stream` in its s
 NPLN_TITLE=stardew-valley NPLN_TURN_SECRET=… CERT_FILE=… KEY_FILE=… go run ./cmd/nplnd
 ```
 
-Every environment variable a title read before is unchanged; `NPLN_TITLE` is the only new one.
-The former `stardew-valley` and `splatoon-3` repositories are archived; their history is merged
-here.
+## Docs
+
+- [Protocol](docs/protocol.md)
+- [Evidence](docs/evidence.md)
+- [Deploy](docs/deploy.md)
+- [Notes](docs/notes.md)
+- [Docs index](docs/README.md)
+
+Live compatibility status: [openpak.org/titles](https://openpak.org/titles)
+
+## Licence
+
+AGPL-3.0-only. See [LICENSE](LICENSE).
