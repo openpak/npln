@@ -11,6 +11,16 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.9.0 — 2026-11-01
+
+- Splatoon 3: read-only JSON API on the health listener (`/api/v1/schedule.json`,
+  `/api/v1/fests.json`) for the shared SplatNet site; see `titles/splatoon-3/docs/schedule-api.md`.
+- Splatoon 3: rotation file is renewed with temp file + rename, so a root-owned file on the volume
+  no longer causes "permission denied" and an hourly re-roll of the in-memory rotation.
+- Splatoon 3: `FestService` serves a fest defined in `fests.json` (SelectFestSchedule,
+  CreateFestEntry, GetFestEntry); GetFestResult / GetFestDecryptionKey remain documented gaps
+  (`titles/splatoon-3/docs/splatfest.md`).
+
 ## Unreleased — 2026-10-13
 
 - Integrate the standalone connectivity service in the shared NPLN ICE handler;

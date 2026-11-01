@@ -160,3 +160,18 @@ func TestKeep(t *testing.T) {
 		t.Fatal("a broken file was served")
 	}
 }
+
+func TestWriteReplacesForeignFile(t *testing.T) {
+	dir := t.TempDir()
+	p := dir + "/rotation.json"
+	if err := os.WriteFile(p, []byte("old"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if err := Write(p, Generate(now, 24, 24, 1), now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(p, now); err != nil {
+		t.Fatal(err)
+	}
+}

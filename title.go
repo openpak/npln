@@ -8,6 +8,7 @@ package npln
 
 import (
 	"net"
+	"net/http"
 
 	"google.golang.org/grpc/credentials"
 )
@@ -19,4 +20,7 @@ type Title struct {
 	HealthListen string // default HEALTH_LISTEN
 	// Run builds the title's gRPC server over creds and serves it on lis until it fails.
 	Run func(creds credentials.TransportCredentials, lis net.Listener) error
+	// Routes, when set, adds read-only HTTP routes to the plain health listener (no TLS, internal
+	// network only). They must be safe to serve before Run has loaded anything.
+	Routes func(mux *http.ServeMux)
 }

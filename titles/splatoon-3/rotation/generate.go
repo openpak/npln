@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -106,7 +107,27 @@ func Write(path string, f *File, at time.Time) error {
 	header := fmt.Sprintf("// Generated, anchored at %s.\n"+
 		"// The server renews it on its own; the last versus window ends %s.\n",
 		at.UTC().Format(time.RFC3339), f.VsEnd().Format(time.RFC3339))
-	return os.WriteFile(path, append([]byte(header), b...), 0o644)
+	// Temp file + rename in the same directory: replacing needs write access to the directory,
+	// not to the old file, so a file left behind owned by another uid (a volume populated by
+	// root) can still be renewed.
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".rotation-*.tmp")
+	if err != nil {
+		return err
+	}
+	_, err = tmp.Write(append([]byte(header), b...))
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(tmp.Name(), 0o644)
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+	}
+	return err
 }
 
 // Keep returns the rotation to serve at `now`, renewing the file first when it is missing or

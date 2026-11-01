@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/credentials"
@@ -30,6 +29,7 @@ var Title = host.Title{
 	Listen:       ":21012",
 	HealthListen: ":21013",
 	Run:          run,
+	Routes:       routes,
 }
 
 func run(creds credentials.TransportCredentials, lis net.Listener) error {
@@ -40,7 +40,7 @@ func run(creds credentials.TransportCredentials, lis net.Listener) error {
 	}
 	log.Printf("rotation %s: %d vs, %d coop, %d season, %d league, runs to %s",
 		rotPath, len(rot.Vs), len(rot.Coop), len(rot.Season), len(rot.League), rot.VsEnd().Format(time.RFC3339))
-	var cur atomic.Pointer[rotation.File]
+	cur := &current
 	cur.Store(rot)
 	// The rotation is anchored to real time and runs out; renew it before it does, while running.
 	go func() {
@@ -50,7 +50,7 @@ func run(creds credentials.TransportCredentials, lis net.Listener) error {
 			}
 		}
 	}()
-	srv := npln.NewServer(creds, &cur)
+	srv := npln.NewServer(creds, cur)
 	// The console dials the session/gamesync endpoint directly (22210), not through Traefik.
 	if sessionAddr := env("NPLN_SESSION_LISTEN", ":22210"); sessionAddr != "" && sessionAddr != lis.Addr().String() {
 		if sl, err := net.Listen("tcp", sessionAddr); err != nil {

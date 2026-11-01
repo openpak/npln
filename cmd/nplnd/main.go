@@ -13,6 +13,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
+	host "github.com/openpak/npln"
 	"github.com/openpak/npln/internal/connectivity"
 	"github.com/openpak/npln/redact"
 	"github.com/openpak/npln/titles"
@@ -68,12 +69,13 @@ func main() {
 	if connectivityClient != nil {
 		log.Print("shared connectivity enabled for NPLN ICE allocation")
 	}
-	serveHealth(env("HEALTH_LISTEN", title.HealthListen), title.Name)
+	serveHealth(env("HEALTH_LISTEN", title.HealthListen), title)
 	log.Printf("%s NPLN server listening on %s (gRPC/TLS)", title.Name, addr)
 	log.Fatal(title.Run(creds, lis))
 }
 
-func serveHealth(addr, service string) {
+func serveHealth(addr string, title host.Title) {
+	service := title.Name
 	if addr == "" {
 		return
 	}
@@ -82,6 +84,9 @@ func serveHealth(addr, service string) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","service":"` + service + `"}`))
 	})
+	if title.Routes != nil {
+		title.Routes(mux)
+	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Printf("health: cannot listen on %s: %s", addr, redact.Err(err))

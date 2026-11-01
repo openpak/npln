@@ -71,9 +71,9 @@ func targetName(target string) string {
 	return Tenant + "/targets/" + id
 }
 
-// setID names the rotation a response came from. It is the same for every kind in one file,
+// SetID names the rotation a response came from. It is the same for every kind in one file,
 // which is exactly the property the game needs them to share, and changes when it is renewed.
-func setID(rot *rotation.File) string {
+func SetID(rot *rotation.File) string {
 	return fmt.Sprintf("openpak-%d", rot.Vs[0].Start.Unix())
 }
 
@@ -95,7 +95,7 @@ func (s *scheduleServer) SelectVsSchedules(_ context.Context, req *toyohrpb.Sele
 			RegularSettings: &toyohrpb.RegularSettings{Stages: w.Regular},
 			XSettings:       &toyohrpb.XSettings{Rule: r[2], Stages: w.X.Stages},
 			LeagueSettings:  &toyohrpb.LeagueSettings{Rule: r[3], Stages: w.League.Stages},
-			ScheduleSetId:   setID(rot),
+			ScheduleSetId:   SetID(rot),
 		}
 		for j, b := range w.Bankara {
 			rule := b.Rule
@@ -122,7 +122,7 @@ func (s *scheduleServer) SelectCoopSchedules(_ context.Context, req *toyohrpb.Se
 		}
 		out.Schedules = append(out.Schedules, &toyohrpb.CoopSchedule{
 			Name:          fmt.Sprintf("%s/coopSchedules/%d", targetName(req.GetTarget()), i),
-			ScheduleSetId: setID(rot),
+			ScheduleSetId: SetID(rot),
 			StartTime:     ts(w.Start),
 			EndTime:       ts(w.End),
 			ShiftId:       w.Start.UTC().Format("20060102150405"), // the shift's start, as Nintendo names shifts
@@ -131,7 +131,7 @@ func (s *scheduleServer) SelectCoopSchedules(_ context.Context, req *toyohrpb.Se
 			// each weapon too unless it is -1 (random), the Grizzco weapon unless negative. A
 			// rotation file written before these rules carries made-up ids, so they are set here.
 			Normal: &toyohrpb.CoopSchedule_Normal{
-				Stage: coopStage(w.Start), Boss: "SakelienGiant", MainWeapons: []int64{-1, -1, -1, -1}, KumaWeapon: -1,
+				Stage: CoopStage(w.Start), Boss: "SakelienGiant", MainWeapons: []int64{-1, -1, -1, -1}, KumaWeapon: -1,
 				// The lobby refuses a shift without a monthly reward: a gear type and a gear id
 				// that exists in that type's table (docs/provenance.md).
 				RewardType: "Head", RewardGearId: 21010,
@@ -156,7 +156,7 @@ func (s *scheduleServer) SelectSeasonSchedules(_ context.Context, req *toyohrpb.
 			Field_2:       1, // the season id the game looks up in its season table; 0 is not in it
 			StartTime:     ts(w.Start),
 			EndTime:       ts(w.End),
-			ScheduleSetId: setID(rot),
+			ScheduleSetId: SetID(rot),
 		})
 	}
 	out.Etag = etag(out)
@@ -167,7 +167,7 @@ func (s *scheduleServer) SelectSeasonSchedules(_ context.Context, req *toyohrpb.
 // coopStages are the Salmon Run stage ids the shift check accepts; each shift takes the next.
 var coopStages = []int32{1, 2, 4, 6, 7, 8, 9}
 
-func coopStage(start time.Time) int32 {
+func CoopStage(start time.Time) int32 {
 	n := start.Unix() / 86400
 	if n < 0 {
 		n = -n
@@ -204,7 +204,7 @@ func (s *scheduleServer) SelectVsParams(_ context.Context, req *toyohrpb.SelectV
 			Name:        targetName(req.GetTarget()) + "/vsParams/current",
 			Timestamp_1: ts(cur),
 			Timestamp_2: ts(cur),
-			ParamsSetId: setID(rot),
+			ParamsSetId: SetID(rot),
 		},
 	}
 	out.Etag = etag(out)
