@@ -52,8 +52,8 @@ NPLN_TITLE=stardew-valley NPLN_TURN_SECRET=… CERT_FILE=… KEY_FILE=… go run
 
 - [Protocol](docs/protocol.md)
 - [Deploy](docs/deploy.md)
-- [Notes](docs/notes.md)
-- [Docs index](docs/README.md)
+
+PRDs: openpak/prds (private)
 
 Live compatibility status: [openpak.org/titles](https://openpak.org/titles)
 

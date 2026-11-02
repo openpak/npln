@@ -22,3 +22,20 @@ refreshed for it, calls carrying its token are refused with `PermissionDenied`, 
 streams end within a minute. The source is nx-baas (`/internal/switch/identity` answers 403
 `account_banned`), reached with the `NX_INTERNAL_URL` / `NX_INTERNAL_KEY` every title already
 has. A title wires it with `bans.Default.Unary` / `bans.Default.Stream` in its server chain.
+
+## Schema and title layout
+
+- `proto/` is the one NPLN schema every title shares (Stardew's tree plus Splatoon's `toyohr`
+  services). One copy is required: two copies of the same `.proto` file names in one binary
+  collide in the protobuf registry at start-up. Regenerate with `proto/generate.sh`.
+- `titles/<game>/npln` holds that title's service implementations. Stardew and Splatoon carry
+  their own auth, friends and gamesync code. Titles not yet observed run Stardew's set under
+  their own tenant through `titles/stardewset` (Wonder, Dinkum, Human Fall Flat).
+- Each title keeps its own README, docs and tools (`titles/stardew-valley/cmd/observer`,
+  `cmd/probe`; `titles/splatoon-3/cmd/genrotation`) in its directory.
+
+## Title IDs
+
+Pokémon Scarlet and Violet: the module serves Scarlet's Title ID `0100A3D008C5C000`. Violet's ID
+(`01008F6008C5E000`) appears only in a comment in `titles/pokemon-scarlet-violet/title.go`, so
+the title entry is not a Violet service.
