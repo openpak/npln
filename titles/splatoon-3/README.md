@@ -4,10 +4,9 @@ NPLN game server for **Splatoon 3** (`0100C2500FC20000`) on Nintendo Switch. NPL
 transport family as [`stardew-valley`](../stardew-valley), a much larger service surface, and far
 less of it observed.
 
-**Status: early.** It starts, terminates TLS on the Splatoon 3 NPLN tenant port, and answers
+It starts, terminates TLS on the Splatoon 3 NPLN tenant port, and answers
 `nn.npln.auth.v1.Auth`, `nn.npln.friends.v1.Friends`, `nn.npln.friends.v1.PresenceService` and
-`nn.npln.toyohr.v1.Schedule`, logging every other method as `UNIMPLEMENTED`. **No part of it has
-been run against the retail game.** Matchmaking, game sessions, gamesync and the rest of the
+`nn.npln.toyohr.v1.Schedule`, logging every other method as `UNIMPLEMENTED`. Matchmaking, game sessions, gamesync and the rest of the
 `toyohr` services are not implemented.
 
 What the title actually requires is now documented rather than guessed:

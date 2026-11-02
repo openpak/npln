@@ -1,5 +1,5 @@
 // cmd/probe: a controlled, sanitized TLS termination point for Stardew's NPLN
-// tenant traffic (see handoff.md, Experiment 2026-08-31-7).
+// tenant traffic.
 //
 // The probe terminates TLS locally with an in-memory self-signed certificate,
 // answers only the minimum HTTP/2 framing required to keep the peer talking,

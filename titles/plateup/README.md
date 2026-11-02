@@ -2,12 +2,8 @@
 
 Switch application `01003F901A83E000`, selected with `NPLN_TITLE=plateup` in
 the shared `nplnd` binary. Tenant TLS **21128**, HTTP `/health` **21129**,
-direct session/Gamesync TCP **24560**. Deployed 2026-10-12 under captured
-tenant **`t-a8f1d737-lp1`**. Public TLS/gRPC probes pass. At 17:34:52–55 UTC,
-the Switch authenticated, created a lobby and connected to Gamesync, writing
-session data. At 17:35:36–37, Harbor joined and both devices requested ICE;
-the owner confirmed the Switch works online and Harbor can connect to it.
-Sustained gameplay, reverse hosting and reconnect remain separately unverified.
+direct session/Gamesync TCP **24560**. Runs under captured
+tenant **`t-a8f1d737-lp1`**.
 
 The installed Switch update 1.5.2 (content version 1572864) uses **NPLN
 matchmaking/Gamesync plus QUIC peer connections**, and NPLN leaderboards.

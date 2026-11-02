@@ -18,8 +18,8 @@ missing logs `UNIMPLEMENTED` and that log is the next work list.
 | UGC store | documents in `NPLN_UGC_FILE`; the course query (`ku` by `` `ut` `` desc, 30) and general Firestore-style queries; writes only by the owner, size-limited; attachments not served | [provenance](docs/provenance.md) |
 | Hydro datastore | in memory; owner-only changes unless the content grants UPDATE | [provenance](docs/provenance.md) |
 
-Deployed 2026-09-11 as `openpak-wonder` (tenant cert `deploy/keys/wonder.pem` from the OpenPak
-CA, Traefik `HostSNI` passthrough). Not console-verified. `NPLN_TENANT` overrides the tenant if a
+Runs as `openpak-wonder` (tenant cert `deploy/keys/wonder.pem` from the OpenPak
+CA, Traefik `HostSNI` passthrough). `NPLN_TENANT` overrides the tenant if a
 capture ever disagrees with the public list.
 
 ```sh

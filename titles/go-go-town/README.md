@@ -4,10 +4,8 @@ Switch application `010095001B12A000`, selected by `NPLN_TITLE=go-go-town` in
 the shared `nplnd` binary. Tenant TLS port **21126**, plain `/health` port
 **21127**, direct session/Gamesync TCP port **24550**.
 
-Deployed as `openpak-go-go-town` on 2026-10-12 under the hardware-captured
-tenant `tenants/t-05cbf648-lp1`. Public TLS/gRPC checks pass on 443 and 24550;
-**Switch host → Harbor join and two-player gameplay are confirmed** by the
-owner's test and server join trace. Auth, Friends, Presence,
+Runs as `openpak-go-go-town` under the hardware-captured
+tenant `tenants/t-05cbf648-lp1`. Auth, Friends, Presence,
 GameSessionService and Gamesync use Stardew's service set without extra
 title options. Other
 services remain unimplemented until a client trace establishes the need.

@@ -1,7 +1,7 @@
 # Splatoon 3 Splatfest (`toyohr.v1.FestService`)
 
-Status 2026-11-01. No console has seen any of this yet; everything below is built from the proto
-and the notes in provenance.md. Test on Harbor first, one RPC at a time.
+Everything below is built from the proto and the notes in provenance.md. Test on Harbor first,
+one RPC at a time.
 
 ## Defining a fest
 
