@@ -11,6 +11,17 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.11.0 — 2026-11-03
+
+- Every hosted title with online play reports `game_sessions.<title>` to the rewards service (Stardew Valley,
+  Super Mario Bros. Wonder, Terraria, Human: Fall Flat, PlateUp!, Dinkum, Core Keeper, Go-Go Town!, Bayonetta 3,
+  Pokemon Scarlet/Violet and Legends: Arceus, Super Mario Party Jamboree, Monster Hunter Rise, Hamster Playground,
+  Wavecade, Endless Ocean Luminous, MGS Peace Walker). Same rule as Splatoon 3: 3 minutes with another player in one
+  game session, once per player and session. `NewServer` now starts the session watcher (before, only
+  `RegisterSessions` did). Metrics are in rewards 0.9.0 (migration 0008). Off without `REWARDS_EVENTS_URL`/`KEY`.
+- Not done: PlateUp! and Wonder leaderboards. The NPLN LeaderboardService has no recovered wire protocol in
+  `proto/`, so there is nothing to persist or rank yet.
+
 ## v0.10.0 — 2026-11-03
 
 - Splatoon 3: reports `turf_sessions.s3` to the rewards service. A player counts once per game

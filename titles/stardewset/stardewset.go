@@ -14,6 +14,8 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
+	emit "github.com/openpak/rewards-emit"
+
 	host "github.com/openpak/npln"
 	"github.com/openpak/npln/redact"
 	"github.com/openpak/npln/titles/stardew-valley/npln"
@@ -37,7 +39,7 @@ func Title(name, titleID, listen, healthListen, session, defaultTenant string, o
 			if err != nil {
 				return err
 			}
-			srv := npln.NewServer(creds, tenant, strings.ToLower(titleID), opts...)
+			srv := npln.NewServer(creds, tenant, strings.ToLower(titleID), withRewards(name, opts)...)
 			if addr := env("NPLN_SESSION_LISTEN", session); addr != "" && addr != lis.Addr().String() {
 				if sl, err := net.Listen("tcp", addr); err != nil {
 					log.Printf("session endpoint: cannot listen on %s: %s", addr, redact.Err(err))
@@ -49,6 +51,26 @@ func Title(name, titleID, listen, healthListen, session, defaultTenant string, o
 			return srv.Serve(lis)
 		},
 	}
+}
+
+// RewardsMetric is the rewards metric a title's online sessions are reported under.
+func RewardsMetric(name string) string { return "game_sessions." + name }
+
+// withRewards returns opts with the title's session reporting on: metric game_sessions.<name>,
+// sent to the rewards service when REWARDS_EVENTS_URL and REWARDS_EVENTS_KEY are set. A title
+// that set its own metric keeps it.
+func withRewards(name string, opts []npln.Options) []npln.Options {
+	var o npln.Options
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+	if o.RewardsMetric == "" {
+		o.RewardsMetric = RewardsMetric(name)
+	}
+	if o.Rewards == nil {
+		o.Rewards = emit.FromEnv("npln-" + name)
+	}
+	return []npln.Options{o}
 }
 
 // Tenant is the tenant to serve: NPLN_TENANT when set (a capture that disagrees with a

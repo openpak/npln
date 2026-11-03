@@ -8,6 +8,8 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
+	emit "github.com/openpak/rewards-emit"
+
 	host "github.com/openpak/npln"
 	"github.com/openpak/npln/redact"
 	"github.com/openpak/npln/titles/stardew-valley/npln"
@@ -19,7 +21,9 @@ var Title = host.Title{
 	Listen:       ":21010",
 	HealthListen: ":21011",
 	Run: func(creds credentials.TransportCredentials, lis net.Listener) error {
-		srv := npln.NewServer(creds, npln.StardewTenant, npln.AppID)
+		srv := npln.NewServer(creds, npln.StardewTenant, npln.AppID, npln.Options{
+			Rewards: emit.FromEnv("npln-stardew-valley"), RewardsMetric: "game_sessions.stardew-valley",
+		})
 		// A host creates a session and the server hands every joiner an
 		// address to dial. The console dials THAT directly -- not through
 		// Traefik, which only knows SNI -- so it has to be a port of its own,
