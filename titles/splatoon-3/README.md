@@ -39,6 +39,7 @@ your own file if you hold a real one.
 | `NX_INTERNAL_KEY` | nx-baas's `NX_INTERNAL_KEY`, sent as `X-Internal-Key` |
 | `NPLN_JWT_KEY` | persisted ES256 key for the access tokens (a restart otherwise invalidates every live session) |
 | `NPLN_FRIENDS_CHUNK_BYTES` | byte budget for one friend-list stream message, default 4096. The whole graph in one message is a measured crash |
+| `REWARDS_EVENTS_URL` / `REWARDS_EVENTS_KEY[_FILE]` | rewards events API; with both set, online sessions (3 minutes together in a room, `REWARDS_SESSION_MIN`) count as `turf_sessions.s3` |
 | `NPLN_ROTATION` | rotation file, default `rotation.json` |
 
 Auth flow: the game sends its BAAS id_token; the `openpak` claim inside it was signed by nx-baas. This

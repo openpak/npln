@@ -11,6 +11,14 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.10.0 — 2026-11-03
+
+- Splatoon 3: reports `turf_sessions.s3` to the rewards service. A player counts once per game
+  session (room, private battle or matchmaker pool) after sharing it with at least one other
+  player for 3 minutes (`REWARDS_SESSION_MIN`); event id and distinct key are the session id, the
+  identity is the `switch` BAAS user id. Off unless `REWARDS_EVENTS_URL` and `REWARDS_EVENTS_KEY`
+  are set. Other titles of the shared session package are unchanged (`Options.Rewards` is nil).
+
 ## v0.9.0 — 2026-11-01
 
 - Splatoon 3: read-only JSON API on the health listener (`/api/v1/schedule.json`,

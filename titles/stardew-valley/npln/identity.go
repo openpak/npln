@@ -153,6 +153,7 @@ func gatedIdentity(ext *authpb.ExternalIdToken, tenant string) (uint64, string, 
 		return 0, "", errOutdated()
 	}
 	rememberAppVersion(acc.UserID(), av)
+	rememberPlayerIdentity(acc.UserID(), acc.BaasUserID, acc.PID)
 	return acc.PID, tenant + "/users/" + acc.UserID(), nil
 }
 
@@ -346,7 +347,8 @@ var trustUIDMetadata = os.Getenv("NPLN_TRUST_UID_METADATA") == "1"
 // callerUser is the caller's user resource name, from the bearer token. The uid request
 // metadata is client-controlled and is not an identity.
 func callerUser(ctx context.Context) (string, error) {
-	if _, uid, ok := bearer(ctx); ok && uid != "" {
+	if pid, uid, ok := bearer(ctx); ok && uid != "" {
+		notePlayerPID(uid, pid)
 		return tenantFromCtx(ctx) + "/users/" + uid, nil
 	}
 	if uid := uidFromCtx(ctx); trustUIDMetadata && uid != "" {

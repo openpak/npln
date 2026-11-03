@@ -24,6 +24,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openpak/npln/bans"
+	emit "github.com/openpak/rewards-emit"
+
 	authpb "github.com/openpak/npln/proto/auth/v1"
 	friendspb "github.com/openpak/npln/proto/friends/v1"
 	gspb "github.com/openpak/npln/proto/gamesync/v1"
@@ -182,6 +184,12 @@ type Options struct {
 
 	// Referee publishes Splatoon 3's match verdicts on gamesync (referee.go).
 	Referee bool
+
+	// Rewards reports online sessions to the rewards service under RewardsMetric (for example
+	// "turf_sessions.s3"): a player counts once they have shared a game session with at least one
+	// other player for REWARDS_SESSION_MIN (default 3 minutes). Nil or no metric means off.
+	Rewards       *emit.Client
+	RewardsMetric string
 }
 
 // titleOptions are the hosted title's Options; a package variable for the same reason as Tenant.
@@ -254,4 +262,5 @@ func RegisterSessions(s *grpc.Server, tenant string, opts Options) {
 	if opts.Matchmaker {
 		mmpb.RegisterMatchmakerServer(s, newMatchmaker(mm))
 	}
+	mm.watchSessions(opts.Rewards, opts.RewardsMetric, sessionMin(), 20*time.Second)
 }

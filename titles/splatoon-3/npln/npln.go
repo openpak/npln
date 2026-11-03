@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"github.com/openpak/npln/redact"
 	"github.com/openpak/npln/rpclog"
+	emit "github.com/openpak/rewards-emit"
 	"log"
 	"math/big"
 	"net/http"
@@ -526,6 +527,8 @@ func NewServer(creds credentials.TransportCredentials, rot *atomic.Pointer[rotat
 	// Splatoon 3 room (docs/provenance.md), hence ConfigProperties; Referee publishes the match verdicts.
 	stardew.RegisterSessions(s, Tenant, stardew.Options{
 		ConfigProperties: true, Matchmaker: true, Referee: true, LatencyServers: latencyServers,
+		// An online session (3 minutes together in a room or pool) is a Turf Session for rewards.
+		Rewards: emit.FromEnv("npln-splatoon-3"), RewardsMetric: "turf_sessions.s3",
 	})
 	// The toyohr services the game calls on its way to the lobby, and the maintenance feed.
 	s.RegisterService(withRawUnary(toyohrpb.CloudSave_ServiceDesc, map[string]rawHandler{"GetSaveRecord": getSaveRecord}), &cloudSave{})
