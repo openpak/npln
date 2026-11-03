@@ -11,6 +11,10 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.13.1 — 2026-11-03
+
+- Cloud save files are imported into Postgres eagerly at start, not on first load.
+
 ## v0.13.0 — 2026-11-03
 
 - Durable records move to Postgres when `NPLN_DATABASE_URL` is set (table `npln.blobs`, one connection per unit,

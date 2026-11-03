@@ -80,6 +80,28 @@ func (s *saveStore) path(uid string) (string, error) {
 	return filepath.Join(dir, uid+".pb"), nil
 }
 
+// importAll copies every save file into Postgres at start (files stay), so a backup of the
+// database holds all players, not only those who loaded since the move. Idempotent.
+func (s *saveStore) importAll() {
+	db := s.pg()
+	if db == nil {
+		return
+	}
+	files, _ := filepath.Glob(filepath.Join(saveDir(), "*.pb"))
+	n := 0
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		uid := strings.TrimSuffix(filepath.Base(f), ".pb")
+		if ins, err := db.Import("cloudsave", uid, b); err == nil && ins {
+			n++
+		}
+	}
+	log.Printf("[CloudSave] %d save file(s) found, %d imported into Postgres", len(files), n)
+}
+
 // load returns the stored record, or nil when the player has none.
 func (s *saveStore) load(uid string) (*toyohrpb.SaveRecord, error) {
 	p, err := s.path(uid)
