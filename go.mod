@@ -18,7 +18,7 @@ require (
 
 require (
 	github.com/jackc/pgx/v5 v5.11.0
-	github.com/openpak/rewards-emit v0.1.0
+	github.com/openpak/rewards-emit v0.3.0
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 )
