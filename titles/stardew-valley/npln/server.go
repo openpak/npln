@@ -230,7 +230,7 @@ func NewServer(creds credentials.TransportCredentials, tenant, appID string, tit
 	mm := newSessionServer()
 	mmpb.RegisterGameSessionServiceServer(s, mm)
 	gspb.RegisterGamesyncServer(s, newGamesync(mm)) // session transport: same listener (host:port points here)
-	mm.watchSessions(titleOptions.Rewards, titleOptions.RewardsMetric, sessionMin(), 20*time.Second)
+	mm.watchSessions(titleOptions.Rewards, titleOptions.RewardsMetric, sessionMin(), 20*time.Second, countedFor(titleOptions.Rewards))
 	if titleOptions.Matchmaker {
 		mmpb.RegisterMatchmakerServer(s, newMatchmaker(mm))
 	}
@@ -263,5 +263,5 @@ func RegisterSessions(s *grpc.Server, tenant string, opts Options) {
 	if opts.Matchmaker {
 		mmpb.RegisterMatchmakerServer(s, newMatchmaker(mm))
 	}
-	mm.watchSessions(opts.Rewards, opts.RewardsMetric, sessionMin(), 20*time.Second)
+	mm.watchSessions(opts.Rewards, opts.RewardsMetric, sessionMin(), 20*time.Second, countedFor(opts.Rewards))
 }

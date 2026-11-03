@@ -11,6 +11,14 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.12.0 — 2026-11-03
+
+- Counted sessions are durable: which sessions were already reported to rewards is stored (`internal/counted`), in
+  Postgres at `NPLN_DATABASE_URL` (pool of 2, table `npln.counted_sessions`) or else in
+  `counted-sessions.log` under `NPLN_STATE_DIR` (default `/app/state`, the title's volume). A restart neither forgets
+  nor re-reports a counted session; restart test in `rewards_test.go`. Live room, presence and ticket state is still
+  in memory by design (consoles re-create it on reconnect).
+
 ## v0.11.0 — 2026-11-03
 
 - Every hosted title with online play reports `game_sessions.<title>` to the rewards service (Stardew Valley,

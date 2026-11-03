@@ -6,6 +6,7 @@ package npln
 // (game session, player); the session id is the event id and the distinct key.
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"time"
 
 	emit "github.com/openpak/rewards-emit"
+
+	"github.com/openpak/npln/internal/counted"
 )
 
 // sessionMin is how long two players must share a session before it counts.
@@ -70,10 +73,11 @@ type sessionClock struct {
 	min     time.Duration
 	since   map[string]time.Time
 	emitted map[string]bool
+	counted map[string]bool // reported and stored durably; survives a restart, never pruned
 }
 
 func newSessionClock(min time.Duration) *sessionClock {
-	return &sessionClock{min: min, since: map[string]time.Time{}, emitted: map[string]bool{}}
+	return &sessionClock{min: min, since: map[string]time.Time{}, emitted: map[string]bool{}, counted: map[string]bool{}}
 }
 
 // tick takes the sessions now (id -> participant user ids) and returns the pairs that just
@@ -90,7 +94,7 @@ func (c *sessionClock) tick(now time.Time, gs map[string][]string) (done []sessi
 			if _, ok := c.since[k]; !ok {
 				c.since[k] = now
 			}
-			if !c.emitted[k] && now.Sub(c.since[k]) >= c.min {
+			if !c.emitted[k] && !c.counted[k] && now.Sub(c.since[k]) >= c.min {
 				c.emitted[k] = true
 				done = append(done, sessionPair{g, uid})
 			}
@@ -124,13 +128,20 @@ func (g *sessionServer) sessionSnapshot() map[string][]string {
 
 // watchSessions reports the online sessions to rewards under metric. It returns a stop
 // function; with rewards unconfigured, or no metric, it does nothing.
-func (g *sessionServer) watchSessions(rw *emit.Client, metric string, min, every time.Duration) (stop func()) {
+func (g *sessionServer) watchSessions(rw *emit.Client, metric string, min, every time.Duration, store counted.Store) (stop func()) {
 	if !rw.Enabled() || metric == "" {
 		return func() {}
 	}
 	done := make(chan struct{})
 	go func() {
 		clock := newSessionClock(min)
+		if store != nil {
+			if done, err := store.Load(metric); err != nil {
+				log.Printf("[Rewards] counted sessions not loaded: %v", err)
+			} else {
+				clock.counted = done
+			}
+		}
 		t := time.NewTicker(every)
 		defer t.Stop()
 		for {
@@ -145,6 +156,12 @@ func (g *sessionServer) watchSessions(rw *emit.Client, metric string, min, every
 					ID: fmt.Sprintf("%s:%s:%s", metric, p.gsid, baas), Metric: metric,
 					Player: &emit.Identity{Namespace: "switch", Subject: baas}, Keys: []string{p.gsid},
 				})
+				clock.counted[p.gsid+"/"+p.uid] = true
+				if store != nil {
+					if err := store.Mark(metric, p.gsid+"/"+p.uid); err != nil {
+						log.Printf("[Rewards] counted session not stored: %v", err)
+					}
+				}
 			}
 			select {
 			case <-t.C:
@@ -154,4 +171,26 @@ func (g *sessionServer) watchSessions(rw *emit.Client, metric string, min, every
 		}
 	}()
 	return func() { close(done) }
+}
+
+// openCounted opens the durable record of counted sessions: Postgres at NPLN_DATABASE_URL (two
+// connections at most), else a file in NPLN_STATE_DIR (default /app/state, the title's volume).
+func openCounted() counted.Store {
+	dir := os.Getenv("NPLN_STATE_DIR")
+	if dir == "" {
+		dir = "/app/state"
+	}
+	st, err := counted.Open(context.Background(), os.Getenv("NPLN_DATABASE_URL"), dir)
+	if err != nil {
+		log.Printf("[Rewards] counted-session store unavailable, counting from memory only: %v", err)
+		return nil
+	}
+	return st
+}
+
+func countedFor(rw *emit.Client) counted.Store {
+	if !rw.Enabled() {
+		return nil
+	}
+	return openCounted()
 }

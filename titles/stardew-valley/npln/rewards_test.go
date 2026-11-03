@@ -11,6 +11,7 @@ import (
 
 	emit "github.com/openpak/rewards-emit"
 
+	"github.com/openpak/npln/internal/counted"
 	mmpb "github.com/openpak/npln/proto/matchmaking/v1"
 )
 
@@ -60,7 +61,7 @@ func TestOnlineSessionReachesRewards(t *testing.T) {
 	defer rw.Close(t.Context())
 	mm := newSessionServer()
 	mm.members["room1"] = []*mmpb.UserSession{{User: "tenants/t/users/u-aaa"}}
-	stop := mm.watchSessions(rw, "turf_sessions.s3", 300*time.Millisecond, 40*time.Millisecond)
+	stop := mm.watchSessions(rw, "turf_sessions.s3", 300*time.Millisecond, 40*time.Millisecond, nil)
 	defer stop()
 
 	time.Sleep(400 * time.Millisecond) // alone in the room: nothing
@@ -105,5 +106,50 @@ func TestOnlineSessionReachesRewards(t *testing.T) {
 	}
 	if !seen["00000000000000a1"] || !seen["00000000000000b2"] {
 		t.Errorf("subjects %v", seen)
+	}
+}
+
+// A restart must not forget a counted session nor report it again: the server is rebuilt over the
+// same durable store while both players are still in the room.
+func TestCountedSessionSurvivesRestart(t *testing.T) {
+	var mu sync.Mutex
+	n := 0
+	sink := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		var in struct{ Events []map[string]any }
+		_ = json.Unmarshal(b, &in)
+		mu.Lock()
+		n += len(in.Events)
+		mu.Unlock()
+		_, _ = w.Write([]byte(`{"results":[]}`))
+	}))
+	defer sink.Close()
+	rememberPlayerIdentity("u-ccc", "00000000000000c3", 3)
+	rememberPlayerIdentity("u-ddd", "00000000000000d4", 4)
+	store, err := counted.Open(t.Context(), "", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func(wait time.Duration) {
+		rw := emit.New(emit.Config{URL: sink.URL, Key: "k", Source: "t", Flush: 10 * time.Millisecond})
+		mm := newSessionServer()
+		mm.members["room9"] = []*mmpb.UserSession{{User: "tenants/t/users/u-ccc"}, {User: "tenants/t/users/u-ddd"}}
+		stop := mm.watchSessions(rw, "game_sessions.x", 100*time.Millisecond, 20*time.Millisecond, store)
+		time.Sleep(wait)
+		stop()
+		rw.Close(t.Context())
+	}
+	run(600 * time.Millisecond)
+	mu.Lock()
+	first := n
+	mu.Unlock()
+	if first != 2 {
+		t.Fatalf("first run: want 2 events, got %d", first)
+	}
+	run(600 * time.Millisecond) // "restart": new server and clock, same store
+	mu.Lock()
+	defer mu.Unlock()
+	if n != 2 {
+		t.Fatalf("session reported again after restart: %d events", n)
 	}
 }
