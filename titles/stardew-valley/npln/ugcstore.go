@@ -34,6 +34,7 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/openpak/npln/internal/blob"
 	commonpb "github.com/openpak/npln/proto/common"
 	ugcpb "github.com/openpak/npln/proto/ugcstore/v1"
 	"github.com/openpak/npln/redact"
@@ -67,6 +68,7 @@ type ugcStore struct {
 	ugcpb.UnimplementedUgcstoreServer
 	file string
 
+	db      *blob.Store // Postgres when NPLN_DATABASE_URL is set (and a file is named), else the file
 	mu      sync.Mutex
 	docs    map[string]*ugcEntry // path relative to …/documents -> entry
 	aliases map[string]*ugcAlias // code -> alias
@@ -74,6 +76,9 @@ type ugcStore struct {
 
 func newUGCStore(file string) *ugcStore {
 	u := &ugcStore{file: file, docs: map[string]*ugcEntry{}, aliases: map[string]*ugcAlias{}}
+	if file != "" {
+		u.db = blob.Default()
+	}
 	u.load()
 	return u
 }
@@ -92,7 +97,20 @@ func (u *ugcStore) load() {
 	if u.file == "" {
 		return
 	}
-	b, err := os.ReadFile(u.file)
+	var b []byte
+	var err error
+	if u.db != nil {
+		var ok bool
+		if b, ok, err = u.db.Get("ugc", "all"); err == nil && !ok {
+			// first start on Postgres: import the old file (kept in place)
+			if b, err = os.ReadFile(u.file); err == nil {
+				_, err = u.db.Import("ugc", "all", b)
+				log.Printf("[UGC] imported %s into Postgres", u.file)
+			}
+		}
+	} else {
+		b, err = os.ReadFile(u.file)
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		return
 	}
@@ -133,6 +151,12 @@ func (u *ugcStore) save() {
 		data.Aliases = append(data.Aliases, a)
 	}
 	b, err := json.Marshal(data)
+	if err == nil && u.db != nil {
+		if err = u.db.Put("ugc", "all", b); err != nil {
+			log.Printf("[UGC] saving to Postgres: %s (changes live in memory only)", redact.Err(err))
+		}
+		return
+	}
 	if err == nil {
 		tmp := u.file + ".tmp"
 		if err = os.WriteFile(tmp, b, 0o600); err == nil {

@@ -31,6 +31,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/openpak/npln/internal/blob"
 	commonpb "github.com/openpak/npln/proto/common"
 	ugcpb "github.com/openpak/npln/proto/ugcstore/v1"
 	"github.com/openpak/npln/redact"
@@ -47,6 +48,7 @@ const (
 type ugcStore struct {
 	ugcpb.UnimplementedUgcstoreServer
 	file string
+	db   *blob.Store // Postgres when NPLN_DATABASE_URL is set, else the file
 
 	mu   sync.Mutex
 	docs map[string]*ugcpb.Document // path relative to …/documents/ -> document (Name holds that path)
@@ -60,8 +62,21 @@ func ugcFile() string {
 }
 
 func newUGCStore(file string) *ugcStore {
-	u := &ugcStore{file: file, docs: map[string]*ugcpb.Document{}}
-	b, err := os.ReadFile(file)
+	u := &ugcStore{file: file, db: blob.Default(), docs: map[string]*ugcpb.Document{}}
+	var b []byte
+	var err error
+	if u.db != nil {
+		var ok bool
+		if b, ok, err = u.db.Get("ugc", "all"); err == nil && !ok {
+			// first start on Postgres: import the old file (kept in place)
+			if b, err = os.ReadFile(file); err == nil {
+				_, err = u.db.Import("ugc", "all", b)
+				log.Printf("[Ugc] imported %s into Postgres (%d bytes)", file, len(b))
+			}
+		}
+	} else {
+		b, err = os.ReadFile(file)
+	}
 	if err != nil && !os.IsNotExist(err) {
 		log.Printf("[Ugc] load: %s", redact.Err(err))
 	}
@@ -90,6 +105,12 @@ func (u *ugcStore) save() {
 		}
 		out = binary.AppendUvarint(out, uint64(len(b)))
 		out = append(out, b...)
+	}
+	if u.db != nil {
+		if err := u.db.Put("ugc", "all", out); err != nil {
+			log.Printf("[Ugc] save: %s", redact.Err(err))
+		}
+		return
 	}
 	if err := os.MkdirAll(filepath.Dir(u.file), 0o700); err != nil {
 		log.Printf("[Ugc] save: %s", redact.Err(err))

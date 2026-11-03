@@ -33,6 +33,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/openpak/npln/internal/blob"
 	toyohrpb "github.com/openpak/npln/proto/toyohr/v1"
 	"github.com/openpak/npln/redact"
 )
@@ -160,7 +161,19 @@ func (s *festStore) init() {
 	s.path = envOr("NPLN_FEST_FILE", filepath.Join(filepath.Dir(rot), "fests.json"))
 	s.entries = envOr("NPLN_FEST_ENTRIES", filepath.Join(filepath.Dir(s.path), "festentries.json"))
 	s.ent = map[string]map[string]festEntryRec{}
-	if b, err := os.ReadFile(s.entries); err == nil {
+	var b []byte
+	var err error
+	if db := blob.Default(); db != nil {
+		var ok bool
+		if b, ok, err = db.Get("festentries", "all"); err == nil && !ok {
+			if b, err = os.ReadFile(s.entries); err == nil { // import the old file, kept in place
+				_, err = db.Import("festentries", "all", b)
+			}
+		}
+	} else {
+		b, err = os.ReadFile(s.entries)
+	}
+	if err == nil {
 		if err := json.Unmarshal(b, &s.ent); err != nil {
 			log.Printf("[Fest] entries: %s", redact.Err(err))
 		}
@@ -258,8 +271,14 @@ func (s *festStore) enter(fest, uid, team, region string) (festEntryRec, error) 
 	}
 	s.ent[fest][uid] = e
 	b, _ := json.MarshalIndent(s.ent, "", " ")
-	tmp, err := os.CreateTemp(filepath.Dir(s.entries), ".festentries-*.tmp")
-	if err == nil {
+	var tmp *os.File
+	var err error
+	if db := blob.Default(); db != nil {
+		err = db.Put("festentries", "all", b)
+	} else {
+		tmp, err = os.CreateTemp(filepath.Dir(s.entries), ".festentries-*.tmp")
+	}
+	if tmp != nil && err == nil {
 		_, err = tmp.Write(b)
 		if cerr := tmp.Close(); err == nil {
 			err = cerr

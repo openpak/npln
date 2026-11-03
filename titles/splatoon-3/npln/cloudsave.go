@@ -35,6 +35,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/openpak/npln/internal/blob"
 	commonpb "github.com/openpak/npln/proto/common"
 	toyohrpb "github.com/openpak/npln/proto/toyohr/v1"
 	"github.com/openpak/npln/redact"
@@ -50,6 +51,18 @@ func saveDir() string {
 type saveStore struct {
 	mu  sync.Mutex
 	dir string
+	db  *blob.Store // tests; the shared store uses blob.Default()
+}
+
+// pg is the Postgres store when NPLN_DATABASE_URL is set (the shared store only), else nil.
+func (s *saveStore) pg() *blob.Store {
+	if s.db != nil {
+		return s.db
+	}
+	if s.dir == "" {
+		return blob.Default()
+	}
+	return nil
 }
 
 var saves = &saveStore{}
@@ -73,11 +86,26 @@ func (s *saveStore) load(uid string) (*toyohrpb.SaveRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	b, err := os.ReadFile(p)
-	if os.IsNotExist(err) {
+	var b []byte
+	if db := s.pg(); db != nil {
+		var ok bool
+		if b, ok, err = db.Get("cloudsave", uid); err != nil {
+			return nil, err
+		}
+		if !ok { // first read after the move to Postgres: import the old file, keep it
+			if b, err = os.ReadFile(p); os.IsNotExist(err) {
+				return nil, nil
+			} else if err != nil {
+				return nil, err
+			}
+			if _, err = db.Import("cloudsave", uid, b); err != nil {
+				return nil, err
+			}
+			log.Printf("[CloudSave] imported %s into Postgres", uid)
+		}
+	} else if b, err = os.ReadFile(p); os.IsNotExist(err) {
 		return nil, nil
-	}
-	if err != nil {
+	} else if err != nil {
 		return nil, err
 	}
 	var rec toyohrpb.SaveRecord
@@ -95,6 +123,9 @@ func (s *saveStore) store(uid string, rec *toyohrpb.SaveRecord) error {
 	b, err := proto.Marshal(rec)
 	if err != nil {
 		return err
+	}
+	if db := s.pg(); db != nil {
+		return db.Put("cloudsave", uid, b)
 	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return err

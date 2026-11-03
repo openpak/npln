@@ -11,6 +11,14 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.13.0 — 2026-11-03
+
+- Durable records move to Postgres when `NPLN_DATABASE_URL` is set (table `npln.blobs`, one connection per unit,
+  alongside the counted-session pool): Splatoon 3 cloud saves, Splatoon 3 and Stardew/Wonder user-generated
+  documents (`ugcstore`), Splatoon 3 fest entries. On first start the old file is imported when Postgres has no
+  record yet (idempotent, the file stays in place). Without the variable the files are used as before. JWT keys and
+  the generated rotation stay files. Tests: `internal/blob`, `cloudsave_pg_test.go` (set `NPLN_TEST_DSN`).
+
 ## v0.12.0 — 2026-11-03
 
 - Counted sessions are durable: which sessions were already reported to rewards is stored (`internal/counted`), in
