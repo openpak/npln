@@ -1,8 +1,14 @@
 package rpclog
 
 import (
+	"bytes"
+	"context"
+	"log"
+	"os"
 	"strings"
 	"testing"
+
+	"google.golang.org/grpc"
 
 	"google.golang.org/protobuf/encoding/protowire"
 
@@ -61,5 +67,22 @@ func TestBodyIsAnOutlineByDefault(t *testing.T) {
 	}
 	if got := rawOutline(protowire.AppendString(protowire.AppendTag(nil, 1, protowire.BytesType), "private")); got != "fields=1:len7" {
 		t.Fatalf("rawOutline = %q", got)
+	}
+}
+
+func TestUnaryLineHasCodeAndDurationNoBody(t *testing.T) {
+	t.Setenv("NPLN_TRACE_BODIES", "")
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+	const user = "tenants/t-secret-user-77"
+	_, _ = Unary(context.Background(), &authpb.IssueTokenRequest{User: user}, &grpc.UnaryServerInfo{FullMethod: "/a.B/C"},
+		func(context.Context, any) (any, error) { return nil, nil })
+	out := buf.String()
+	if !strings.Contains(out, "[RPC=] /a.B/C code=OK ms=") {
+		t.Fatalf("no result line: %s", out)
+	}
+	if strings.Contains(out, user) || strings.Contains(out, "secret") {
+		t.Fatalf("body leaked with flag off: %s", out)
 	}
 }

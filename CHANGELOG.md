@@ -11,6 +11,9 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.14.0 — 2026-11-03
+- RPC log: one [RPC=] line per unary call with method, code and ms. Bodies stay an outline (field names and sizes, no values); full bodies only with NPLN_TRACE_BODIES=1, unset in prod; test covers flag off.
+
 ## v0.13.2 — 2026-11-03
 
 - rewards-emit v0.3.0: with `REWARDS_EMIT_DATABASE_URL` set the reward event outbox is kept in Postgres, so queued events survive a restart.

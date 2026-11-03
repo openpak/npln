@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
@@ -224,10 +225,12 @@ func unknown(m protoreflect.Message) string {
 // Unary logs the request and, when there is one, the response of every unary call.
 func Unary(ctx context.Context, req any, info *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
 	log.Printf("[RPC>] %s %s", info.FullMethod, Body(req))
+	start := time.Now()
 	resp, err := h(ctx, req)
 	if err == nil {
 		log.Printf("[RPC<] %s %s", info.FullMethod, Body(resp))
 	}
+	log.Printf("[RPC=] %s code=%s ms=%d", info.FullMethod, status.Code(err), time.Since(start).Milliseconds())
 	return resp, err
 }
 
