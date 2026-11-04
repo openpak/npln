@@ -11,6 +11,9 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.15.1 — 2026-11-04
+- Same code as v0.15.0; the tag v0.15.0 was cut on a commit that differs only in test formatting, so this is the release built from main.
+
 ## v0.15.0 — 2026-11-04
 - Account erasure (openpak/prds#120). Every title container serves `DELETE /internal/accounts/{account_id}/data` on its health listener (`HEALTH_LISTEN`), `Authorization: Bearer <ACCOUNT_ERASE_KEY>` (unset: 503), answering `{"service":"npln-<title>","rows":N}`. The account's NPLN user ids are derived from its core "switch" link subjects (new read-only core client: `ACCOUNT_GRPC_ADDR`, default `openpak-account:20001`, and `ACCOUNT_INTERNAL_KEY`). One log line per erasure.
 - Erased: Splatoon 3 cloud save (Postgres row and legacy file), Splatfest entries, documents under `users/<uid>/`, presence; shared sessions package: counted reward sessions (Postgres or state file), UGC documents and short codes owned by the player, Hydro contents, matchmaking tickets, the player's mailbox and the messages/acks they sent, session membership, identity/version/presence maps.
