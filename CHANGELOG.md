@@ -11,6 +11,12 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.15.0 — 2026-11-04
+- Account erasure (openpak/prds#120). Every title container serves `DELETE /internal/accounts/{account_id}/data` on its health listener (`HEALTH_LISTEN`), `Authorization: Bearer <ACCOUNT_ERASE_KEY>` (unset: 503), answering `{"service":"npln-<title>","rows":N}`. The account's NPLN user ids are derived from its core "switch" link subjects (new read-only core client: `ACCOUNT_GRPC_ADDR`, default `openpak-account:20001`, and `ACCOUNT_INTERNAL_KEY`). One log line per erasure.
+- Erased: Splatoon 3 cloud save (Postgres row and legacy file), Splatfest entries, documents under `users/<uid>/`, presence; shared sessions package: counted reward sessions (Postgres or state file), UGC documents and short codes owned by the player, Hydro contents, matchmaking tickets, the player's mailbox and the messages/acks they sent, session membership, identity/version/presence maps.
+- Decision: UGC documents the player owns are deleted, not credited to a "deleted user": their bodies are opaque game data that may carry the player's identity, and the store cannot scrub them. Splatoon 3 documents outside a `users/<uid>/` path carry no owner and cannot be tied to an account; they stay.
+- The endpoint erases the title running in that container (its rows and its memory); the website must call every nplnd container.
+
 ## v0.14.0 — 2026-11-03
 - RPC log: one [RPC=] line per unary call with method, code and ms. Bodies stay an outline (field names and sizes, no values); full bodies only with NPLN_TRACE_BODIES=1, unset in prod; test covers flag off.
 

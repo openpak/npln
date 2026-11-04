@@ -22,6 +22,8 @@ type Store interface {
 	Load(title string) (map[string]bool, error)
 	// Mark records a key as counted.
 	Mark(title, key string) error
+	// Forget drops every counted key that ends in "/"+uid, for each uid, across all titles.
+	Forget(uids []string) (int, error)
 	Close()
 }
 
@@ -93,6 +95,20 @@ func (p *pg) Mark(title, key string) error {
 	return err
 }
 
+func (p *pg) Forget(uids []string) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	n := 0
+	for _, u := range uids {
+		tag, err := p.pool.Exec(ctx, `DELETE FROM npln.counted_sessions WHERE right(key, $2) = $1`, "/"+u, len(u)+1)
+		if err != nil {
+			return n, err
+		}
+		n += int(tag.RowsAffected())
+	}
+	return n, nil
+}
+
 func (p *pg) Close() { p.pool.Close() }
 
 // file is one "title<TAB>key" line per counted session.
@@ -135,6 +151,48 @@ func (f *file) Mark(title, key string) error {
 	defer fh.Close()
 	_, err = fh.WriteString(title + "\t" + key + "\n")
 	return err
+}
+
+func (f *file) Forget(uids []string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	b, err := os.ReadFile(f.path)
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	var keep []string
+	for _, line := range strings.Split(strings.TrimRight(string(b), "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		drop := false
+		for _, u := range uids {
+			if strings.HasSuffix(line, "/"+u) {
+				drop = true
+			}
+		}
+		if drop {
+			n++
+		} else {
+			keep = append(keep, line)
+		}
+	}
+	if n == 0 {
+		return 0, nil
+	}
+	out := strings.Join(keep, "\n")
+	if out != "" {
+		out += "\n"
+	}
+	tmp := f.path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(out), 0o644); err != nil {
+		return 0, err
+	}
+	return n, os.Rename(tmp, f.path)
 }
 
 func (f *file) Close() {}
