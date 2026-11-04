@@ -87,6 +87,7 @@ func serveHealth(addr string, title host.Title) {
 	if title.Routes != nil {
 		title.Routes(mux)
 	}
+	host.MountErase(mux, "npln-"+service)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Printf("health: cannot listen on %s: %s", addr, redact.Err(err))

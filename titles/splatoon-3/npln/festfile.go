@@ -270,6 +270,16 @@ func (s *festStore) enter(fest, uid, team, region string) (festEntryRec, error) 
 		s.ent[fest] = map[string]festEntryRec{}
 	}
 	s.ent[fest][uid] = e
+	err := s.saveLocked()
+	if err != nil {
+		delete(s.ent[fest], uid) // not durable: do not claim it
+		return festEntryRec{}, err
+	}
+	return e, nil
+}
+
+// saveLocked writes every entry to Postgres or the entries file. Caller holds s.mu.
+func (s *festStore) saveLocked() error {
 	b, _ := json.MarshalIndent(s.ent, "", " ")
 	var tmp *os.File
 	var err error
@@ -289,11 +299,7 @@ func (s *festStore) enter(fest, uid, team, region string) (festEntryRec, error) 
 			os.Remove(tmp.Name())
 		}
 	}
-	if err != nil {
-		delete(s.ent[fest], uid) // not durable: do not claim it
-		return festEntryRec{}, err
-	}
-	return e, nil
+	return err
 }
 
 func entryMsg(tenant, fest, uid string, e festEntryRec) *toyohrpb.FestEntry {

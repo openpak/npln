@@ -57,6 +57,18 @@ unset, or no nodes, everything is answered from home as before. `OPENPAK_REGIONS
   `ugcstore.json` in the working directory; point it into the data volume, e.g.
   `/app/data/ugcstore.json`). Everything else is in memory.
 
+## Account erasure
+
+`DELETE /internal/accounts/{account_id}/data` on each title container's health listener
+(`HEALTH_LISTEN`, container network only, e.g. `http://openpak-npln-splatoon-3:21013`) with
+`Authorization: Bearer $ACCOUNT_ERASE_KEY`. Unset key: 503. The container needs `ACCOUNT_ERASE_KEY`,
+`ACCOUNT_INTERNAL_KEY` and optionally `ACCOUNT_GRPC_ADDR` (default `openpak-account:20001`). The NPLN
+user ids come from the account's core `switch` links, so call it while the links still exist.
+Each container erases its own title's rows and live memory: call every nplnd container.
+Erased: cloud save, fest entries, user documents, owned UGC and short codes, Hydro contents, mailboxes,
+matchmaking tickets, session membership, counted reward sessions. Kept: Splatoon 3 documents outside
+`users/<uid>/` (no owner recorded). Tickets/rooms of other players are untouched.
+
 ## Run
 
 ```sh

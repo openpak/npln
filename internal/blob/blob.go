@@ -117,4 +117,13 @@ func (s *Store) Import(kind, key string, data []byte) (bool, error) {
 	return tag.RowsAffected() == 1, err
 }
 
+// DeleteKeys removes this title's records of the given kind under the given keys and reports how
+// many rows went. Idempotent.
+func (s *Store) DeleteKeys(kind string, keys []string) (int, error) {
+	c, cancel := ctx()
+	defer cancel()
+	tag, err := s.pool.Exec(c, `DELETE FROM npln.blobs WHERE title=$1 AND kind=$2 AND key = ANY($3)`, s.title, kind, keys)
+	return int(tag.RowsAffected()), err
+}
+
 func (s *Store) Close() { s.pool.Close() }

@@ -540,6 +540,9 @@ func NewServer(creds credentials.TransportCredentials, rot *atomic.Pointer[rotat
 	s.RegisterService(withRawUnary(toyohrpb.FestService_ServiceDesc, festRawHandlers()), &fest{})
 	saves.importAll()
 	ugc := newUGCStore(ugcFile())
+	ugcStores.Lock()
+	ugcStores.list = append(ugcStores.list, ugc)
+	ugcStores.Unlock()
 	s.RegisterService(withRawUnary(ugcpb.Ugcstore_ServiceDesc, map[string]rawHandler{"GetDocument": ugc.getDocument}), ugc)
 	toyohrpb.RegisterGameRecordServer(s, &gameRecord{ugc: ugc})
 	if rot != nil && rot.Load() != nil {

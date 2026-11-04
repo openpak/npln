@@ -228,21 +228,22 @@ func NewServer(creds credentials.TransportCredentials, tenant, appID string, tit
 	friendspb.RegisterFriendsServer(s, &friendsServer{})
 	friendspb.RegisterPresenceServiceServer(s, &presenceServer{})
 	mm := newSessionServer()
+	trackRooms(mm)
 	mmpb.RegisterGameSessionServiceServer(s, mm)
 	gspb.RegisterGamesyncServer(s, newGamesync(mm)) // session transport: same listener (host:port points here)
 	mm.watchSessions(titleOptions.Rewards, titleOptions.RewardsMetric, sessionMin(), 20*time.Second, countedFor(titleOptions.Rewards))
 	if titleOptions.Matchmaker {
-		mmpb.RegisterMatchmakerServer(s, newMatchmaker(mm))
+		mmpb.RegisterMatchmakerServer(s, trackedMatchmaker(mm))
 	}
 	if titleOptions.Messaging {
-		msgpb.RegisterMessagingServer(s, newMessaging(mm))
+		msgpb.RegisterMessagingServer(s, trackedMessaging(mm))
 	}
 	if titleOptions.UGC {
-		ugcpb.RegisterUgcstoreServer(s, newUGCStore(envOr("NPLN_UGC_FILE", "ugcstore.json")))
+		ugcpb.RegisterUgcstoreServer(s, trackedUGC(newUGCStore(envOr("NPLN_UGC_FILE", "ugcstore.json"))))
 		ugcpb.RegisterScreeningServer(s, &screening{})
 	}
 	if titleOptions.Hydro {
-		hydropb.RegisterDatastoreServer(s, newHydro())
+		hydropb.RegisterDatastoreServer(s, trackedHydro(newHydro()))
 	}
 	return s
 }
@@ -258,10 +259,11 @@ func RegisterSessions(s *grpc.Server, tenant string, opts Options) {
 	titleOptions = opts
 	startRouting()
 	mm := newSessionServer()
+	trackRooms(mm)
 	mmpb.RegisterGameSessionServiceServer(s, mm)
 	gspb.RegisterGamesyncServer(s, newGamesync(mm))
 	if opts.Matchmaker {
-		mmpb.RegisterMatchmakerServer(s, newMatchmaker(mm))
+		mmpb.RegisterMatchmakerServer(s, trackedMatchmaker(mm))
 	}
 	mm.watchSessions(opts.Rewards, opts.RewardsMetric, sessionMin(), 20*time.Second, countedFor(opts.Rewards))
 }
