@@ -11,6 +11,12 @@
 Generated from git history on 2026-09-15. `git log` stays the source
 of truth; this file is the readable summary.
 
+## v0.15.2 — 2026-11-04
+- **Permanent state** (openpak/prds#85): the Hydro datastore (contents and their etags) and the Messaging queues (messages waiting for an ack, RecvAck
+  waiting for the sender, and the resume-token counter) are written through to Postgres (`npln.blobs`, kinds `hydro`, `msg`, `msgseq`; the
+  table already exists) and loaded on start, so a restart loses nothing and etags / resume tokens continue where they were. Account erasure removes
+  the durable records too. Memory only without `NPLN_DATABASE_URL`. Tests: `NPLN_TEST_DSN`.
+
 ## v0.15.1 — 2026-11-04
 - Same code as v0.15.0; the tag v0.15.0 was cut on a commit that differs only in test formatting, so this is the release built from main.
 

@@ -11,7 +11,10 @@ package npln
 // set or increment `payload` (set only) or `attributes.<n>`. TrackContent reports, as an empty
 // message, each change to a tracked content.
 //
-// ponytail: in-memory; a restart empties the datastore.
+// Storage: every content is one record in Postgres (npln.blobs, kind "hydro", key = content name,
+// value = the Content message, its etag included), written through on every change and loaded
+// when the server starts, so a restart keeps contents and etags. Without NPLN_DATABASE_URL it is
+// memory only (tests).
 
 import (
 	"context"
@@ -30,10 +33,13 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/openpak/npln/internal/blob"
 	commonpb "github.com/openpak/npln/proto/common"
 	hydropb "github.com/openpak/npln/proto/hydro/v1"
 	"github.com/openpak/npln/redact"
 )
+
+const hydroKind = "hydro"
 
 const (
 	hydroMaxPayload  = 64 << 10 // bytes of one content's payload
@@ -46,14 +52,59 @@ const (
 type hydro struct {
 	hydropb.UnimplementedDatastoreServer
 
+	db       *blob.Store // nil: memory only
 	mu       sync.Mutex
 	contents map[string]*hydropb.Content // name -> content
 	rev      map[string]uint64           // name -> revision, the etag
 	watch    map[chan string]struct{}    // TrackContent streams, told each changed name
 }
 
-func newHydro() *hydro {
-	return &hydro{contents: map[string]*hydropb.Content{}, rev: map[string]uint64{}, watch: map[chan string]struct{}{}}
+func newHydro() *hydro { return newHydroDB(blob.Default()) }
+
+func newHydroDB(db *blob.Store) *hydro {
+	h := &hydro{db: db, contents: map[string]*hydropb.Content{}, rev: map[string]uint64{}, watch: map[chan string]struct{}{}}
+	h.load()
+	return h
+}
+
+// load reads every stored content back, with its etag as the revision.
+func (h *hydro) load() {
+	if h.db == nil {
+		return
+	}
+	all, err := h.db.List(hydroKind)
+	if err != nil {
+		log.Printf("[Hydro] load: %s", redact.Err(err))
+		return
+	}
+	for name, b := range all {
+		c := &hydropb.Content{}
+		if proto.Unmarshal(b, c) != nil {
+			continue
+		}
+		h.contents[name] = c
+		h.rev[name], _ = strconv.ParseUint(c.GetEtag(), 10, 64)
+	}
+	log.Printf("[Hydro] loaded %d content(s) from Postgres", len(h.contents))
+}
+
+// store writes a content through (or removes its record when it is gone). Caller holds h.mu.
+func (h *hydro) store(name string) {
+	if h.db == nil {
+		return
+	}
+	var err error
+	if c := h.contents[name]; c != nil {
+		var b []byte
+		if b, err = proto.Marshal(c); err == nil {
+			err = h.db.Put(hydroKind, name, b)
+		}
+	} else {
+		_, err = h.db.DeleteKeys(hydroKind, []string{name})
+	}
+	if err != nil {
+		log.Printf("[Hydro] persist %s: %s", redact.Tag(name), redact.Err(err))
+	}
 }
 
 // changed bumps a content's etag and tells trackers. Caller holds h.mu.
@@ -62,6 +113,7 @@ func (h *hydro) changed(name string) {
 	if c := h.contents[name]; c != nil {
 		c.Etag = strconv.FormatUint(h.rev[name], 10)
 	}
+	h.store(name)
 	for w := range h.watch {
 		select {
 		case w <- name:
@@ -137,6 +189,7 @@ func (h *hydro) live(name string) *hydropb.Content {
 	c := h.contents[name]
 	if c != nil && c.GetExpireTime() != nil && time.Now().After(c.GetExpireTime().AsTime()) {
 		delete(h.contents, name)
+		h.store(name)
 		return nil
 	}
 	return c

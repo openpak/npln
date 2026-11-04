@@ -126,4 +126,25 @@ func (s *Store) DeleteKeys(kind string, keys []string) (int, error) {
 	return int(tag.RowsAffected()), err
 }
 
+// List returns every record of the kind for this title, by key.
+func (s *Store) List(kind string) (map[string][]byte, error) {
+	c, cancel := ctx()
+	defer cancel()
+	rows, err := s.pool.Query(c, `SELECT key, data FROM npln.blobs WHERE title=$1 AND kind=$2`, s.title, kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]byte{}
+	for rows.Next() {
+		var k string
+		var d []byte
+		if err := rows.Scan(&k, &d); err != nil {
+			return nil, err
+		}
+		out[k] = d
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) Close() { s.pool.Close() }

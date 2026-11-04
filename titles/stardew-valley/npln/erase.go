@@ -122,14 +122,18 @@ func eraseUsers(_ context.Context, uids []string) (int, error) {
 		for u := range set {
 			if b, ok := m.boxes[u]; ok {
 				n += len(b.items) + 1
+				for _, q := range b.items {
+					m.drop(u, q)
+				}
 				delete(m.boxes, u)
 			}
 		}
-		for _, b := range m.boxes {
+		for uid, b := range m.boxes {
 			kept := b.items[:0]
 			for _, q := range b.items {
 				if set[q.from] {
 					n++
+					m.drop(uid, q)
 					continue
 				}
 				kept = append(kept, q)
@@ -154,6 +158,7 @@ func eraseUsers(_ context.Context, uids []string) (int, error) {
 			if set[lastSeg(c.GetUser())] {
 				delete(h.contents, name)
 				delete(h.rev, name)
+				h.store(name)
 				n++
 			}
 		}

@@ -13,12 +13,20 @@ package npln
 //   - A need_ack message stays queued until the receiver acks it; the ack travels back to the
 //     sender's stream as a RecvAck naming the receiver. Other messages go once delivered.
 //
-// ponytail: in-memory, bounded per user and by age; a restart drops undelivered messages.
+// Storage: every queued item is a record in Postgres (npln.blobs, kind "msg", key
+// "<uid>/<seq>"), plus the sequence counter (kind "msgseq"), written through when queued and
+// removed when delivered, acked, expired or trimmed; loaded when the server starts, so a restart
+// keeps what waits for an ack and never reuses a resume token. Bounded per user and by age.
+// Without NPLN_DATABASE_URL it is memory only (tests).
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +38,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/openpak/npln/internal/blob"
 	msgpb "github.com/openpak/npln/proto/messaging/v1"
 	"github.com/openpak/npln/redact"
 )
@@ -64,13 +73,122 @@ type messaging struct {
 	// friends lists a player's friends' user ids; nx-baas by default, a stub in tests.
 	friends func(ctx context.Context) (map[string]bool, error)
 
+	db    *blob.Store // nil: memory only
 	mu    sync.Mutex
 	seq   uint64
 	boxes map[string]*mailbox // uid -> mailbox
 }
 
-func newMessaging(rooms *sessionServer) *messaging {
-	return &messaging{rooms: rooms, friends: callerFriends, boxes: map[string]*mailbox{}}
+const (
+	msgKind    = "msg"
+	msgSeqKind = "msgseq"
+)
+
+func newMessaging(rooms *sessionServer) *messaging { return newMessagingDB(rooms, blob.Default()) }
+
+func newMessagingDB(rooms *sessionServer, db *blob.Store) *messaging {
+	m := &messaging{rooms: rooms, friends: callerFriends, db: db, boxes: map[string]*mailbox{}}
+	m.load()
+	return m
+}
+
+type queuedRecord struct {
+	At   int64  `json:"at"`
+	From string `json:"from"`
+	Msg  []byte `json:"msg,omitempty"`
+	Ack  []byte `json:"ack,omitempty"`
+}
+
+func msgKey(uid string, seq uint64) string { return fmt.Sprintf("%s/%020d", uid, seq) }
+
+// load reads the queues and the sequence counter back, oldest first, skipping what expired.
+func (m *messaging) load() {
+	if m.db == nil {
+		return
+	}
+	if b, ok, err := m.db.Get(msgSeqKind, "n"); err == nil && ok {
+		m.seq, _ = strconv.ParseUint(string(b), 10, 64)
+	} else if err != nil {
+		log.Printf("[Msg] load counter: %s", redact.Err(err))
+	}
+	all, err := m.db.List(msgKind)
+	if err != nil {
+		log.Printf("[Msg] load: %s", redact.Err(err))
+		return
+	}
+	var stale []string
+	keys := make([]string, 0, len(all))
+	for k := range all {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys) // zero-padded seq: oldest first within a user
+	n := 0
+	for _, k := range keys {
+		uid, seqS, _ := strings.Cut(k, "/")
+		seq, err := strconv.ParseUint(seqS, 10, 64)
+		var r queuedRecord
+		if err != nil || json.Unmarshal(all[k], &r) != nil || time.Since(time.Unix(0, r.At)) > msgMaxAge {
+			stale = append(stale, k)
+			continue
+		}
+		q := &queued{seq: seq, at: time.Unix(0, r.At), from: r.From}
+		if len(r.Msg) > 0 {
+			q.msg = &msgpb.RecvMessage{}
+			err = proto.Unmarshal(r.Msg, q.msg)
+		} else {
+			q.ack = &msgpb.RecvAck{}
+			err = proto.Unmarshal(r.Ack, q.ack)
+		}
+		if err != nil {
+			stale = append(stale, k)
+			continue
+		}
+		m.seq = max(m.seq, seq)
+		b := m.box(uid)
+		b.items = append(b.items, q)
+		n++
+	}
+	if len(stale) > 0 {
+		if _, err := m.db.DeleteKeys(msgKind, stale); err != nil {
+			log.Printf("[Msg] drop expired: %s", redact.Err(err))
+		}
+	}
+	log.Printf("[Msg] loaded %d queued item(s) from Postgres", n)
+}
+
+// keep writes one queued item and the counter through. Caller holds m.mu.
+func (m *messaging) keep(uid string, q *queued) {
+	if m.db == nil {
+		return
+	}
+	r := queuedRecord{At: q.at.UnixNano(), From: q.from}
+	var err error
+	if q.msg != nil {
+		r.Msg, err = proto.Marshal(q.msg)
+	} else {
+		r.Ack, err = proto.Marshal(q.ack)
+	}
+	var b []byte
+	if err == nil {
+		if b, err = json.Marshal(r); err == nil {
+			if err = m.db.Put(msgKind, msgKey(uid, q.seq), b); err == nil {
+				err = m.db.Put(msgSeqKind, "n", []byte(strconv.FormatUint(m.seq, 10)))
+			}
+		}
+	}
+	if err != nil {
+		log.Printf("[Msg] persist: %s", redact.Err(err))
+	}
+}
+
+// drop removes one item's record. Caller holds m.mu.
+func (m *messaging) drop(uid string, q *queued) {
+	if m.db == nil {
+		return
+	}
+	if _, err := m.db.DeleteKeys(msgKind, []string{msgKey(uid, q.seq)}); err != nil {
+		log.Printf("[Msg] persist: %s", redact.Err(err))
+	}
 }
 
 // callerFriends is the caller's friend set from nx-baas.
@@ -124,7 +242,11 @@ func (m *messaging) enqueue(uid string, q *queued) {
 	}
 	b := m.box(uid)
 	b.items = append(b.items, q)
+	m.keep(uid, q)
 	if len(b.items) > msgMaxQueued {
+		for _, old := range b.items[:len(b.items)-msgMaxQueued] {
+			m.drop(uid, old)
+		}
 		b.items = b.items[len(b.items)-msgMaxQueued:]
 	}
 	for w := range b.wake {
@@ -218,6 +340,7 @@ func (m *messaging) SendAck(ctx context.Context, req *msgpb.SendAckRequest) (*ms
 				continue
 			}
 			b.items = append(b.items[:i:i], b.items[i+1:]...)
+			m.drop(me, q)
 			m.enqueue(q.from, &queued{from: me, ack: &msgpb.RecvAck{
 				Ack:          &msgpb.AckBody{MessageRequestId: a.GetMessageRequestId(), SenderUser: q.msg.GetSenderUser()},
 				ReceiverUser: receiver,
@@ -237,6 +360,7 @@ func (m *messaging) pending(uid string, afterMsg, afterAck uint64) []*queued {
 	kept := b.items[:0]
 	for _, q := range b.items {
 		if time.Since(q.at) > msgMaxAge {
+			m.drop(uid, q)
 			continue
 		}
 		after := afterAck
@@ -246,6 +370,7 @@ func (m *messaging) pending(uid string, afterMsg, afterAck uint64) []*queued {
 		if q.seq > after {
 			out = append(out, q)
 			if q.ack != nil || !q.msg.GetMessageBody().GetNeedAck() {
+				m.drop(uid, q)
 				continue // delivered once, gone
 			}
 		}
